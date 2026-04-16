@@ -1,96 +1,108 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Tech moderne — indigo nuit. Tous les tokens HSL. */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Surfaces */
+    --background: 232 47% 6%;
+    --foreground: 220 25% 96%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 232 40% 9%;
+    --card-foreground: 220 25% 96%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 232 42% 8%;
+    --popover-foreground: 220 25% 96%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Brand */
+    --primary: 243 75% 59%;
+    --primary-foreground: 220 25% 98%;
+    --primary-glow: 252 85% 70%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 232 30% 14%;
+    --secondary-foreground: 220 20% 92%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 232 25% 13%;
+    --muted-foreground: 220 12% 62%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 252 85% 70%;
+    --accent-foreground: 232 47% 6%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 75% 58%;
+    --destructive-foreground: 220 25% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --success: 152 60% 48%;
+    --success-foreground: 220 25% 98%;
 
-    --radius: 0.5rem;
+    --warning: 38 92% 56%;
+    --warning-foreground: 232 47% 6%;
 
-    --sidebar-background: 0 0% 98%;
+    --border: 232 28% 16%;
+    --input: 232 28% 16%;
+    --ring: 243 75% 59%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    --radius: 0.875rem;
 
-    --sidebar-primary: 240 5.9% 10%;
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(243 75% 59%), hsl(252 85% 70%));
+    --gradient-hero: radial-gradient(ellipse at top, hsl(243 75% 25% / 0.4), transparent 60%),
+                     radial-gradient(ellipse at bottom right, hsl(252 85% 30% / 0.3), transparent 50%),
+                     hsl(232 47% 6%);
+    --gradient-card: linear-gradient(160deg, hsl(232 40% 11%), hsl(232 40% 8%));
+    --gradient-mesh: linear-gradient(135deg, hsl(243 75% 59% / 0.15), hsl(252 85% 70% / 0.1));
 
-    --sidebar-primary-foreground: 0 0% 98%;
+    /* Shadows & glows */
+    --shadow-glow: 0 0 40px hsl(243 75% 59% / 0.35);
+    --shadow-elegant: 0 20px 50px -20px hsl(232 60% 2% / 0.7);
+    --shadow-card: 0 8px 24px -8px hsl(232 60% 2% / 0.5);
 
-    --sidebar-accent: 240 4.8% 95.9%;
+    /* Motion */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar (kept for shadcn sidebar component) */
+    --sidebar-background: 232 42% 8%;
+    --sidebar-foreground: 220 20% 92%;
+    --sidebar-primary: 243 75% 59%;
+    --sidebar-primary-foreground: 220 25% 98%;
+    --sidebar-accent: 232 30% 14%;
+    --sidebar-accent-foreground: 220 20% 92%;
+    --sidebar-border: 232 28% 16%;
+    --sidebar-ring: 243 75% 59%;
   }
 
+  /* Single dark theme for v1 */
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 232 47% 6%;
+    --foreground: 220 25% 96%;
+    --card: 232 40% 9%;
+    --card-foreground: 220 25% 96%;
+    --popover: 232 42% 8%;
+    --popover-foreground: 220 25% 96%;
+    --primary: 243 75% 59%;
+    --primary-foreground: 220 25% 98%;
+    --secondary: 232 30% 14%;
+    --secondary-foreground: 220 20% 92%;
+    --muted: 232 25% 13%;
+    --muted-foreground: 220 12% 62%;
+    --accent: 252 85% 70%;
+    --accent-foreground: 232 47% 6%;
+    --destructive: 0 75% 58%;
+    --destructive-foreground: 220 25% 98%;
+    --border: 232 28% 16%;
+    --input: 232 28% 16%;
+    --ring: 243 75% 59%;
+    --sidebar-background: 232 42% 8%;
+    --sidebar-foreground: 220 20% 92%;
+    --sidebar-primary: 243 75% 59%;
+    --sidebar-primary-foreground: 220 25% 98%;
+    --sidebar-accent: 232 30% 14%;
+    --sidebar-accent-foreground: 220 20% 92%;
+    --sidebar-border: 232 28% 16%;
+    --sidebar-ring: 243 75% 59%;
   }
 }
 
@@ -98,8 +110,70 @@ All colors MUST be HSL.
   * {
     @apply border-border;
   }
-
-  body {
-    @apply bg-background text-foreground;
+  html {
+    font-family: 'DM Sans', system-ui, sans-serif;
   }
+  body {
+    @apply bg-background text-foreground antialiased;
+    background: var(--gradient-hero);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply backdrop-blur-xl border border-border/60;
+    background: var(--gradient-card);
+    box-shadow: var(--shadow-card);
+  }
+  .hero-grid-bg {
+    background-image:
+      linear-gradient(hsl(243 75% 59% / 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(243 75% 59% / 0.08) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+  }
+  .text-gradient {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+/* Leaflet dark theme tweaks */
+.leaflet-container {
+  background: hsl(var(--muted)) !important;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.leaflet-tile {
+  filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.95);
+}
+.leaflet-control-attribution,
+.leaflet-control-zoom a {
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--muted-foreground)) !important;
+  border-color: hsl(var(--border)) !important;
+}
+.leaflet-control-zoom a {
+  font-weight: 600;
+}
+.runner-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  border: 2px solid hsl(var(--background));
+  box-shadow: var(--shadow-glow);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
 }
