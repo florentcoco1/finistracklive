@@ -297,7 +297,6 @@ export default function TrackerPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      )}
 
       <Card className="glass-card p-5">
         <div className="flex items-center gap-2 mb-3">
