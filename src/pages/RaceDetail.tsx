@@ -38,6 +38,7 @@ export default function RaceDetail() {
   const [myRegistration, setMyRegistration] = useState<{ id: string; bib_number: string } | null>(null);
   const [signupOpen, setSignupOpen] = useState(false);
   const [bibInput, setBibInput] = useState("");
+  const [phoneInput, setPhoneInput] = useState("");
 
   useEffect(() => {
     if (!raceId) return;
@@ -131,13 +132,18 @@ export default function RaceDetail() {
       toast.error("N° de dossard requis");
       return;
     }
+    if (!phoneInput.trim() || phoneInput.trim().length < 6) {
+      toast.error("N° de téléphone requis");
+      return;
+    }
     const { data, error } = await supabase
       .from("race_registrations")
       .insert({
         race_id: raceId!,
         runner_id: user.id,
         bib_number: bibInput.trim(),
-      })
+        emergency_phone: phoneInput.trim(),
+      } as any)
       .select("id, bib_number")
       .single();
     if (error) {
@@ -193,8 +199,14 @@ export default function RaceDetail() {
                   <DialogTitle>S'inscrire à {race.name}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
-                  <Label htmlFor="bib">N° de dossard</Label>
-                  <Input id="bib" value={bibInput} onChange={(e) => setBibInput(e.target.value)} placeholder="ex: 142" />
+                  <div>
+                    <Label htmlFor="bib">N° de dossard</Label>
+                    <Input id="bib" value={bibInput} onChange={(e) => setBibInput(e.target.value)} placeholder="ex: 142" />
+                  </div>
+                  <div>
+                    <Label htmlFor="phone">N° de téléphone</Label>
+                    <Input id="phone" type="tel" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} placeholder="ex: 06 12 34 56 78" />
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button variant="hero" onClick={handleRegister}>Confirmer</Button>
@@ -259,7 +271,13 @@ export default function RaceDetail() {
                       <p className="text-xs text-muted-foreground">
                         {formatSpeed(r.rolling_speed_kmh)} · {formatPace(r.rolling_pace_sec_per_km)}
                       </p>
-                      {stale && r.tracking_active && (
+                      {r.runner_status === 'dnf' && (
+                        <p className="text-[10px] text-destructive mt-0.5 font-semibold">🏳️ Abandon</p>
+                      )}
+                      {r.runner_status === 'problem' && (
+                        <p className="text-[10px] text-warning mt-0.5 font-semibold">⚠️ Problème signalé</p>
+                      )}
+                      {stale && r.tracking_active && r.runner_status === 'running' && (
                         <p className="text-[10px] text-warning mt-0.5">📡 signal perdu</p>
                       )}
                     </div>
