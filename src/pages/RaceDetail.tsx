@@ -8,7 +8,7 @@ import { StatusBadge } from "./Index";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { ChevronLeft, Trophy, Radio, UserPlus, Smartphone } from "lucide-react";
+import { ChevronLeft, Trophy, Radio, UserPlus, Smartphone, AlertTriangle, Flag, Phone } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ interface Race {
   status: "upcoming" | "live" | "finished";
   gpx_geojson: any;
   route_points: { lat: number; lng: number; cumulativeDistanceM: number }[] | null;
+  organizer_id: string;
 }
 
 export default function RaceDetail() {
@@ -44,7 +45,7 @@ export default function RaceDetail() {
     if (!raceId) return;
     supabase
       .from("races")
-      .select("id, name, description, start_time, distance_km, status, gpx_geojson, route_points")
+      .select("id, name, description, start_time, distance_km, status, gpx_geojson, route_points, organizer_id")
       .eq("id", raceId)
       .single()
       .then(({ data, error }) => {
@@ -112,6 +113,13 @@ export default function RaceDetail() {
     }
     return [];
   }, [race]);
+
+  const isOrganizer = user && race && race.organizer_id === user.id;
+
+  const alerts = useMemo(
+    () => rows.filter((r) => r.runner_status === "dnf" || r.runner_status === "problem"),
+    [rows],
+  );
 
   const sorted = useMemo(
     () =>
@@ -225,6 +233,52 @@ export default function RaceDetail() {
         <p className="text-muted-foreground mb-6 max-w-3xl">{race.description}</p>
       )}
 
+      {/* Organizer alerts */}
+      {isOrganizer && alerts.length > 0 && (
+        <Card className="glass-card p-4 mb-6 border-warning/50">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="h-5 w-5 text-warning" />
+            <h2 className="font-display font-semibold text-lg">Alertes coureurs ({alerts.length})</h2>
+          </div>
+          <ul className="space-y-2">
+            {alerts.map((a) => (
+              <li key={a.registration_id} className={`rounded-lg p-3 border ${a.runner_status === "problem" ? "border-warning/50 bg-warning/10" : "border-destructive/30 bg-destructive/5"}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <span className="font-semibold text-sm">
+                      #{a.bib_number} {a.first_name} {a.last_name}
+                    </span>
+                    {a.runner_status === "dnf" ? (
+                      <span className="ml-2 text-xs text-destructive font-semibold">
+                        <Flag className="inline h-3 w-3 mr-1" />Abandon{a.dnf_reason ? ` — ${a.dnf_reason}` : ""}
+                      </span>
+                    ) : (
+                      <span className="ml-2 text-xs text-warning font-semibold">
+                        <AlertTriangle className="inline h-3 w-3 mr-1" />Problème
+                      </span>
+                    )}
+                  </div>
+                  {a.emergency_phone && (
+                    <a href={`tel:${a.emergency_phone}`} className="inline-flex items-center gap-1 text-xs text-primary hover:underline shrink-0">
+                      <Phone className="h-3 w-3" /> {a.emergency_phone}
+                    </a>
+                  )}
+                </div>
+                {a.runner_status === "problem" && a.problem_description && (
+                  <p className="text-xs text-muted-foreground mt-1">« {a.problem_description} »</p>
+                )}
+                {a.latitude && a.longitude && (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    📍 Dernière position : {a.latitude.toFixed(5)}, {a.longitude.toFixed(5)}
+                    {a.distance_along_route_m != null && ` — ${formatDistance(a.distance_along_route_m)}`}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
       <div className="grid lg:grid-cols-[1fr_360px] gap-6">
         <Card className="glass-card p-2 h-[420px] md:h-[600px] overflow-hidden">
           <RaceMap routeCoords={routeCoords} runners={rows} focusedRunnerId={focused} />
@@ -272,10 +326,14 @@ export default function RaceDetail() {
                         {formatSpeed(r.rolling_speed_kmh)} · {formatPace(r.rolling_pace_sec_per_km)}
                       </p>
                       {r.runner_status === 'dnf' && (
-                        <p className="text-[10px] text-destructive mt-0.5 font-semibold">🏳️ Abandon</p>
+                        <p className="text-[10px] text-destructive mt-0.5 font-semibold">
+                          🏳️ Abandon{r.dnf_reason ? ` — ${r.dnf_reason}` : ""}
+                        </p>
                       )}
                       {r.runner_status === 'problem' && (
-                        <p className="text-[10px] text-warning mt-0.5 font-semibold">⚠️ Problème signalé</p>
+                        <p className="text-[10px] text-warning mt-0.5 font-semibold">
+                          ⚠️ Problème{r.problem_description ? ` — ${r.problem_description}` : ""}
+                        </p>
                       )}
                       {stale && r.tracking_active && r.runner_status === 'running' && (
                         <p className="text-[10px] text-warning mt-0.5">📡 signal perdu</p>

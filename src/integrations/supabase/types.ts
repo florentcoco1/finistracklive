@@ -55,9 +55,11 @@ export type Database = {
           bib_number: string
           category: string | null
           created_at: string
+          dnf_reason: string | null
           emergency_phone: string | null
           finished_at: string | null
           id: string
+          problem_description: string | null
           race_id: string
           runner_id: string
           runner_status: Database["public"]["Enums"]["runner_status"]
@@ -69,9 +71,11 @@ export type Database = {
           bib_number: string
           category?: string | null
           created_at?: string
+          dnf_reason?: string | null
           emergency_phone?: string | null
           finished_at?: string | null
           id?: string
+          problem_description?: string | null
           race_id: string
           runner_id: string
           runner_status?: Database["public"]["Enums"]["runner_status"]
@@ -83,9 +87,11 @@ export type Database = {
           bib_number?: string
           category?: string | null
           created_at?: string
+          dnf_reason?: string | null
           emergency_phone?: string | null
           finished_at?: string | null
           id?: string
+          problem_description?: string | null
           race_id?: string
           runner_id?: string
           runner_status?: Database["public"]["Enums"]["runner_status"]
@@ -233,6 +239,7 @@ export type Database = {
           bib_number: string | null
           category: string | null
           distance_along_route_m: number | null
+          dnf_reason: string | null
           emergency_phone: string | null
           finished_at: string | null
           first_name: string | null
@@ -240,6 +247,7 @@ export type Database = {
           last_position_at: string | null
           latitude: number | null
           longitude: number | null
+          problem_description: string | null
           progress_percent: number | null
           race_id: string | null
           registration_id: string | null

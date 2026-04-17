@@ -8,10 +8,13 @@ import { toast } from "sonner";
 import { ChevronLeft, Play, Square, Activity, Satellite, Flag, AlertTriangle } from "lucide-react";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
 import type { RunnerStatus } from "@/lib/types";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 
 interface Race {
   id: string;
@@ -122,9 +125,22 @@ export default function TrackerPage() {
     toast.success("Suivi arrêté");
   };
 
-  const reportStatus = async (status: RunnerStatus) => {
+  const [dnfDialogOpen, setDnfDialogOpen] = useState(false);
+  const [problemDialogOpen, setProblemDialogOpen] = useState(false);
+  const [dnfReason, setDnfReason] = useState("");
+  const [problemDesc, setProblemDesc] = useState("");
+
+  const DNF_REASONS = [
+    "Épuisement",
+    "Blessure",
+    "Erreur de parcours",
+    "Problème matériel",
+    "Conditions météo",
+    "Autre",
+  ];
+
+  const reportStatus = async (status: RunnerStatus, extra?: { dnf_reason?: string; problem_description?: string }) => {
     if (!reg) return;
-    // Stop GPS tracking
     if (watchIdRef.current != null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
@@ -137,10 +153,13 @@ export default function TrackerPage() {
         runner_status: status,
         tracking_active: false,
         finished_at: new Date().toISOString(),
+        ...extra,
       } as any)
       .eq("id", reg.id);
 
     setReg({ ...reg, runner_status: status });
+    setDnfDialogOpen(false);
+    setProblemDialogOpen(false);
     toast.success(status === "dnf" ? "Abandon enregistré. Bon courage !" : "Problème signalé. L'organisation est prévenue.");
   };
 
@@ -213,52 +232,71 @@ export default function TrackerPage() {
         <Card className="glass-card p-4 mb-4">
           <p className="text-xs text-muted-foreground mb-3 text-center font-medium">Signaler un problème</p>
           <div className="grid grid-cols-2 gap-3">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10">
-                  <Flag className="h-4 w-4 mr-2" /> Abandon
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Confirmer l'abandon ?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Ton suivi sera arrêté et l'organisation sera informée. Cette action est définitive.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Annuler</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => reportStatus("dnf")} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Confirmer l'abandon
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" className="border-warning/50 text-warning hover:bg-warning/10">
-                  <AlertTriangle className="h-4 w-4 mr-2" /> Problème
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Signaler un problème ?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    L'organisation sera prévenue de ta position et de ton numéro de téléphone. Ton suivi sera arrêté.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Annuler</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => reportStatus("problem")} className="bg-warning text-warning-foreground hover:bg-warning/90">
-                    Signaler
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={() => setDnfDialogOpen(true)}>
+              <Flag className="h-4 w-4 mr-2" /> Abandon
+            </Button>
+            <Button variant="outline" className="border-warning/50 text-warning hover:bg-warning/10" onClick={() => setProblemDialogOpen(true)}>
+              <AlertTriangle className="h-4 w-4 mr-2" /> Problème
+            </Button>
           </div>
         </Card>
       )}
+
+      {/* DNF Dialog with reason */}
+      <Dialog open={dnfDialogOpen} onOpenChange={setDnfDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Motif de l'abandon</DialogTitle>
+          </DialogHeader>
+          <RadioGroup value={dnfReason} onValueChange={setDnfReason} className="space-y-2">
+            {DNF_REASONS.map((reason) => (
+              <div key={reason} className="flex items-center space-x-2">
+                <RadioGroupItem value={reason} id={`dnf-${reason}`} />
+                <Label htmlFor={`dnf-${reason}`} className="cursor-pointer">{reason}</Label>
+              </div>
+            ))}
+          </RadioGroup>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDnfDialogOpen(false)}>Annuler</Button>
+            <Button
+              variant="destructive"
+              disabled={!dnfReason}
+              onClick={() => reportStatus("dnf", { dnf_reason: dnfReason })}
+            >
+              Confirmer l'abandon
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Problem Dialog with description */}
+      <Dialog open={problemDialogOpen} onOpenChange={setProblemDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Décrire le problème</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            L'organisation sera prévenue avec ta position et ton téléphone.
+          </p>
+          <Textarea
+            value={problemDesc}
+            onChange={(e) => setProblemDesc(e.target.value)}
+            placeholder="Décris brièvement ton problème…"
+            maxLength={300}
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProblemDialogOpen(false)}>Annuler</Button>
+            <Button
+              className="bg-warning text-warning-foreground hover:bg-warning/90"
+              disabled={!problemDesc.trim()}
+              onClick={() => reportStatus("problem", { problem_description: problemDesc.trim() })}
+            >
+              Signaler
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card className="glass-card p-5">
         <div className="flex items-center gap-2 mb-3">
