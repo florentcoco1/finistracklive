@@ -122,6 +122,28 @@ export default function TrackerPage() {
     toast.success("Suivi arrêté");
   };
 
+  const reportStatus = async (status: RunnerStatus) => {
+    if (!reg) return;
+    // Stop GPS tracking
+    if (watchIdRef.current != null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    setTracking(false);
+
+    await supabase
+      .from("race_registrations")
+      .update({
+        runner_status: status,
+        tracking_active: false,
+        finished_at: new Date().toISOString(),
+      } as any)
+      .eq("id", reg.id);
+
+    setReg({ ...reg, runner_status: status });
+    toast.success(status === "dnf" ? "Abandon enregistré. Bon courage !" : "Problème signalé. L'organisation est prévenue.");
+  };
+
   useEffect(() => {
     return () => {
       if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
@@ -142,6 +164,8 @@ export default function TrackerPage() {
     );
   }
 
+  const isDnfOrProblem = reg.runner_status === "dnf" || reg.runner_status === "problem";
+
   return (
     <main className="container py-6 max-w-md">
       <Link to={`/races/${race.id}`} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4">
@@ -152,30 +176,89 @@ export default function TrackerPage() {
         <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Dossard</p>
         <p className="font-display text-5xl font-bold text-gradient mb-1">#{reg.bib_number}</p>
         <p className="text-sm text-muted-foreground">{race.name}</p>
-      </Card>
-
-      <Card className="glass-card p-6 mb-4">
-        <div className="flex items-center gap-3 mb-5">
-          <span className={`relative flex h-3 w-3 ${tracking ? "" : "opacity-30"}`}>
-            {tracking && <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-75 animate-ping" />}
-            <span className={`relative inline-flex rounded-full h-3 w-3 ${tracking ? "bg-success" : "bg-muted-foreground"}`} />
-          </span>
-          <p className="text-sm font-medium">{tracking ? "Suivi GPS actif" : "Suivi inactif"}</p>
-          <Satellite className={`h-4 w-4 ml-auto ${tracking ? "text-success" : "text-muted-foreground"}`} />
-        </div>
-
-        {tracking ? (
-          <Button variant="destructive" size="xl" className="w-full" onClick={stopTracking}>
-            <Square className="h-5 w-5 mr-2" /> Arrêter le suivi
-          </Button>
-        ) : (
-          <Button variant="hero" size="xl" className="w-full animate-pulse-glow" onClick={startTracking}>
-            <Play className="h-5 w-5 mr-2" /> Démarrer le suivi
-          </Button>
+        {reg.runner_status === "dnf" && (
+          <p className="mt-2 text-sm font-semibold text-destructive">🏳️ Abandon enregistré</p>
         )}
-
-        {error && <p className="text-xs text-destructive mt-3">{error}</p>}
+        {reg.runner_status === "problem" && (
+          <p className="mt-2 text-sm font-semibold text-warning">⚠️ Problème signalé</p>
+        )}
       </Card>
+
+      {!isDnfOrProblem && (
+        <Card className="glass-card p-6 mb-4">
+          <div className="flex items-center gap-3 mb-5">
+            <span className={`relative flex h-3 w-3 ${tracking ? "" : "opacity-30"}`}>
+              {tracking && <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-75 animate-ping" />}
+              <span className={`relative inline-flex rounded-full h-3 w-3 ${tracking ? "bg-success" : "bg-muted-foreground"}`} />
+            </span>
+            <p className="text-sm font-medium">{tracking ? "Suivi GPS actif" : "Suivi inactif"}</p>
+            <Satellite className={`h-4 w-4 ml-auto ${tracking ? "text-success" : "text-muted-foreground"}`} />
+          </div>
+
+          {tracking ? (
+            <Button variant="destructive" size="xl" className="w-full" onClick={stopTracking}>
+              <Square className="h-5 w-5 mr-2" /> Arrêter le suivi
+            </Button>
+          ) : (
+            <Button variant="hero" size="xl" className="w-full animate-pulse-glow" onClick={startTracking}>
+              <Play className="h-5 w-5 mr-2" /> Démarrer le suivi
+            </Button>
+          )}
+
+          {error && <p className="text-xs text-destructive mt-3">{error}</p>}
+        </Card>
+      )}
+
+      {!isDnfOrProblem && (
+        <Card className="glass-card p-4 mb-4">
+          <p className="text-xs text-muted-foreground mb-3 text-center font-medium">Signaler un problème</p>
+          <div className="grid grid-cols-2 gap-3">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10">
+                  <Flag className="h-4 w-4 mr-2" /> Abandon
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirmer l'abandon ?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Ton suivi sera arrêté et l'organisation sera informée. Cette action est définitive.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => reportStatus("dnf")} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Confirmer l'abandon
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" className="border-warning/50 text-warning hover:bg-warning/10">
+                  <AlertTriangle className="h-4 w-4 mr-2" /> Problème
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Signaler un problème ?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    L'organisation sera prévenue de ta position et de ton numéro de téléphone. Ton suivi sera arrêté.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => reportStatus("problem")} className="bg-warning text-warning-foreground hover:bg-warning/90">
+                    Signaler
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </Card>
+      )}
 
       <Card className="glass-card p-5">
         <div className="flex items-center gap-2 mb-3">
