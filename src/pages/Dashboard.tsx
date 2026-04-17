@@ -28,7 +28,7 @@ export default function Dashboard() {
   const [registrations, setRegistrations] = useState<MyRegistration[]>([]);
 
   useEffect(() => {
-    document.title = "Mon espace — LiveTrack";
+    document.title = "Mon espace — FinisTrackLive";
   }, []);
 
   useEffect(() => {

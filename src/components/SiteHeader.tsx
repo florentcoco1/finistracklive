@@ -24,7 +24,7 @@ export function SiteHeader() {
           <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
             <Activity className="h-5 w-5 text-primary-foreground" />
           </span>
-          <span className="text-gradient">LiveTrack</span>
+          <span className="text-gradient">FinisTrackLive</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-1">

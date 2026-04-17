@@ -20,7 +20,7 @@ export default function RacesList() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    document.title = "Toutes les courses — LiveTrack";
+    document.title = "Toutes les courses — FinisTrackLive";
     supabase
       .from("races")
       .select("id, name, description, start_time, distance_km, status")
