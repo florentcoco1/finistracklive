@@ -8,7 +8,7 @@ import { StatusBadge } from "./Index";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { ChevronLeft, Trophy, Radio, UserPlus, Smartphone } from "lucide-react";
+import { ChevronLeft, Trophy, Radio, UserPlus, Smartphone, AlertTriangle, Flag, Phone } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ interface Race {
   status: "upcoming" | "live" | "finished";
   gpx_geojson: any;
   route_points: { lat: number; lng: number; cumulativeDistanceM: number }[] | null;
+  organizer_id: string;
 }
 
 export default function RaceDetail() {
@@ -44,7 +45,7 @@ export default function RaceDetail() {
     if (!raceId) return;
     supabase
       .from("races")
-      .select("id, name, description, start_time, distance_km, status, gpx_geojson, route_points")
+      .select("id, name, description, start_time, distance_km, status, gpx_geojson, route_points, organizer_id")
       .eq("id", raceId)
       .single()
       .then(({ data, error }) => {
@@ -112,6 +113,13 @@ export default function RaceDetail() {
     }
     return [];
   }, [race]);
+
+  const isOrganizer = user && race && race.organizer_id === user.id;
+
+  const alerts = useMemo(
+    () => rows.filter((r) => r.runner_status === "dnf" || r.runner_status === "problem"),
+    [rows],
+  );
 
   const sorted = useMemo(
     () =>
