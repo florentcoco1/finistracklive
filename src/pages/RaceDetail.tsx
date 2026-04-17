@@ -326,10 +326,14 @@ export default function RaceDetail() {
                         {formatSpeed(r.rolling_speed_kmh)} · {formatPace(r.rolling_pace_sec_per_km)}
                       </p>
                       {r.runner_status === 'dnf' && (
-                        <p className="text-[10px] text-destructive mt-0.5 font-semibold">🏳️ Abandon</p>
+                        <p className="text-[10px] text-destructive mt-0.5 font-semibold">
+                          🏳️ Abandon{r.dnf_reason ? ` — ${r.dnf_reason}` : ""}
+                        </p>
                       )}
                       {r.runner_status === 'problem' && (
-                        <p className="text-[10px] text-warning mt-0.5 font-semibold">⚠️ Problème signalé</p>
+                        <p className="text-[10px] text-warning mt-0.5 font-semibold">
+                          ⚠️ Problème{r.problem_description ? ` — ${r.problem_description}` : ""}
+                        </p>
                       )}
                       {stale && r.tracking_active && r.runner_status === 'running' && (
                         <p className="text-[10px] text-warning mt-0.5">📡 signal perdu</p>
