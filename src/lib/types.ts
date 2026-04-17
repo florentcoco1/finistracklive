@@ -11,6 +11,8 @@ export interface LeaderboardRow {
   finished_at: string | null;
   runner_status: RunnerStatus;
   emergency_phone: string | null;
+  dnf_reason: string | null;
+  problem_description: string | null;
   first_name: string | null;
   last_name: string | null;
   latitude: number | null;
