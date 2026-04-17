@@ -107,7 +107,7 @@ export default function AuthPage() {
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-primary shadow-glow mb-4">
             <Activity className="h-6 w-6 text-primary-foreground" />
           </div>
-          <h1 className="text-3xl font-bold mb-2">Bienvenue sur LiveTrack</h1>
+          <h1 className="text-3xl font-bold mb-2">Bienvenue sur FinisTrackLive</h1>
           <p className="text-muted-foreground">Suivez et soyez suivi en direct</p>
         </div>
 

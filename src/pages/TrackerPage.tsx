@@ -48,7 +48,7 @@ export default function TrackerPage() {
   const watchIdRef = useRef<number | null>(null);
   const lastSentRef = useRef<number>(0);
 
-  useEffect(() => { document.title = "Suivi GPS — LiveTrack"; }, []);
+  useEffect(() => { document.title = "Suivi GPS — FinisTrackLive"; }, []);
 
   useEffect(() => {
     if (!raceId || !user) return;

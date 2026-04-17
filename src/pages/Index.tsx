@@ -19,7 +19,7 @@ const Index = () => {
   const [races, setRaces] = useState<Race[]>([]);
 
   useEffect(() => {
-    document.title = "LiveTrack — Suivi de course en direct";
+    document.title = "FinisTrackLive — Suivi de course en direct";
     supabase
       .from("races")
       .select("id, name, start_time, distance_km, status")

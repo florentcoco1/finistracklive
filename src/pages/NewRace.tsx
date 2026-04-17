@@ -25,7 +25,7 @@ export default function NewRace() {
   const [gpxPreview, setGpxPreview] = useState<{ distanceKm: number; points: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => { document.title = "Créer une course — LiveTrack"; }, []);
+  useEffect(() => { document.title = "Créer une course — FinisTrackLive"; }, []);
 
   if (loading) return <main className="container py-12"><p className="text-muted-foreground">Chargement…</p></main>;
   if (!user) return <Navigate to="/auth" replace />;

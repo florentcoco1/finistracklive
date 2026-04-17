@@ -54,7 +54,7 @@ export default function RaceDetail() {
           return;
         }
         setRace(data as any);
-        document.title = `${data.name} — LiveTrack`;
+        document.title = `${data.name} — FinisTrackLive`;
       });
   }, [raceId]);
 
