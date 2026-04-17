@@ -5,7 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ChevronLeft, Play, Square, Activity, Satellite } from "lucide-react";
+import { ChevronLeft, Play, Square, Activity, Satellite, Flag, AlertTriangle } from "lucide-react";
+import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
+import type { RunnerStatus } from "@/lib/types";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
 
 interface Race {
@@ -17,6 +23,7 @@ interface Registration {
   id: string;
   bib_number: string;
   tracking_active: boolean;
+  runner_status: RunnerStatus;
 }
 interface Position {
   distance_along_route_m: number | null;
@@ -45,7 +52,7 @@ export default function TrackerPage() {
     if (!raceId || !user) return;
     Promise.all([
       supabase.from("races").select("id, name, distance_km").eq("id", raceId).single(),
-      supabase.from("race_registrations").select("id, bib_number, tracking_active").eq("race_id", raceId).eq("runner_id", user.id).maybeSingle(),
+      supabase.from("race_registrations").select("id, bib_number, tracking_active, runner_status").eq("race_id", raceId).eq("runner_id", user.id).maybeSingle(),
     ]).then(([raceRes, regRes]) => {
       if (raceRes.data) setRace(raceRes.data as Race);
       if (regRes.data) {
