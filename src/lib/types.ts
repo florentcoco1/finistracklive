@@ -1,3 +1,5 @@
+export type RunnerStatus = 'running' | 'dnf' | 'problem';
+
 export interface LeaderboardRow {
   registration_id: string;
   race_id: string;
@@ -7,6 +9,8 @@ export interface LeaderboardRow {
   tracking_active: boolean;
   started_at: string | null;
   finished_at: string | null;
+  runner_status: RunnerStatus;
+  emergency_phone: string | null;
   first_name: string | null;
   last_name: string | null;
   latitude: number | null;

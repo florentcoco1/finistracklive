@@ -55,10 +55,12 @@ export type Database = {
           bib_number: string
           category: string | null
           created_at: string
+          emergency_phone: string | null
           finished_at: string | null
           id: string
           race_id: string
           runner_id: string
+          runner_status: Database["public"]["Enums"]["runner_status"]
           started_at: string | null
           tracking_active: boolean
           updated_at: string
@@ -67,10 +69,12 @@ export type Database = {
           bib_number: string
           category?: string | null
           created_at?: string
+          emergency_phone?: string | null
           finished_at?: string | null
           id?: string
           race_id: string
           runner_id: string
+          runner_status?: Database["public"]["Enums"]["runner_status"]
           started_at?: string | null
           tracking_active?: boolean
           updated_at?: string
@@ -79,10 +83,12 @@ export type Database = {
           bib_number?: string
           category?: string | null
           created_at?: string
+          emergency_phone?: string | null
           finished_at?: string | null
           id?: string
           race_id?: string
           runner_id?: string
+          runner_status?: Database["public"]["Enums"]["runner_status"]
           started_at?: string | null
           tracking_active?: boolean
           updated_at?: string
@@ -227,6 +233,7 @@ export type Database = {
           bib_number: string | null
           category: string | null
           distance_along_route_m: number | null
+          emergency_phone: string | null
           finished_at: string | null
           first_name: string | null
           last_name: string | null
@@ -239,6 +246,7 @@ export type Database = {
           rolling_pace_sec_per_km: number | null
           rolling_speed_kmh: number | null
           runner_id: string | null
+          runner_status: Database["public"]["Enums"]["runner_status"] | null
           started_at: string | null
           tracking_active: boolean | null
         }
@@ -265,6 +273,7 @@ export type Database = {
     Enums: {
       app_role: "organizer" | "runner"
       race_status: "upcoming" | "live" | "finished"
+      runner_status: "running" | "dnf" | "problem"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -394,6 +403,7 @@ export const Constants = {
     Enums: {
       app_role: ["organizer", "runner"],
       race_status: ["upcoming", "live", "finished"],
+      runner_status: ["running", "dnf", "problem"],
     },
   },
 } as const
