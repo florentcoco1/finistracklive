@@ -121,15 +121,30 @@ export default function RaceDetail() {
     [rows],
   );
 
-  const sorted = useMemo(
-    () =>
-      [...rows].sort((a, b) => {
-        const da = a.distance_along_route_m ?? -1;
-        const db = b.distance_along_route_m ?? -1;
-        return db - da;
-      }),
-    [rows],
-  );
+  const sorted = useMemo(() => {
+    const rank = (s: string | null) => (s === "dnf" ? 2 : s === "problem" ? 1 : 0);
+    return [...rows].sort((a, b) => {
+      const ra = rank(a.runner_status);
+      const rb = rank(b.runner_status);
+      if (ra !== rb) return ra - rb;
+      if (a.finished_at && b.finished_at) {
+        return new Date(a.finished_at).getTime() - new Date(b.finished_at).getTime();
+      }
+      if (a.finished_at) return -1;
+      if (b.finished_at) return 1;
+      const da = a.distance_along_route_m ?? -1;
+      const db = b.distance_along_route_m ?? -1;
+      return db - da;
+    });
+  }, [rows]);
+
+  const medalFor = (rank: number, status: string | null) => {
+    if (status === "dnf" || status === "problem") return null;
+    if (rank === 0) return { emoji: "🥇", label: "Or", ring: "ring-2 ring-amber-400 shadow-[0_0_20px_hsl(45_95%_55%/0.5)]", bg: "bg-gradient-to-br from-amber-300/20 to-amber-500/10 border-amber-400/50" };
+    if (rank === 1) return { emoji: "🥈", label: "Argent", ring: "ring-2 ring-slate-300 shadow-[0_0_18px_hsl(220_15%_70%/0.45)]", bg: "bg-gradient-to-br from-slate-200/25 to-slate-400/10 border-slate-300/50" };
+    if (rank === 2) return { emoji: "🥉", label: "Bronze", ring: "ring-2 ring-orange-500 shadow-[0_0_18px_hsl(25_85%_50%/0.4)]", bg: "bg-gradient-to-br from-orange-400/20 to-orange-600/10 border-orange-500/50" };
+    return null;
+  };
 
   const handleRegister = async () => {
     if (!user) {
@@ -301,21 +316,26 @@ export default function RaceDetail() {
                   ? Date.now() - new Date(r.last_position_at).getTime() > 30000
                   : true;
                 const color = colorForRegistration(r.registration_id);
+                const medal = medalFor(i, r.runner_status);
                 return (
                   <li
                     key={r.registration_id}
                     onClick={() => setFocused(r.registration_id)}
-                    className={`flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-secondary/40 cursor-pointer hover:border-primary/40 transition-smooth ${stale ? "opacity-60" : ""}`}
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:border-primary/40 transition-smooth ${stale ? "opacity-60" : ""} ${medal ? medal.bg : "border-border/50 bg-secondary/40"}`}
                   >
-                    <span className="text-sm font-bold text-muted-foreground w-5 text-center">{i + 1}</span>
+                    {medal ? (
+                      <span className="text-xl w-6 text-center shrink-0" aria-label={`Médaille ${medal.label}`}>{medal.emoji}</span>
+                    ) : (
+                      <span className="text-sm font-bold text-muted-foreground w-6 text-center shrink-0">{i + 1}</span>
+                    )}
                     <span
-                      className="h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+                      className={`h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0 ${medal ? medal.ring : ""}`}
                       style={{ background: color }}
                     >
                       {r.bib_number}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">
+                      <p className={`text-sm truncate ${medal ? "font-bold" : "font-medium"}`}>
                         {r.first_name} {r.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground">
@@ -325,6 +345,11 @@ export default function RaceDetail() {
                       <p className="text-xs text-muted-foreground">
                         {formatSpeed(r.rolling_speed_kmh)} · {formatPace(r.rolling_pace_sec_per_km)}
                       </p>
+                      {r.finished_at && (
+                        <p className="text-[10px] text-success mt-0.5 font-semibold">
+                          🏁 Arrivée {format(new Date(r.finished_at), "HH:mm:ss", { locale: fr })}
+                        </p>
+                      )}
                       {r.runner_status === 'dnf' && (
                         <p className="text-[10px] text-destructive mt-0.5 font-semibold">
                           🏳️ Abandon{r.dnf_reason ? ` — ${r.dnf_reason}` : ""}
@@ -335,7 +360,7 @@ export default function RaceDetail() {
                           ⚠️ Problème{r.problem_description ? ` — ${r.problem_description}` : ""}
                         </p>
                       )}
-                      {stale && r.tracking_active && r.runner_status === 'running' && (
+                      {stale && r.tracking_active && r.runner_status === 'running' && !r.finished_at && (
                         <p className="text-[10px] text-warning mt-0.5">📡 signal perdu</p>
                       )}
                     </div>
