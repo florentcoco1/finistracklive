@@ -1,9 +1,10 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { Activity, LogOut, Menu } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import logo from "@/assets/logo.png";
 
 export function SiteHeader() {
   const { user, isOrganizer, signOut, loading } = useAuth();
@@ -20,11 +21,9 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/60 bg-background/70 backdrop-blur-xl">
       <div className="container flex h-16 items-center justify-between gap-4">
-        <Link to="/" className="flex items-center gap-2 font-display font-bold text-lg">
-          <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
-            <Activity className="h-5 w-5 text-primary-foreground" />
-          </span>
-          <span className="text-gradient">FinisTrackLive</span>
+        <Link to="/" className="flex items-center gap-2 font-display font-bold text-lg" aria-label="FinisTrackLive — accueil">
+          <img src={logo} alt="Logo FinisTrackLive" className="h-10 w-10 object-contain" />
+          <span className="text-gradient hidden sm:inline">FinisTrackLive</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-1">
