@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import RaceMap, { colorForRegistration } from "@/components/RaceMap";
+import ElevationChart from "@/components/ElevationChart";
 import { StatusBadge } from "./Index";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
 import { useAuth } from "@/hooks/useAuth";
@@ -295,9 +296,25 @@ export default function RaceDetail() {
       )}
 
       <div className="grid lg:grid-cols-[1fr_360px] gap-6">
-        <Card className="glass-card p-2 h-[420px] md:h-[600px] overflow-hidden">
-          <RaceMap routeCoords={routeCoords} routePoints={race.route_points} runners={rows} focusedRunnerId={focused} />
-        </Card>
+        <div className="space-y-4">
+          <Card className="glass-card p-2 h-[420px] md:h-[600px] overflow-hidden">
+            <RaceMap routeCoords={routeCoords} routePoints={race.route_points} runners={rows} focusedRunnerId={focused} />
+          </Card>
+
+          <Card className="glass-card p-4 h-[220px]">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="h-4 w-4 text-primary-glow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 22 5-5 4 4 7-7 4 4"/><path d="M2 22h20"/></svg>
+              <h3 className="font-display font-semibold text-sm">Profil de dénivelé & avancement du peloton</h3>
+            </div>
+            <div className="h-[calc(100%-32px)]">
+              <ElevationChart
+                gpxGeojson={race.gpx_geojson}
+                totalDistanceKm={race.distance_km}
+                runners={rows}
+              />
+            </div>
+          </Card>
+        </div>
 
         <Card className="glass-card p-4 max-h-[600px] flex flex-col">
           <div className="flex items-center gap-2 mb-3">
