@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ChevronLeft, Play, Square, Activity, Satellite, Flag, AlertTriangle } from "lucide-react";
+import { ChevronLeft, Play, Square, Activity, Satellite, Flag, AlertTriangle, Watch } from "lucide-react";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
 import type { RunnerStatus } from "@/lib/types";
 import { Input } from "@/components/ui/input";
@@ -48,6 +48,17 @@ export default function TrackerPage() {
   const watchIdRef = useRef<number | null>(null);
   const lastSentRef = useRef<number>(0);
 
+  // Garmin LiveTrack
+  const [garminUrl, setGarminUrl] = useState<string>(() => localStorage.getItem("garmin_livetrack_url") ?? "");
+  const [garminActive, setGarminActive] = useState(false);
+  const [garminError, setGarminError] = useState<string | null>(null);
+  const [garminLastPointAt, setGarminLastPointAt] = useState<number | null>(null);
+  const garminIntervalRef = useRef<number | null>(null);
+  const garminSinceRef = useRef<number>(0);
+
+  // True if Garmin produced a fresh point in the last 30s -> phone GPS pauses sending
+  const garminFreshRef = useRef<boolean>(false);
+
   useEffect(() => { document.title = "Suivi GPS — FinisTrackLive"; }, []);
 
   useEffect(() => {
@@ -66,6 +77,8 @@ export default function TrackerPage() {
 
   const sendPosition = async (lat: number, lng: number, accuracy?: number, speed?: number) => {
     if (!reg) return;
+    // Priority Garmin: if a fresh Garmin point arrived in the last 30s, skip phone GPS
+    if (garminFreshRef.current) return;
     // throttle locally to ~5s
     const now = Date.now();
     if (now - lastSentRef.current < 4500) return;
@@ -79,6 +92,60 @@ export default function TrackerPage() {
       return;
     }
     if (data?.position) setLastPos(data.position as Position);
+  };
+
+  // Poll Garmin LiveTrack every 10s
+  const pollGarmin = async () => {
+    if (!reg || !garminUrl) return;
+    const { data, error } = await supabase.functions.invoke("poll-garmin-livetrack", {
+      body: {
+        registration_id: reg.id,
+        livetrack_url: garminUrl,
+        since_ms: garminSinceRef.current,
+      },
+    });
+    if (error) {
+      setGarminError(error.message);
+      return;
+    }
+    setGarminError(null);
+    if (data?.latest_ms && data.latest_ms > garminSinceRef.current) {
+      garminSinceRef.current = data.latest_ms;
+      setGarminLastPointAt(data.latest_ms);
+    }
+    if (data?.points > 0) {
+      garminFreshRef.current = true;
+      // expire freshness after 30s of silence
+      window.setTimeout(() => { garminFreshRef.current = false; }, 30_000);
+    }
+    if (data?.position) setLastPos(data.position as Position);
+  };
+
+  const startGarmin = () => {
+    if (!garminUrl.trim()) {
+      toast.error("Colle d'abord ton URL Garmin LiveTrack");
+      return;
+    }
+    if (!/livetrack\.garmin\.com\/session\/.+\/token\/.+/.test(garminUrl)) {
+      toast.error("URL invalide. Format: https://livetrack.garmin.com/session/.../token/...");
+      return;
+    }
+    localStorage.setItem("garmin_livetrack_url", garminUrl.trim());
+    setGarminActive(true);
+    garminSinceRef.current = 0;
+    pollGarmin();
+    garminIntervalRef.current = window.setInterval(pollGarmin, 10_000);
+    toast.success("Suivi Garmin LiveTrack activé");
+  };
+
+  const stopGarmin = () => {
+    if (garminIntervalRef.current != null) {
+      window.clearInterval(garminIntervalRef.current);
+      garminIntervalRef.current = null;
+    }
+    setGarminActive(false);
+    garminFreshRef.current = false;
+    toast.success("Suivi Garmin arrêté");
   };
 
   const startTracking = async () => {
@@ -166,6 +233,7 @@ export default function TrackerPage() {
   useEffect(() => {
     return () => {
       if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (garminIntervalRef.current != null) window.clearInterval(garminIntervalRef.current);
     };
   }, []);
 
@@ -225,6 +293,50 @@ export default function TrackerPage() {
           )}
 
           {error && <p className="text-xs text-destructive mt-3">{error}</p>}
+        </Card>
+      )}
+
+      {!isDnfOrProblem && (
+        <Card className="glass-card p-6 mb-4">
+          <div className="flex items-center gap-3 mb-4">
+            <Watch className={`h-4 w-4 ${garminActive ? "text-primary-glow" : "text-muted-foreground"}`} />
+            <p className="text-sm font-medium">Garmin LiveTrack</p>
+            {garminActive && (
+              <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-success">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-75 animate-ping" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
+                </span>
+                Connecté
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Colle l'URL LiveTrack envoyée par ta montre Garmin pour un suivi plus précis (priorité sur le GPS du téléphone).
+          </p>
+          <Input
+            type="url"
+            placeholder="https://livetrack.garmin.com/session/.../token/..."
+            value={garminUrl}
+            onChange={(e) => setGarminUrl(e.target.value)}
+            disabled={garminActive}
+            className="mb-3 text-xs"
+          />
+          {garminActive ? (
+            <Button variant="outline" size="sm" className="w-full" onClick={stopGarmin}>
+              <Square className="h-4 w-4 mr-2" /> Désactiver Garmin
+            </Button>
+          ) : (
+            <Button variant="secondary" size="sm" className="w-full" onClick={startGarmin}>
+              <Watch className="h-4 w-4 mr-2" /> Activer le suivi Garmin
+            </Button>
+          )}
+          {garminLastPointAt && (
+            <p className="text-[11px] text-muted-foreground mt-2 text-center">
+              Dernier point Garmin : {new Date(garminLastPointAt).toLocaleTimeString("fr-FR")}
+            </p>
+          )}
+          {garminError && <p className="text-xs text-destructive mt-2">{garminError}</p>}
         </Card>
       )}
 
