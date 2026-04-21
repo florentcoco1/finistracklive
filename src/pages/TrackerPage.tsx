@@ -233,6 +233,7 @@ export default function TrackerPage() {
   useEffect(() => {
     return () => {
       if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (garminIntervalRef.current != null) window.clearInterval(garminIntervalRef.current);
     };
   }, []);
 
@@ -292,6 +293,50 @@ export default function TrackerPage() {
           )}
 
           {error && <p className="text-xs text-destructive mt-3">{error}</p>}
+        </Card>
+      )}
+
+      {!isDnfOrProblem && (
+        <Card className="glass-card p-6 mb-4">
+          <div className="flex items-center gap-3 mb-4">
+            <Watch className={`h-4 w-4 ${garminActive ? "text-primary-glow" : "text-muted-foreground"}`} />
+            <p className="text-sm font-medium">Garmin LiveTrack</p>
+            {garminActive && (
+              <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-success">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-75 animate-ping" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
+                </span>
+                Connecté
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Colle l'URL LiveTrack envoyée par ta montre Garmin pour un suivi plus précis (priorité sur le GPS du téléphone).
+          </p>
+          <Input
+            type="url"
+            placeholder="https://livetrack.garmin.com/session/.../token/..."
+            value={garminUrl}
+            onChange={(e) => setGarminUrl(e.target.value)}
+            disabled={garminActive}
+            className="mb-3 text-xs"
+          />
+          {garminActive ? (
+            <Button variant="outline" size="sm" className="w-full" onClick={stopGarmin}>
+              <Square className="h-4 w-4 mr-2" /> Désactiver Garmin
+            </Button>
+          ) : (
+            <Button variant="secondary" size="sm" className="w-full" onClick={startGarmin}>
+              <Watch className="h-4 w-4 mr-2" /> Activer le suivi Garmin
+            </Button>
+          )}
+          {garminLastPointAt && (
+            <p className="text-[11px] text-muted-foreground mt-2 text-center">
+              Dernier point Garmin : {new Date(garminLastPointAt).toLocaleTimeString("fr-FR")}
+            </p>
+          )}
+          {garminError && <p className="text-xs text-destructive mt-2">{garminError}</p>}
         </Card>
       )}
 
