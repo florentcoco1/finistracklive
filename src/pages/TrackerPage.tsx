@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ChevronLeft, Play, Square, Activity, Satellite, Flag, AlertTriangle } from "lucide-react";
+import { ChevronLeft, Play, Square, Activity, Satellite, Flag, AlertTriangle, Watch } from "lucide-react";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
 import type { RunnerStatus } from "@/lib/types";
 import { Input } from "@/components/ui/input";
@@ -47,6 +47,17 @@ export default function TrackerPage() {
   const [error, setError] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const lastSentRef = useRef<number>(0);
+
+  // Garmin LiveTrack
+  const [garminUrl, setGarminUrl] = useState<string>(() => localStorage.getItem("garmin_livetrack_url") ?? "");
+  const [garminActive, setGarminActive] = useState(false);
+  const [garminError, setGarminError] = useState<string | null>(null);
+  const [garminLastPointAt, setGarminLastPointAt] = useState<number | null>(null);
+  const garminIntervalRef = useRef<number | null>(null);
+  const garminSinceRef = useRef<number>(0);
+
+  // True if Garmin produced a fresh point in the last 30s -> phone GPS pauses sending
+  const garminFreshRef = useRef<boolean>(false);
 
   useEffect(() => { document.title = "Suivi GPS — FinisTrackLive"; }, []);
 
