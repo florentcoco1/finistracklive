@@ -77,6 +77,8 @@ export default function TrackerPage() {
 
   const sendPosition = async (lat: number, lng: number, accuracy?: number, speed?: number) => {
     if (!reg) return;
+    // Priority Garmin: if a fresh Garmin point arrived in the last 30s, skip phone GPS
+    if (garminFreshRef.current) return;
     // throttle locally to ~5s
     const now = Date.now();
     if (now - lastSentRef.current < 4500) return;
@@ -90,6 +92,60 @@ export default function TrackerPage() {
       return;
     }
     if (data?.position) setLastPos(data.position as Position);
+  };
+
+  // Poll Garmin LiveTrack every 10s
+  const pollGarmin = async () => {
+    if (!reg || !garminUrl) return;
+    const { data, error } = await supabase.functions.invoke("poll-garmin-livetrack", {
+      body: {
+        registration_id: reg.id,
+        livetrack_url: garminUrl,
+        since_ms: garminSinceRef.current,
+      },
+    });
+    if (error) {
+      setGarminError(error.message);
+      return;
+    }
+    setGarminError(null);
+    if (data?.latest_ms && data.latest_ms > garminSinceRef.current) {
+      garminSinceRef.current = data.latest_ms;
+      setGarminLastPointAt(data.latest_ms);
+    }
+    if (data?.points > 0) {
+      garminFreshRef.current = true;
+      // expire freshness after 30s of silence
+      window.setTimeout(() => { garminFreshRef.current = false; }, 30_000);
+    }
+    if (data?.position) setLastPos(data.position as Position);
+  };
+
+  const startGarmin = () => {
+    if (!garminUrl.trim()) {
+      toast.error("Colle d'abord ton URL Garmin LiveTrack");
+      return;
+    }
+    if (!/livetrack\.garmin\.com\/session\/.+\/token\/.+/.test(garminUrl)) {
+      toast.error("URL invalide. Format: https://livetrack.garmin.com/session/.../token/...");
+      return;
+    }
+    localStorage.setItem("garmin_livetrack_url", garminUrl.trim());
+    setGarminActive(true);
+    garminSinceRef.current = 0;
+    pollGarmin();
+    garminIntervalRef.current = window.setInterval(pollGarmin, 10_000);
+    toast.success("Suivi Garmin LiveTrack activé");
+  };
+
+  const stopGarmin = () => {
+    if (garminIntervalRef.current != null) {
+      window.clearInterval(garminIntervalRef.current);
+      garminIntervalRef.current = null;
+    }
+    setGarminActive(false);
+    garminFreshRef.current = false;
+    toast.success("Suivi Garmin arrêté");
   };
 
   const startTracking = async () => {
