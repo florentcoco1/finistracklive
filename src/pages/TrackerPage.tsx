@@ -202,8 +202,8 @@ export default function TrackerPage() {
     toast.success("Suivi arrêté");
   };
 
-  const [dnfDialogOpen, setDnfDialogOpen] = useState(false);
-  const [problemDialogOpen, setProblemDialogOpen] = useState(false);
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const [stopChoice, setStopChoice] = useState<"finished" | "dnf" | "problem" | "">("");
   const [dnfReason, setDnfReason] = useState("");
   const [problemDesc, setProblemDesc] = useState("");
 
@@ -216,28 +216,63 @@ export default function TrackerPage() {
     "Autre",
   ];
 
-  const reportStatus = async (status: RunnerStatus, extra?: { dnf_reason?: string; problem_description?: string }) => {
-    if (!reg) return;
+  // Stop tracking + persist outcome (arrived / dnf / problem)
+  const confirmStop = async () => {
+    if (!reg || !stopChoice) return;
+
+    // Stop GPS watchers
     if (watchIdRef.current != null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
+    if (garminIntervalRef.current != null) {
+      window.clearInterval(garminIntervalRef.current);
+      garminIntervalRef.current = null;
+      setGarminActive(false);
+      garminFreshRef.current = false;
+    }
     setTracking(false);
 
-    await supabase
+    const update: Record<string, unknown> = {
+      tracking_active: false,
+      finished_at: new Date().toISOString(),
+    };
+
+    if (stopChoice === "finished") {
+      update.runner_status = "running"; // arrived: status stays "running", finished_at marks arrival
+      update.dnf_reason = null;
+      update.problem_description = null;
+    } else if (stopChoice === "dnf") {
+      if (!dnfReason) { toast.error("Choisis un motif d'abandon"); return; }
+      update.runner_status = "dnf";
+      update.dnf_reason = dnfReason;
+    } else if (stopChoice === "problem") {
+      if (!problemDesc.trim()) { toast.error("Décris le problème"); return; }
+      update.runner_status = "problem";
+      update.problem_description = problemDesc.trim();
+    }
+
+    const { error } = await supabase
       .from("race_registrations")
-      .update({
-        runner_status: status,
-        tracking_active: false,
-        finished_at: new Date().toISOString(),
-        ...extra,
-      } as any)
+      .update(update as any)
       .eq("id", reg.id);
 
-    setReg({ ...reg, runner_status: status });
-    setDnfDialogOpen(false);
-    setProblemDialogOpen(false);
-    toast.success(status === "dnf" ? "Abandon enregistré. Bon courage !" : "Problème signalé. L'organisation est prévenue.");
+    if (error) { toast.error(error.message); return; }
+
+    setReg({
+      ...reg,
+      runner_status: (update.runner_status as RunnerStatus) ?? reg.runner_status,
+    });
+    setStopDialogOpen(false);
+    setStopChoice("");
+    setDnfReason("");
+    setProblemDesc("");
+
+    toast.success(
+      stopChoice === "finished" ? "Bravo, arrivée enregistrée 🏁" :
+      stopChoice === "dnf" ? "Abandon enregistré. Bon courage !" :
+      "Problème signalé. L'organisation est prévenue.",
+    );
   };
 
   useEffect(() => {
