@@ -155,9 +155,14 @@ export default function TrackerPage() {
       return;
     }
 
+    // Reset finished_at on (re)start so the runner reappears as active on the map
     const { error } = await supabase
       .from("race_registrations")
-      .update({ tracking_active: true, started_at: reg.tracking_active ? undefined : new Date().toISOString() })
+      .update({
+        tracking_active: true,
+        started_at: new Date().toISOString(),
+        finished_at: null,
+      } as any)
       .eq("id", reg.id);
     if (error) { toast.error(error.message); return; }
 
@@ -184,9 +189,14 @@ export default function TrackerPage() {
     }
     setTracking(false);
     if (reg) {
+      // Only mark as finished if the runner actually reached the finish line (>=99%)
+      const reached = (lastPos?.progress_percent ?? 0) >= 99;
       await supabase
         .from("race_registrations")
-        .update({ tracking_active: false, finished_at: new Date().toISOString() })
+        .update({
+          tracking_active: false,
+          ...(reached ? { finished_at: new Date().toISOString() } : {}),
+        } as any)
         .eq("id", reg.id);
     }
     toast.success("Suivi arrêté");
