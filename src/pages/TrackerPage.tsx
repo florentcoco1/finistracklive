@@ -182,25 +182,6 @@ export default function TrackerPage() {
     );
   };
 
-  const stopTracking = async () => {
-    if (watchIdRef.current != null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-    setTracking(false);
-    if (reg) {
-      // Only mark as finished if the runner actually reached the finish line (>=99%)
-      const reached = (lastPos?.progress_percent ?? 0) >= 99;
-      await supabase
-        .from("race_registrations")
-        .update({
-          tracking_active: false,
-          ...(reached ? { finished_at: new Date().toISOString() } : {}),
-        } as any)
-        .eq("id", reg.id);
-    }
-    toast.success("Suivi arrêté");
-  };
 
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
   const [stopChoice, setStopChoice] = useState<"finished" | "dnf" | "problem" | "">("");
