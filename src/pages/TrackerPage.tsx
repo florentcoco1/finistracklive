@@ -182,28 +182,9 @@ export default function TrackerPage() {
     );
   };
 
-  const stopTracking = async () => {
-    if (watchIdRef.current != null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-    setTracking(false);
-    if (reg) {
-      // Only mark as finished if the runner actually reached the finish line (>=99%)
-      const reached = (lastPos?.progress_percent ?? 0) >= 99;
-      await supabase
-        .from("race_registrations")
-        .update({
-          tracking_active: false,
-          ...(reached ? { finished_at: new Date().toISOString() } : {}),
-        } as any)
-        .eq("id", reg.id);
-    }
-    toast.success("Suivi arrêté");
-  };
 
-  const [dnfDialogOpen, setDnfDialogOpen] = useState(false);
-  const [problemDialogOpen, setProblemDialogOpen] = useState(false);
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const [stopChoice, setStopChoice] = useState<"finished" | "dnf" | "problem" | "">("");
   const [dnfReason, setDnfReason] = useState("");
   const [problemDesc, setProblemDesc] = useState("");
 
@@ -216,28 +197,63 @@ export default function TrackerPage() {
     "Autre",
   ];
 
-  const reportStatus = async (status: RunnerStatus, extra?: { dnf_reason?: string; problem_description?: string }) => {
-    if (!reg) return;
+  // Stop tracking + persist outcome (arrived / dnf / problem)
+  const confirmStop = async () => {
+    if (!reg || !stopChoice) return;
+
+    // Stop GPS watchers
     if (watchIdRef.current != null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
+    if (garminIntervalRef.current != null) {
+      window.clearInterval(garminIntervalRef.current);
+      garminIntervalRef.current = null;
+      setGarminActive(false);
+      garminFreshRef.current = false;
+    }
     setTracking(false);
 
-    await supabase
+    const update: Record<string, unknown> = {
+      tracking_active: false,
+      finished_at: new Date().toISOString(),
+    };
+
+    if (stopChoice === "finished") {
+      update.runner_status = "running"; // arrived: status stays "running", finished_at marks arrival
+      update.dnf_reason = null;
+      update.problem_description = null;
+    } else if (stopChoice === "dnf") {
+      if (!dnfReason) { toast.error("Choisis un motif d'abandon"); return; }
+      update.runner_status = "dnf";
+      update.dnf_reason = dnfReason;
+    } else if (stopChoice === "problem") {
+      if (!problemDesc.trim()) { toast.error("Décris le problème"); return; }
+      update.runner_status = "problem";
+      update.problem_description = problemDesc.trim();
+    }
+
+    const { error } = await supabase
       .from("race_registrations")
-      .update({
-        runner_status: status,
-        tracking_active: false,
-        finished_at: new Date().toISOString(),
-        ...extra,
-      } as any)
+      .update(update as any)
       .eq("id", reg.id);
 
-    setReg({ ...reg, runner_status: status });
-    setDnfDialogOpen(false);
-    setProblemDialogOpen(false);
-    toast.success(status === "dnf" ? "Abandon enregistré. Bon courage !" : "Problème signalé. L'organisation est prévenue.");
+    if (error) { toast.error(error.message); return; }
+
+    setReg({
+      ...reg,
+      runner_status: (update.runner_status as RunnerStatus) ?? reg.runner_status,
+    });
+    setStopDialogOpen(false);
+    setStopChoice("");
+    setDnfReason("");
+    setProblemDesc("");
+
+    toast.success(
+      stopChoice === "finished" ? "Bravo, arrivée enregistrée 🏁" :
+      stopChoice === "dnf" ? "Abandon enregistré. Bon courage !" :
+      "Problème signalé. L'organisation est prévenue.",
+    );
   };
 
   useEffect(() => {
@@ -293,7 +309,7 @@ export default function TrackerPage() {
           </div>
 
           {tracking ? (
-            <Button variant="destructive" size="xl" className="w-full" onClick={stopTracking}>
+            <Button variant="destructive" size="xl" className="w-full" onClick={() => setStopDialogOpen(true)}>
               <Square className="h-5 w-5 mr-2" /> Arrêter le suivi
             </Button>
           ) : (
@@ -350,71 +366,77 @@ export default function TrackerPage() {
         </Card>
       )}
 
-      {!isDnfOrProblem && (
-        <Card className="glass-card p-4 mb-4">
-          <p className="text-xs text-muted-foreground mb-3 text-center font-medium">Signaler un problème</p>
-          <div className="grid grid-cols-2 gap-3">
-            <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={() => setDnfDialogOpen(true)}>
-              <Flag className="h-4 w-4 mr-2" /> Abandon
-            </Button>
-            <Button variant="outline" className="border-warning/50 text-warning hover:bg-warning/10" onClick={() => setProblemDialogOpen(true)}>
-              <AlertTriangle className="h-4 w-4 mr-2" /> Problème
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {/* DNF Dialog with reason */}
-      <Dialog open={dnfDialogOpen} onOpenChange={setDnfDialogOpen}>
+      {/* Unified Stop Dialog: arrived / DNF / problem */}
+      <Dialog open={stopDialogOpen} onOpenChange={(o) => { setStopDialogOpen(o); if (!o) { setStopChoice(""); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Motif de l'abandon</DialogTitle>
+            <DialogTitle>Arrêter le suivi</DialogTitle>
           </DialogHeader>
-          <RadioGroup value={dnfReason} onValueChange={setDnfReason} className="space-y-2">
-            {DNF_REASONS.map((reason) => (
-              <div key={reason} className="flex items-center space-x-2">
-                <RadioGroupItem value={reason} id={`dnf-${reason}`} />
-                <Label htmlFor={`dnf-${reason}`} className="cursor-pointer">{reason}</Label>
-              </div>
-            ))}
+
+          <p className="text-sm text-muted-foreground">Quel est le motif de l'arrêt ?</p>
+
+          <RadioGroup value={stopChoice} onValueChange={(v) => setStopChoice(v as typeof stopChoice)} className="space-y-2">
+            <div className="flex items-center space-x-2 rounded-lg border border-border/50 p-3 hover:border-success/50 transition-smooth">
+              <RadioGroupItem value="finished" id="stop-finished" />
+              <Label htmlFor="stop-finished" className="cursor-pointer flex items-center gap-2">
+                <Flag className="h-4 w-4 text-success" /> Je suis arrivé(e) 🏁
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2 rounded-lg border border-border/50 p-3 hover:border-destructive/50 transition-smooth">
+              <RadioGroupItem value="dnf" id="stop-dnf" />
+              <Label htmlFor="stop-dnf" className="cursor-pointer flex items-center gap-2">
+                <Flag className="h-4 w-4 text-destructive" /> Abandon
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2 rounded-lg border border-border/50 p-3 hover:border-warning/50 transition-smooth">
+              <RadioGroupItem value="problem" id="stop-problem" />
+              <Label htmlFor="stop-problem" className="cursor-pointer flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-warning" /> J'ai un problème
+              </Label>
+            </div>
           </RadioGroup>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDnfDialogOpen(false)}>Annuler</Button>
-            <Button
-              variant="destructive"
-              disabled={!dnfReason}
-              onClick={() => reportStatus("dnf", { dnf_reason: dnfReason })}
-            >
-              Confirmer l'abandon
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      {/* Problem Dialog with description */}
-      <Dialog open={problemDialogOpen} onOpenChange={setProblemDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Décrire le problème</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            L'organisation sera prévenue avec ta position et ton téléphone.
-          </p>
-          <Textarea
-            value={problemDesc}
-            onChange={(e) => setProblemDesc(e.target.value)}
-            placeholder="Décris brièvement ton problème…"
-            maxLength={300}
-            rows={3}
-          />
+          {stopChoice === "dnf" && (
+            <div className="mt-2">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Motif de l'abandon</p>
+              <RadioGroup value={dnfReason} onValueChange={setDnfReason} className="space-y-1.5">
+                {DNF_REASONS.map((reason) => (
+                  <div key={reason} className="flex items-center space-x-2">
+                    <RadioGroupItem value={reason} id={`dnf-${reason}`} />
+                    <Label htmlFor={`dnf-${reason}`} className="cursor-pointer text-sm">{reason}</Label>
+                  </div>
+                ))}
+              </RadioGroup>
+            </div>
+          )}
+
+          {stopChoice === "problem" && (
+            <div className="mt-2 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                L'organisation sera prévenue avec ta position et ton téléphone.
+              </p>
+              <Textarea
+                value={problemDesc}
+                onChange={(e) => setProblemDesc(e.target.value)}
+                placeholder="Décris brièvement ton problème…"
+                maxLength={300}
+                rows={3}
+              />
+            </div>
+          )}
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setProblemDialogOpen(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setStopDialogOpen(false)}>Annuler</Button>
             <Button
-              className="bg-warning text-warning-foreground hover:bg-warning/90"
-              disabled={!problemDesc.trim()}
-              onClick={() => reportStatus("problem", { problem_description: problemDesc.trim() })}
+              variant={stopChoice === "dnf" ? "destructive" : "hero"}
+              disabled={
+                !stopChoice ||
+                (stopChoice === "dnf" && !dnfReason) ||
+                (stopChoice === "problem" && !problemDesc.trim())
+              }
+              onClick={confirmStop}
             >
-              Signaler
+              Confirmer
             </Button>
           </DialogFooter>
         </DialogContent>
