@@ -131,7 +131,7 @@ export default function RaceMap({ routeCoords, routePoints, runners, focusedRunn
         .filter((r) => r.latitude != null && r.longitude != null)
         .map((r) => (
           <Marker
-            key={r.registration_id}
+            key={`${r.registration_id}:${r.last_position_at ?? `${r.latitude}:${r.longitude}`}`}
             position={[r.latitude!, r.longitude!]}
             icon={makeRunnerIcon(r.bib_number, colorForRegistration(r.registration_id))}
           />

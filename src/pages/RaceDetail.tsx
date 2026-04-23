@@ -64,6 +64,40 @@ export default function RaceDetail() {
     if (!raceId) return;
     let active = true;
 
+    const patchRunnerPosition = (incoming: Partial<LeaderboardRow> & { registration_id: string; recorded_at?: string | null }) => {
+      if (!active) return;
+      setRows((current) => {
+        let matched = false;
+        const next = current.map((row) => {
+          if (row.registration_id !== incoming.registration_id) return row;
+          matched = true;
+
+          const incomingAt = incoming.recorded_at ?? row.last_position_at;
+          const currentAt = row.last_position_at;
+          if (
+            incomingAt &&
+            currentAt &&
+            new Date(incomingAt).getTime() < new Date(currentAt).getTime()
+          ) {
+            return row;
+          }
+
+          return {
+            ...row,
+            latitude: incoming.latitude ?? row.latitude,
+            longitude: incoming.longitude ?? row.longitude,
+            distance_along_route_m: incoming.distance_along_route_m ?? row.distance_along_route_m,
+            progress_percent: incoming.progress_percent ?? row.progress_percent,
+            rolling_speed_kmh: incoming.rolling_speed_kmh ?? row.rolling_speed_kmh,
+            rolling_pace_sec_per_km: incoming.rolling_pace_sec_per_km ?? row.rolling_pace_sec_per_km,
+            last_position_at: incomingAt ?? row.last_position_at,
+          };
+        });
+
+        return matched ? next : current;
+      });
+    };
+
     const reload = async () => {
       const { data, error } = await supabase
         .from("live_leaderboard")
@@ -81,6 +115,22 @@ export default function RaceDetail() {
         { event: "*", schema: "public", table: "runner_positions" },
         (payload) => {
           console.log("[realtime] runner_positions", payload.eventType);
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            const next = payload.new as {
+              registration_id: string;
+              latitude: number | null;
+              longitude: number | null;
+              distance_along_route_m: number | null;
+              progress_percent: number | null;
+              rolling_speed_kmh: number | null;
+              rolling_pace_sec_per_km: number | null;
+              recorded_at: string;
+            };
+
+            patchRunnerPosition(next);
+            return;
+          }
+
           reload();
         },
       )
@@ -97,7 +147,7 @@ export default function RaceDetail() {
       });
 
     // Polling fallback in case realtime drops
-    const poll = window.setInterval(reload, 8000);
+    const poll = window.setInterval(reload, 4000);
 
     return () => {
       active = false;
