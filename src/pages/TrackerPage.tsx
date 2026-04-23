@@ -45,8 +45,12 @@ export default function TrackerPage() {
   const [tracking, setTracking] = useState(false);
   const [lastPos, setLastPos] = useState<Position | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pointsSent, setPointsSent] = useState(0);
+  const [lastSendAt, setLastSendAt] = useState<number | null>(null);
+  const [lastSendError, setLastSendError] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const lastSentRef = useRef<number>(0);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   // Garmin LiveTrack
   const [garminUrl, setGarminUrl] = useState<string>(() => localStorage.getItem("garmin_livetrack_url") ?? "");
