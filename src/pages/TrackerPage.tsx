@@ -121,7 +121,13 @@ export default function TrackerPage() {
       },
     });
     if (error) {
+      console.error("[garmin] invoke error", error);
       setGarminError(error.message);
+      return;
+    }
+    if (data && (data as any).ok === false) {
+      console.warn("[garmin] response not ok", data);
+      setGarminError((data as any).error ?? "Erreur Garmin inconnue");
       return;
     }
     setGarminError(null);
