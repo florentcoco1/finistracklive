@@ -42,6 +42,13 @@ interface TrackPoint {
   fitnessPointData?: { speedMetersPerSecond?: number };
 }
 
+function respond(payload: Record<string, unknown>, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -58,37 +65,23 @@ Deno.serve(async (req) => {
     });
     const { data: { user }, error: userErr } = await userClient.auth.getUser();
     if (userErr || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return respond({ ok: false, error: "Non authentifié" });
     }
 
     const body = await req.json().catch(() => ({}));
     const { registration_id, livetrack_url, since_ms } = body ?? {};
 
     if (typeof registration_id !== "string" || typeof livetrack_url !== "string") {
-      return new Response(
-        JSON.stringify({ error: "registration_id and livetrack_url required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return respond({ ok: false, error: "registration_id et livetrack_url requis" });
     }
 
     const parsed = parseLiveTrackUrl(livetrack_url);
     if (!parsed) {
-      return new Response(
-        JSON.stringify({
-          error:
-            "URL Garmin LiveTrack invalide. Format attendu: https://livetrack.garmin.com/session/.../token/...",
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return respond({
+        ok: false,
+        error:
+          "URL Garmin LiveTrack invalide. Format attendu: https://livetrack.garmin.com/session/.../token/...",
+      });
     }
 
     // Fetch trackpoints from Garmin
@@ -96,24 +89,32 @@ Deno.serve(async (req) => {
     const garminUrl =
       `https://livetrack.garmin.com/services/session/${parsed.sessionId}/trackpoints?requestTime=${requestTime}`;
 
-    const garminRes = await fetch(garminUrl, {
-      headers: {
-        "Authorization": parsed.token,
-        "Accept": "application/json",
-        "User-Agent": "FinisTrackLive/1.0",
-      },
-    });
+    let garminRes: Response;
+    try {
+      garminRes = await fetch(garminUrl, {
+        headers: {
+          "Authorization": parsed.token,
+          "Accept": "application/json",
+          "User-Agent": "FinisTrackLive/1.0",
+        },
+      });
+    } catch (e) {
+      return respond({
+        ok: false,
+        error: `Impossible de joindre Garmin: ${(e as Error).message}`,
+        points: 0,
+      });
+    }
 
     if (!garminRes.ok) {
-      return new Response(
-        JSON.stringify({
-          error: `Garmin LiveTrack indisponible (HTTP ${garminRes.status}). Vérifie que la session est active.`,
-        }),
-        {
-          status: 502,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      const text = await garminRes.text().catch(() => "");
+      return respond({
+        ok: false,
+        error: `Garmin LiveTrack indisponible (HTTP ${garminRes.status}). Vérifie que la session est active et que le partage est public.`,
+        garmin_status: garminRes.status,
+        garmin_body_preview: text.slice(0, 200),
+        points: 0,
+      });
     }
 
     const garminJson = await garminRes.json().catch(() => null) as
@@ -128,13 +129,7 @@ Deno.serve(async (req) => {
       : [];
 
     if (trackPoints.length === 0) {
-      return new Response(
-        JSON.stringify({ ok: true, points: 0, latest_ms: requestTime }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return respond({ ok: true, points: 0, latest_ms: requestTime });
     }
 
     // Sort by dateTime ascending and pick the latest valid point
@@ -150,13 +145,7 @@ Deno.serve(async (req) => {
       );
 
     if (validPoints.length === 0) {
-      return new Response(
-        JSON.stringify({ ok: true, points: 0, latest_ms: requestTime }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return respond({ ok: true, points: 0, latest_ms: requestTime });
     }
 
     const latest = validPoints[validPoints.length - 1];
@@ -181,26 +170,18 @@ Deno.serve(async (req) => {
 
     const recordJson = await recordRes.json().catch(() => ({}));
 
-    return new Response(
-      JSON.stringify({
-        ok: recordRes.ok,
-        points: validPoints.length,
-        latest_ms: latestMs,
-        position: (recordJson as any)?.position ?? null,
-        record_status: recordRes.status,
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
-    );
+    return respond({
+      ok: recordRes.ok,
+      points: validPoints.length,
+      latest_ms: latestMs,
+      position: (recordJson as any)?.position ?? null,
+      record_status: recordRes.status,
+      record_error: recordRes.ok ? null : (recordJson as any)?.error ?? null,
+    });
   } catch (e) {
-    return new Response(
-      JSON.stringify({ error: (e as Error).message ?? "Server error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
-    );
+    return respond({
+      ok: false,
+      error: (e as Error).message ?? "Server error",
+    });
   }
 });
