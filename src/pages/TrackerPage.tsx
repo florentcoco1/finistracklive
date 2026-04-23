@@ -308,6 +308,7 @@ export default function TrackerPage() {
     return () => {
       if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
       if (garminIntervalRef.current != null) window.clearInterval(garminIntervalRef.current);
+      releaseWakeLock();
     };
   }, []);
 
