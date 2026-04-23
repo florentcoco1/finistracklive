@@ -45,8 +45,12 @@ export default function TrackerPage() {
   const [tracking, setTracking] = useState(false);
   const [lastPos, setLastPos] = useState<Position | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pointsSent, setPointsSent] = useState(0);
+  const [lastSendAt, setLastSendAt] = useState<number | null>(null);
+  const [lastSendError, setLastSendError] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const lastSentRef = useRef<number>(0);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   // Garmin LiveTrack
   const [garminUrl, setGarminUrl] = useState<string>(() => localStorage.getItem("garmin_livetrack_url") ?? "");
@@ -79,19 +83,31 @@ export default function TrackerPage() {
     if (!reg) return;
     // Priority Garmin: if a fresh Garmin point arrived in the last 30s, skip phone GPS
     if (garminFreshRef.current) return;
-    // throttle locally to ~5s
+    // throttle locally to ~3s (server enforces 2s minimum)
     const now = Date.now();
-    if (now - lastSentRef.current < 4500) return;
+    if (now - lastSentRef.current < 3000) return;
     lastSentRef.current = now;
 
     const { data, error } = await supabase.functions.invoke("record-position", {
       body: { registration_id: reg.id, latitude: lat, longitude: lng, accuracy, speed },
     });
     if (error) {
-      console.error(error);
+      console.error("[record-position] error", error);
+      setLastSendError(error.message ?? "Envoi échoué");
       return;
     }
-    if (data?.position) setLastPos(data.position as Position);
+    if ((data as any)?.error) {
+      console.warn("[record-position] server", data);
+      setLastSendError((data as any).error);
+      return;
+    }
+    setLastSendError(null);
+    setPointsSent((n) => n + 1);
+    setLastSendAt(Date.now());
+    if (data?.position) {
+      setLastPos(data.position as Position);
+      console.log("[record-position] ok", data.position);
+    }
   };
 
   // Poll Garmin LiveTrack every 10s
@@ -148,6 +164,33 @@ export default function TrackerPage() {
     toast.success("Suivi Garmin arrêté");
   };
 
+  const acquireWakeLock = async () => {
+    try {
+      if ("wakeLock" in navigator) {
+        wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
+        wakeLockRef.current?.addEventListener?.("release", () => {
+          console.log("[wake-lock] released");
+        });
+      }
+    } catch (e) {
+      console.warn("[wake-lock] failed", e);
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    try { await wakeLockRef.current?.release?.(); } catch { /* noop */ }
+    wakeLockRef.current = null;
+  };
+
+  // Re-acquire wake lock when tab becomes visible again
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible" && tracking) acquireWakeLock();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [tracking]);
+
   const startTracking = async () => {
     if (!reg) return;
     if (!("geolocation" in navigator)) {
@@ -168,10 +211,14 @@ export default function TrackerPage() {
 
     setTracking(true);
     setError(null);
+    setPointsSent(0);
+    setLastSendError(null);
+    acquireWakeLock();
     toast.success("Suivi GPS démarré");
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
+        console.log("[geo] watchPosition", pos.coords.latitude, pos.coords.longitude, "acc:", pos.coords.accuracy);
         sendPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed ?? undefined);
       },
       (err) => {
@@ -212,6 +259,7 @@ export default function TrackerPage() {
       setGarminActive(false);
       garminFreshRef.current = false;
     }
+    releaseWakeLock();
     setTracking(false);
 
     const update: Record<string, unknown> = {
@@ -260,6 +308,7 @@ export default function TrackerPage() {
     return () => {
       if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
       if (garminIntervalRef.current != null) window.clearInterval(garminIntervalRef.current);
+      releaseWakeLock();
     };
   }, []);
 
@@ -453,8 +502,26 @@ export default function TrackerPage() {
           <Stat label="Vitesse" value={formatSpeed(lastPos?.rolling_speed_kmh)} />
           <Stat label="Allure" value={formatPace(lastPos?.rolling_pace_sec_per_km)} />
         </div>
+
+        <div className="mt-4 rounded-lg bg-secondary/30 border border-border/40 p-3 space-y-1.5">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Diagnostic transmission</p>
+          <div className="flex justify-between text-xs">
+            <span className="text-muted-foreground">Points envoyés</span>
+            <span className="font-mono font-semibold">{pointsSent}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-muted-foreground">Dernier envoi</span>
+            <span className="font-mono">
+              {lastSendAt ? new Date(lastSendAt).toLocaleTimeString("fr-FR") : "—"}
+            </span>
+          </div>
+          {lastSendError && (
+            <p className="text-[11px] text-destructive mt-1">⚠️ {lastSendError}</p>
+          )}
+        </div>
+
         <p className="text-[11px] text-muted-foreground mt-3 text-center">
-          Garde l'écran allumé et ne ferme pas l'onglet pendant la course.
+          📱 L'écran reste allumé pendant le suivi. Évite de fermer l'onglet.
         </p>
       </Card>
     </main>

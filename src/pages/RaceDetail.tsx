@@ -59,16 +59,17 @@ export default function RaceDetail() {
       });
   }, [raceId]);
 
-  // Load + subscribe to leaderboard
+  // Load + subscribe to leaderboard, with polling fallback every 8s
   useEffect(() => {
     if (!raceId) return;
     let active = true;
 
     const reload = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("live_leaderboard")
         .select("*")
         .eq("race_id", raceId);
+      if (error) console.warn("[leaderboard] reload error", error);
       if (active) setRows((data ?? []) as LeaderboardRow[]);
     };
     reload();
@@ -78,17 +79,29 @@ export default function RaceDetail() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "runner_positions" },
-        () => reload(),
+        (payload) => {
+          console.log("[realtime] runner_positions", payload.eventType);
+          reload();
+        },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "race_registrations", filter: `race_id=eq.${raceId}` },
-        () => reload(),
+        (payload) => {
+          console.log("[realtime] race_registrations", payload.eventType);
+          reload();
+        },
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("[realtime] channel status:", status);
+      });
+
+    // Polling fallback in case realtime drops
+    const poll = window.setInterval(reload, 8000);
 
     return () => {
       active = false;
+      window.clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [raceId]);
