@@ -164,6 +164,33 @@ export default function TrackerPage() {
     toast.success("Suivi Garmin arrêté");
   };
 
+  const acquireWakeLock = async () => {
+    try {
+      if ("wakeLock" in navigator) {
+        wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
+        wakeLockRef.current?.addEventListener?.("release", () => {
+          console.log("[wake-lock] released");
+        });
+      }
+    } catch (e) {
+      console.warn("[wake-lock] failed", e);
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    try { await wakeLockRef.current?.release?.(); } catch { /* noop */ }
+    wakeLockRef.current = null;
+  };
+
+  // Re-acquire wake lock when tab becomes visible again
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible" && tracking) acquireWakeLock();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [tracking]);
+
   const startTracking = async () => {
     if (!reg) return;
     if (!("geolocation" in navigator)) {
@@ -184,10 +211,14 @@ export default function TrackerPage() {
 
     setTracking(true);
     setError(null);
+    setPointsSent(0);
+    setLastSendError(null);
+    acquireWakeLock();
     toast.success("Suivi GPS démarré");
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
+        console.log("[geo] watchPosition", pos.coords.latitude, pos.coords.longitude, "acc:", pos.coords.accuracy);
         sendPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed ?? undefined);
       },
       (err) => {
