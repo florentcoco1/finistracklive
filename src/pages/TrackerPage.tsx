@@ -259,6 +259,7 @@ export default function TrackerPage() {
       setGarminActive(false);
       garminFreshRef.current = false;
     }
+    releaseWakeLock();
     setTracking(false);
 
     const update: Record<string, unknown> = {
