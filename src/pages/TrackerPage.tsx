@@ -39,6 +39,7 @@ export default function TrackerPage() {
   const { id: raceId } = useParams<{ id: string }>();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const geoOptions = { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 } as const;
 
   const [race, setRace] = useState<Race | null>(null);
   const [reg, setReg] = useState<Registration | null>(null);
@@ -51,6 +52,11 @@ export default function TrackerPage() {
   const watchIdRef = useRef<number | null>(null);
   const lastSentRef = useRef<number>(0);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const gpsHeartbeatRef = useRef<number | null>(null);
+  const lastGpsEventAtRef = useRef<number>(0);
+  const restartCooldownRef = useRef<number>(0);
+  const trackingRef = useRef(false);
+  const garminFreshTimeoutRef = useRef<number | null>(null);
 
   // Garmin LiveTrack
   const [garminUrl, setGarminUrl] = useState<string>(() => localStorage.getItem("garmin_livetrack_url") ?? "");
@@ -64,6 +70,7 @@ export default function TrackerPage() {
   const garminFreshRef = useRef<boolean>(false);
 
   useEffect(() => { document.title = "Suivi GPS — FinisTrackLive"; }, []);
+  useEffect(() => { trackingRef.current = tracking; }, [tracking]);
 
   useEffect(() => {
     if (!raceId || !user) return;
@@ -104,10 +111,56 @@ export default function TrackerPage() {
     setLastSendError(null);
     setPointsSent((n) => n + 1);
     setLastSendAt(Date.now());
+    setError(null);
     if (data?.position) {
       setLastPos(data.position as Position);
       console.log("[record-position] ok", data.position);
     }
+  };
+
+  const clearPhoneWatcher = () => {
+    if (watchIdRef.current != null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+  };
+
+  const handleGeoSuccess = (pos: GeolocationPosition) => {
+    lastGpsEventAtRef.current = Date.now();
+    setError(null);
+    console.log("[geo] watchPosition", pos.coords.latitude, pos.coords.longitude, "acc:", pos.coords.accuracy);
+    void sendPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed ?? undefined);
+  };
+
+  const handleGeoError = (err: GeolocationPositionError) => {
+    lastGpsEventAtRef.current = Date.now();
+    console.warn("[geo] error", err.code, err.message);
+    setError(err.message);
+
+    if (err.code === err.PERMISSION_DENIED) {
+      toast.error("Autorise la localisation précise et garde cette page ouverte.");
+      return;
+    }
+
+    if (!trackingRef.current) return;
+
+    const now = Date.now();
+    if (now - restartCooldownRef.current < 8000) return;
+    restartCooldownRef.current = now;
+
+    clearPhoneWatcher();
+    watchIdRef.current = navigator.geolocation.watchPosition(handleGeoSuccess, handleGeoError, geoOptions);
+    window.setTimeout(() => {
+      if (!trackingRef.current || garminFreshRef.current) return;
+      navigator.geolocation.getCurrentPosition(handleGeoSuccess, handleGeoError, geoOptions);
+    }, 1500);
+  };
+
+  const startPhoneWatcher = () => {
+    if (!("geolocation" in navigator)) return;
+    clearPhoneWatcher();
+    lastGpsEventAtRef.current = Date.now();
+    watchIdRef.current = navigator.geolocation.watchPosition(handleGeoSuccess, handleGeoError, geoOptions);
   };
 
   // Poll Garmin LiveTrack every 10s
@@ -137,8 +190,12 @@ export default function TrackerPage() {
     }
     if (data?.points > 0) {
       garminFreshRef.current = true;
+      if (garminFreshTimeoutRef.current != null) window.clearTimeout(garminFreshTimeoutRef.current);
       // expire freshness after 30s of silence
-      window.setTimeout(() => { garminFreshRef.current = false; }, 30_000);
+      garminFreshTimeoutRef.current = window.setTimeout(() => {
+        garminFreshRef.current = false;
+        garminFreshTimeoutRef.current = null;
+      }, 30_000);
     }
     if (data?.position) setLastPos(data.position as Position);
   };
@@ -164,6 +221,10 @@ export default function TrackerPage() {
     if (garminIntervalRef.current != null) {
       window.clearInterval(garminIntervalRef.current);
       garminIntervalRef.current = null;
+    }
+    if (garminFreshTimeoutRef.current != null) {
+      window.clearTimeout(garminFreshTimeoutRef.current);
+      garminFreshTimeoutRef.current = null;
     }
     setGarminActive(false);
     garminFreshRef.current = false;
@@ -191,10 +252,48 @@ export default function TrackerPage() {
   // Re-acquire wake lock when tab becomes visible again
   useEffect(() => {
     const onVis = () => {
-      if (document.visibilityState === "visible" && tracking) acquireWakeLock();
+      if (document.visibilityState === "visible" && tracking) {
+        acquireWakeLock();
+        if (!garminFreshRef.current) startPhoneWatcher();
+      }
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
+  }, [tracking]);
+
+  useEffect(() => {
+    if (!tracking) {
+      if (gpsHeartbeatRef.current != null) {
+        window.clearInterval(gpsHeartbeatRef.current);
+        gpsHeartbeatRef.current = null;
+      }
+      return;
+    }
+
+    gpsHeartbeatRef.current = window.setInterval(() => {
+      if (garminFreshRef.current) return;
+
+      const silenceMs = Date.now() - lastGpsEventAtRef.current;
+      if (silenceMs < 12000) return;
+
+      console.warn("[geo] heartbeat stalled", silenceMs);
+      navigator.geolocation.getCurrentPosition(handleGeoSuccess, handleGeoError, geoOptions);
+
+      if (silenceMs > 25000) {
+        const now = Date.now();
+        if (now - restartCooldownRef.current >= 8000) {
+          restartCooldownRef.current = now;
+          startPhoneWatcher();
+        }
+      }
+    }, 10000);
+
+    return () => {
+      if (gpsHeartbeatRef.current != null) {
+        window.clearInterval(gpsHeartbeatRef.current);
+        gpsHeartbeatRef.current = null;
+      }
+    };
   }, [tracking]);
 
   const startTracking = async () => {
@@ -216,23 +315,16 @@ export default function TrackerPage() {
     if (error) { toast.error(error.message); return; }
 
     setTracking(true);
+    trackingRef.current = true;
     setError(null);
     setPointsSent(0);
     setLastSendError(null);
+    lastGpsEventAtRef.current = Date.now();
     acquireWakeLock();
     toast.success("Suivi GPS démarré");
 
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        console.log("[geo] watchPosition", pos.coords.latitude, pos.coords.longitude, "acc:", pos.coords.accuracy);
-        sendPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed ?? undefined);
-      },
-      (err) => {
-        setError(err.message);
-        toast.error("Erreur GPS : " + err.message);
-      },
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 },
-    );
+    navigator.geolocation.getCurrentPosition(handleGeoSuccess, handleGeoError, geoOptions);
+    startPhoneWatcher();
   };
 
 
@@ -255,18 +347,24 @@ export default function TrackerPage() {
     if (!reg || !stopChoice) return;
 
     // Stop GPS watchers
-    if (watchIdRef.current != null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
+    clearPhoneWatcher();
     if (garminIntervalRef.current != null) {
       window.clearInterval(garminIntervalRef.current);
       garminIntervalRef.current = null;
       setGarminActive(false);
       garminFreshRef.current = false;
     }
+    if (garminFreshTimeoutRef.current != null) {
+      window.clearTimeout(garminFreshTimeoutRef.current);
+      garminFreshTimeoutRef.current = null;
+    }
+    if (gpsHeartbeatRef.current != null) {
+      window.clearInterval(gpsHeartbeatRef.current);
+      gpsHeartbeatRef.current = null;
+    }
     releaseWakeLock();
     setTracking(false);
+    trackingRef.current = false;
 
     const update: Record<string, unknown> = {
       tracking_active: false,
@@ -312,8 +410,10 @@ export default function TrackerPage() {
 
   useEffect(() => {
     return () => {
-      if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
+      clearPhoneWatcher();
       if (garminIntervalRef.current != null) window.clearInterval(garminIntervalRef.current);
+      if (garminFreshTimeoutRef.current != null) window.clearTimeout(garminFreshTimeoutRef.current);
+      if (gpsHeartbeatRef.current != null) window.clearInterval(gpsHeartbeatRef.current);
       releaseWakeLock();
     };
   }, []);
