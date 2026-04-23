@@ -83,19 +83,31 @@ export default function TrackerPage() {
     if (!reg) return;
     // Priority Garmin: if a fresh Garmin point arrived in the last 30s, skip phone GPS
     if (garminFreshRef.current) return;
-    // throttle locally to ~5s
+    // throttle locally to ~3s (server enforces 2s minimum)
     const now = Date.now();
-    if (now - lastSentRef.current < 4500) return;
+    if (now - lastSentRef.current < 3000) return;
     lastSentRef.current = now;
 
     const { data, error } = await supabase.functions.invoke("record-position", {
       body: { registration_id: reg.id, latitude: lat, longitude: lng, accuracy, speed },
     });
     if (error) {
-      console.error(error);
+      console.error("[record-position] error", error);
+      setLastSendError(error.message ?? "Envoi échoué");
       return;
     }
-    if (data?.position) setLastPos(data.position as Position);
+    if ((data as any)?.error) {
+      console.warn("[record-position] server", data);
+      setLastSendError((data as any).error);
+      return;
+    }
+    setLastSendError(null);
+    setPointsSent((n) => n + 1);
+    setLastSendAt(Date.now());
+    if (data?.position) {
+      setLastPos(data.position as Position);
+      console.log("[record-position] ok", data.position);
+    }
   };
 
   // Poll Garmin LiveTrack every 10s
