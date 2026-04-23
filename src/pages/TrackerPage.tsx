@@ -502,8 +502,26 @@ export default function TrackerPage() {
           <Stat label="Vitesse" value={formatSpeed(lastPos?.rolling_speed_kmh)} />
           <Stat label="Allure" value={formatPace(lastPos?.rolling_pace_sec_per_km)} />
         </div>
+
+        <div className="mt-4 rounded-lg bg-secondary/30 border border-border/40 p-3 space-y-1.5">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Diagnostic transmission</p>
+          <div className="flex justify-between text-xs">
+            <span className="text-muted-foreground">Points envoyés</span>
+            <span className="font-mono font-semibold">{pointsSent}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-muted-foreground">Dernier envoi</span>
+            <span className="font-mono">
+              {lastSendAt ? new Date(lastSendAt).toLocaleTimeString("fr-FR") : "—"}
+            </span>
+          </div>
+          {lastSendError && (
+            <p className="text-[11px] text-destructive mt-1">⚠️ {lastSendError}</p>
+          )}
+        </div>
+
         <p className="text-[11px] text-muted-foreground mt-3 text-center">
-          Garde l'écran allumé et ne ferme pas l'onglet pendant la course.
+          📱 L'écran reste allumé pendant le suivi. Évite de fermer l'onglet.
         </p>
       </Card>
     </main>
