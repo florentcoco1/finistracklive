@@ -7,7 +7,8 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { ChevronLeft, Play, Square, Activity, Satellite, Flag, AlertTriangle, Watch } from "lucide-react";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
-import type { RunnerStatus } from "@/lib/types";
+import type { RunnerStatus, RouteCoord, LeaderboardRow } from "@/lib/types";
+import RaceMap from "@/components/RaceMap";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +21,7 @@ interface Race {
   id: string;
   name: string;
   distance_km: number | null;
+  route_points: RouteCoord[] | null;
 }
 interface Registration {
   id: string;
@@ -33,6 +35,8 @@ interface Position {
   rolling_speed_kmh: number | null;
   rolling_pace_sec_per_km: number | null;
   recorded_at: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export default function TrackerPage() {
@@ -75,7 +79,7 @@ export default function TrackerPage() {
   useEffect(() => {
     if (!raceId || !user) return;
     Promise.all([
-      supabase.from("races").select("id, name, distance_km").eq("id", raceId).single(),
+      supabase.from("races").select("id, name, distance_km, route_points").eq("id", raceId).single(),
       supabase.from("race_registrations").select("id, bib_number, tracking_active, runner_status").eq("race_id", raceId).eq("runner_id", user.id).maybeSingle(),
     ]).then(([raceRes, regRes]) => {
       if (raceRes.data) setRace(raceRes.data as Race);
