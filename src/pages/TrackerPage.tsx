@@ -7,7 +7,8 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { ChevronLeft, Play, Square, Activity, Satellite, Flag, AlertTriangle, Watch } from "lucide-react";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
-import type { RunnerStatus } from "@/lib/types";
+import type { RunnerStatus, RouteCoord, LeaderboardRow } from "@/lib/types";
+import RaceMap from "@/components/RaceMap";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +21,7 @@ interface Race {
   id: string;
   name: string;
   distance_km: number | null;
+  route_points: RouteCoord[] | null;
 }
 interface Registration {
   id: string;
@@ -33,6 +35,8 @@ interface Position {
   rolling_speed_kmh: number | null;
   rolling_pace_sec_per_km: number | null;
   recorded_at: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export default function TrackerPage() {
@@ -45,6 +49,7 @@ export default function TrackerPage() {
   const [reg, setReg] = useState<Registration | null>(null);
   const [tracking, setTracking] = useState(false);
   const [lastPos, setLastPos] = useState<Position | null>(null);
+  const [livePoint, setLivePoint] = useState<{ lat: number; lng: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pointsSent, setPointsSent] = useState(0);
   const [lastSendAt, setLastSendAt] = useState<number | null>(null);
@@ -75,10 +80,10 @@ export default function TrackerPage() {
   useEffect(() => {
     if (!raceId || !user) return;
     Promise.all([
-      supabase.from("races").select("id, name, distance_km").eq("id", raceId).single(),
+      supabase.from("races").select("id, name, distance_km, route_points").eq("id", raceId).single(),
       supabase.from("race_registrations").select("id, bib_number, tracking_active, runner_status").eq("race_id", raceId).eq("runner_id", user.id).maybeSingle(),
     ]).then(([raceRes, regRes]) => {
-      if (raceRes.data) setRace(raceRes.data as Race);
+      if (raceRes.data) setRace(raceRes.data as unknown as Race);
       if (regRes.data) {
         setReg(regRes.data as Registration);
         setTracking(regRes.data.tracking_active);
@@ -128,6 +133,7 @@ export default function TrackerPage() {
   const handleGeoSuccess = (pos: GeolocationPosition) => {
     lastGpsEventAtRef.current = Date.now();
     setError(null);
+    setLivePoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
     console.log("[geo] watchPosition", pos.coords.latitude, pos.coords.longitude, "acc:", pos.coords.accuracy);
     void sendPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed ?? undefined);
   };
@@ -197,7 +203,13 @@ export default function TrackerPage() {
         garminFreshTimeoutRef.current = null;
       }, 30_000);
     }
-    if (data?.position) setLastPos(data.position as Position);
+    if (data?.position) {
+      setLastPos(data.position as Position);
+      const p = data.position as Position;
+      if (p.latitude != null && p.longitude != null) {
+        setLivePoint({ lat: p.latitude, lng: p.longitude });
+      }
+    }
   };
 
   const startGarmin = () => {
@@ -596,6 +608,45 @@ export default function TrackerPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {race.route_points && race.route_points.length > 1 && (
+        <Card className="glass-card p-3 mb-4 overflow-hidden">
+          <div className="h-72 w-full">
+            <RaceMap
+              routeCoords={race.route_points.map((p) => [p.lat, p.lng])}
+              routePoints={race.route_points}
+              runners={
+                livePoint
+                  ? [{
+                      registration_id: reg.id,
+                      race_id: race.id,
+                      runner_id: user.id,
+                      bib_number: reg.bib_number,
+                      category: null,
+                      tracking_active: tracking,
+                      started_at: null,
+                      finished_at: null,
+                      runner_status: reg.runner_status,
+                      emergency_phone: null,
+                      dnf_reason: null,
+                      problem_description: null,
+                      first_name: null,
+                      last_name: null,
+                      latitude: livePoint.lat,
+                      longitude: livePoint.lng,
+                      distance_along_route_m: lastPos?.distance_along_route_m ?? null,
+                      progress_percent: lastPos?.progress_percent ?? null,
+                      rolling_speed_kmh: lastPos?.rolling_speed_kmh ?? null,
+                      rolling_pace_sec_per_km: lastPos?.rolling_pace_sec_per_km ?? null,
+                      last_position_at: lastPos?.recorded_at ?? new Date().toISOString(),
+                    } as LeaderboardRow]
+                  : []
+              }
+              focusedRunnerId={livePoint ? reg.id : null}
+            />
+          </div>
+        </Card>
+      )}
 
       <Card className="glass-card p-5">
         <div className="flex items-center gap-2 mb-3">
