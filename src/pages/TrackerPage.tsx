@@ -49,6 +49,7 @@ export default function TrackerPage() {
   const [reg, setReg] = useState<Registration | null>(null);
   const [tracking, setTracking] = useState(false);
   const [lastPos, setLastPos] = useState<Position | null>(null);
+  const [livePoint, setLivePoint] = useState<{ lat: number; lng: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pointsSent, setPointsSent] = useState(0);
   const [lastSendAt, setLastSendAt] = useState<number | null>(null);
@@ -132,6 +133,7 @@ export default function TrackerPage() {
   const handleGeoSuccess = (pos: GeolocationPosition) => {
     lastGpsEventAtRef.current = Date.now();
     setError(null);
+    setLivePoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
     console.log("[geo] watchPosition", pos.coords.latitude, pos.coords.longitude, "acc:", pos.coords.accuracy);
     void sendPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed ?? undefined);
   };
@@ -201,7 +203,13 @@ export default function TrackerPage() {
         garminFreshTimeoutRef.current = null;
       }, 30_000);
     }
-    if (data?.position) setLastPos(data.position as Position);
+    if (data?.position) {
+      setLastPos(data.position as Position);
+      const p = data.position as Position;
+      if (p.latitude != null && p.longitude != null) {
+        setLivePoint({ lat: p.latitude, lng: p.longitude });
+      }
+    }
   };
 
   const startGarmin = () => {
