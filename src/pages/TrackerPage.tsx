@@ -609,6 +609,45 @@ export default function TrackerPage() {
         </DialogContent>
       </Dialog>
 
+      {race.route_points && race.route_points.length > 1 && (
+        <Card className="glass-card p-3 mb-4 overflow-hidden">
+          <div className="h-72 w-full">
+            <RaceMap
+              routeCoords={race.route_points.map((p) => [p.lat, p.lng])}
+              routePoints={race.route_points}
+              runners={
+                livePoint
+                  ? [{
+                      registration_id: reg.id,
+                      race_id: race.id,
+                      runner_id: user.id,
+                      bib_number: reg.bib_number,
+                      category: null,
+                      tracking_active: tracking,
+                      started_at: null,
+                      finished_at: null,
+                      runner_status: reg.runner_status,
+                      emergency_phone: null,
+                      dnf_reason: null,
+                      problem_description: null,
+                      first_name: null,
+                      last_name: null,
+                      latitude: livePoint.lat,
+                      longitude: livePoint.lng,
+                      distance_along_route_m: lastPos?.distance_along_route_m ?? null,
+                      progress_percent: lastPos?.progress_percent ?? null,
+                      rolling_speed_kmh: lastPos?.rolling_speed_kmh ?? null,
+                      rolling_pace_sec_per_km: lastPos?.rolling_pace_sec_per_km ?? null,
+                      last_position_at: lastPos?.recorded_at ?? new Date().toISOString(),
+                    } as LeaderboardRow]
+                  : []
+              }
+              focusedRunnerId={livePoint ? reg.id : null}
+            />
+          </div>
+        </Card>
+      )}
+
       <Card className="glass-card p-5">
         <div className="flex items-center gap-2 mb-3">
           <Activity className="h-4 w-4 text-primary-glow" />
