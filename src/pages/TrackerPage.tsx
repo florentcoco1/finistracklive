@@ -82,7 +82,7 @@ export default function TrackerPage() {
       supabase.from("races").select("id, name, distance_km, route_points").eq("id", raceId).single(),
       supabase.from("race_registrations").select("id, bib_number, tracking_active, runner_status").eq("race_id", raceId).eq("runner_id", user.id).maybeSingle(),
     ]).then(([raceRes, regRes]) => {
-      if (raceRes.data) setRace(raceRes.data as Race);
+      if (raceRes.data) setRace(raceRes.data as unknown as Race);
       if (regRes.data) {
         setReg(regRes.data as Registration);
         setTracking(regRes.data.tracking_active);
