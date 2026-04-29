@@ -18,6 +18,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
 } from "@/components/ui/dialog";
 import type { LeaderboardRow } from "@/lib/types";
+import { DifficultyStars } from "@/components/DifficultyStars";
 
 interface Race {
   id: string;
@@ -25,6 +26,7 @@ interface Race {
   description: string | null;
   start_time: string;
   distance_km: number | null;
+  difficulty_level: number | null;
   status: "upcoming" | "live" | "finished";
   gpx_geojson: any;
   route_points: { lat: number; lng: number; cumulativeDistanceM: number }[] | null;
@@ -53,7 +55,7 @@ export default function RaceDetail() {
     if (!raceId) return;
     supabase
       .from("races")
-      .select("id, name, description, start_time, distance_km, status, gpx_geojson, route_points, organizer_id")
+      .select("id, name, description, start_time, distance_km, difficulty_level, status, gpx_geojson, route_points, organizer_id")
       .eq("id", raceId)
       .single()
       .then(({ data, error }) => {
@@ -373,6 +375,7 @@ export default function RaceDetail() {
           <p className="text-muted-foreground mt-1">
             {format(new Date(race.start_time), "EEEE d MMMM yyyy, HH:mm", { locale: fr })}
           </p>
+          <DifficultyStars level={race.difficulty_level} className="mt-2" />
         </div>
         <div className="flex flex-wrap gap-2">
           {isOrganizer && (
