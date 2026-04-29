@@ -52,12 +52,22 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!user || !isOrganizer) return;
-    supabase
-      .from("races")
-      .select("id, name, start_time, distance_km, status")
-      .eq("organizer_id", user.id)
-      .order("start_time", { ascending: false })
-      .then(({ data }) => setOrganizerRaces((data ?? []) as OrganizerRace[]));
+    Promise.all([
+      supabase
+        .from("races")
+        .select("id, name, start_time, distance_km, status")
+        .eq("organizer_id", user.id)
+        .order("start_time", { ascending: false }),
+      supabase
+        .from("race_organizers" as any)
+        .select("race:races ( id, name, start_time, distance_km, status )")
+        .eq("user_id", user.id),
+    ]).then(([owned, delegated]) => {
+      const delegatedRaces = ((delegated.data ?? []) as any[]).map((row) => row.race).filter(Boolean);
+      const byId = new Map<string, OrganizerRace>();
+      [...((owned.data ?? []) as OrganizerRace[]), ...delegatedRaces].forEach((race) => byId.set(race.id, race));
+      setOrganizerRaces([...byId.values()].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()));
+    });
   }, [user, isOrganizer]);
 
   const becomeOrganizer = async () => {
