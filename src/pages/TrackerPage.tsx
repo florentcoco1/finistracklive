@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ChevronLeft, Play, Square, Activity, Satellite, Flag, AlertTriangle, Watch } from "lucide-react";
+import { ChevronLeft, Play, Square, Activity, Satellite, Flag, AlertTriangle, Watch, Trophy, Timer } from "lucide-react";
 import { formatDistance, formatPace, formatSpeed, haversineMeters } from "@/lib/gpx";
 import type { RunnerStatus, RouteCoord, LeaderboardRow } from "@/lib/types";
 import RaceMap from "@/components/RaceMap";
@@ -94,6 +94,7 @@ export default function TrackerPage() {
   const [pointsSent, setPointsSent] = useState(0);
   const [lastSendAt, setLastSendAt] = useState<number | null>(null);
   const [lastSendError, setLastSendError] = useState<string | null>(null);
+  const [leaderboardRows, setLeaderboardRows] = useState<LeaderboardRow[]>([]);
   const watchIdRef = useRef<number | null>(null);
   const lastSentRef = useRef<number>(0);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -119,6 +120,38 @@ export default function TrackerPage() {
 
   useEffect(() => { document.title = "Suivi GPS — FinisTrackLive"; }, []);
   useEffect(() => { trackingRef.current = tracking; }, [tracking]);
+
+  const sortedLeaderboard = useMemo(() => {
+    const rankStatus = (status: string | null) => (status === "dnf" ? 2 : status === "problem" ? 1 : 0);
+    return [...leaderboardRows].sort((a, b) => {
+      if (a.rfid_overall_rank != null && b.rfid_overall_rank != null) return a.rfid_overall_rank - b.rfid_overall_rank;
+      if (a.rfid_overall_rank != null) return -1;
+      if (b.rfid_overall_rank != null) return 1;
+      if (a.rfid_official_seconds != null && b.rfid_official_seconds != null) return a.rfid_official_seconds - b.rfid_official_seconds;
+      if (a.rfid_official_seconds != null) return -1;
+      if (b.rfid_official_seconds != null) return 1;
+      const statusDelta = rankStatus(a.runner_status) - rankStatus(b.runner_status);
+      if (statusDelta !== 0) return statusDelta;
+      if (a.finished_at && b.finished_at) return new Date(a.finished_at).getTime() - new Date(b.finished_at).getTime();
+      if (a.finished_at) return -1;
+      if (b.finished_at) return 1;
+      return (b.distance_along_route_m ?? -1) - (a.distance_along_route_m ?? -1);
+    });
+  }, [leaderboardRows]);
+
+  const myLiveRank = useMemo(() => {
+    if (!reg) return null;
+    const index = sortedLeaderboard.findIndex((row) => row.registration_id === reg.id);
+    return index >= 0 ? index + 1 : null;
+  }, [reg, sortedLeaderboard]);
+
+  const visibleLeaderboardRows = useMemo(() => {
+    if (!reg) return sortedLeaderboard.slice(0, 5);
+    const topRows = sortedLeaderboard.slice(0, 5);
+    const mine = sortedLeaderboard.find((row) => row.registration_id === reg.id);
+    if (mine && !topRows.some((row) => row.registration_id === reg.id)) return [...topRows, mine];
+    return topRows;
+  }, [reg, sortedLeaderboard]);
 
   useEffect(() => {
     if (!raceId || !user) return;
