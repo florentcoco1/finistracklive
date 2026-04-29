@@ -89,7 +89,6 @@ export default function TrackerPage() {
   const [reg, setReg] = useState<Registration | null>(null);
   const [tracking, setTracking] = useState(false);
   const [lastPos, setLastPos] = useState<Position | null>(null);
-  const [livePoint, setLivePoint] = useState<{ lat: number; lng: number } | null>(null);
   const [mapPoint, setMapPoint] = useState<{ lat: number; lng: number; at: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pointsSent, setPointsSent] = useState(0);
@@ -220,7 +219,6 @@ export default function TrackerPage() {
   const handleGeoSuccess = (pos: GeolocationPosition) => {
     lastGpsEventAtRef.current = Date.now();
     setError(null);
-    setLivePoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
     if (Date.now() - lastMapRefreshRef.current >= RUNNER_MAP_REFRESH_MS) {
       setMapPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude, at: Date.now() });
       lastMapRefreshRef.current = Date.now();
@@ -299,7 +297,6 @@ export default function TrackerPage() {
       setLastPos(data.position as Position);
       const p = data.position as Position;
       if (p.latitude != null && p.longitude != null) {
-        setLivePoint({ lat: p.latitude, lng: p.longitude });
         if (p.distance_along_route_m != null) {
           lastMetricSampleRef.current = { distanceM: p.distance_along_route_m, at: Date.now() };
         }
