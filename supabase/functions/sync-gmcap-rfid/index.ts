@@ -7,7 +7,15 @@ const corsHeaders = {
 };
 
 type ParsedRow = Record<string, string>;
-type Source = { id: string; race_id: string; source_url: string; enabled: boolean; last_import_at: string | null };
+type Source = {
+  id: string;
+  race_id: string;
+  source_url: string;
+  source_type: string | null;
+  pending_content: string | null;
+  enabled: boolean;
+  last_import_at: string | null;
+};
 type Registration = { id: string; bib_number: string };
 
 const clean = (value: unknown) => String(value ?? "").trim();
@@ -36,6 +44,18 @@ function extractSplits(row: ParsedRow) {
     if (/^(NbPassage |\d+\||Clt )/.test(key) && value) splits[key] = value;
   }
   return splits;
+}
+
+function isMissingSchemaError(message: string) {
+  return message.includes("schema cache") || message.includes("rfid_timing_results") || message.includes("rfid_identifier");
+}
+
+async function rfidSchemaAvailable(admin: ReturnType<typeof createClient>) {
+  const [{ error: resultsError }, { error: registrationsError }] = await Promise.all([
+    admin.from("rfid_timing_results").select("id", { count: "exact", head: true }).limit(1),
+    admin.from("race_registrations").select("rfid_identifier", { count: "exact", head: true }).limit(1),
+  ]);
+  return ![resultsError, registrationsError].some((error) => error && isMissingSchemaError(error.message));
 }
 
 async function importContent(admin: ReturnType<typeof createClient>, raceId: string, content: string) {
@@ -104,7 +124,12 @@ async function importContent(admin: ReturnType<typeof createClient>, raceId: str
   return { imported: results.length, matched, unmatched: results.length - matched };
 }
 
-async function readSource(url: string) {
+async function readSource(source: Source) {
+  if (source.source_type === "manual_file") {
+    if (!source.pending_content) throw new Error("Aucun contenu manuel GMCAP en attente");
+    return source.pending_content;
+  }
+  const url = source.source_url;
   const parsed = new URL(url);
   if (!["http:", "https:"].includes(parsed.protocol)) {
     throw new Error("La synchronisation cloud nécessite un lien HTTP/HTTPS vers l'export GMCAP");
@@ -116,12 +141,15 @@ async function readSource(url: string) {
 }
 
 async function syncSource(admin: ReturnType<typeof createClient>, source: Source) {
-  const content = await readSource(source.source_url);
+  const content = await readSource(source);
   const result = await importContent(admin, source.race_id, content);
   await admin.from("gmcap_import_sources").update({
     last_import_at: new Date().toISOString(),
     last_import_status: "success",
     last_import_message: `${result.matched} correspondance(s), ${result.unmatched} non associée(s)`,
+    pending_content: null,
+    pending_import_at: null,
+    schema_checked_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }).eq("id", source.id);
   return { race_id: source.race_id, ...result };
