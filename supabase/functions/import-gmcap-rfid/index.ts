@@ -36,6 +36,19 @@ function extractSplits(row: ParsedRow) {
   return splits;
 }
 
+async function isRaceAdmin(admin: ReturnType<typeof createClient>, raceId: string, userId: string) {
+  const { data, error } = await admin.rpc("is_race_admin", { _race_id: raceId, _user_id: userId });
+  if (!error && data) return true;
+
+  const { data: race } = await admin
+    .from("races")
+    .select("organizer_id")
+    .eq("id", raceId)
+    .single();
+
+  return race?.organizer_id === userId;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -57,14 +70,8 @@ Deno.serve(async (req) => {
     }
 
     const admin = createClient(supabaseUrl, serviceKey);
-    const { data: race } = await admin
-      .from("races")
-      .select("id, organizer_id")
-      .eq("id", race_id)
-      .single();
-
-    if (!race || race.organizer_id !== user.id) {
-      return new Response(JSON.stringify({ error: "Import réservé à l'organisateur" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!(await isRaceAdmin(admin, race_id, user.id))) {
+      return new Response(JSON.stringify({ error: "Import réservé aux organisateurs de cette course" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const rows = parseTsv(content);
