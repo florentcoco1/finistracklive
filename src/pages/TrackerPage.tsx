@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -557,6 +557,10 @@ export default function TrackerPage() {
   }
 
   const isDnfOrProblem = reg.runner_status === "dnf" || reg.runner_status === "problem";
+  const routeCoords = useMemo<[number, number][]>(
+    () => race.route_points?.map((p) => [p.lat, p.lng]) ?? [],
+    [race.route_points],
+  );
 
   return (
     <main className="container py-6 max-w-md">
@@ -725,7 +729,7 @@ export default function TrackerPage() {
         <Card className="glass-card p-3 mb-4 overflow-hidden">
           <div className="h-72 w-full">
             <RaceMap
-              routeCoords={race.route_points.map((p) => [p.lat, p.lng])}
+              routeCoords={routeCoords}
               routePoints={race.route_points}
               runners={
                 mapPoint
