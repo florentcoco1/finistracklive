@@ -39,6 +39,15 @@ interface Position {
   latitude?: number | null;
   longitude?: number | null;
 }
+interface FunctionErrorResponse {
+  error?: string;
+  ok?: boolean;
+}
+interface WakeLockNavigator extends Navigator {
+  wakeLock?: {
+    request: (type: "screen") => Promise<WakeLockSentinel>;
+  };
+}
 
 const PHONE_SEND_INTERVAL_MS = 10_000;
 const RUNNER_STATS_REFRESH_MS = 5_000;
@@ -232,17 +241,18 @@ export default function TrackerPage() {
       setLastSendError(error.message ?? "Envoi échoué");
       return;
     }
-    if ((data as any)?.error) {
+    const recordResponse = data as (FunctionErrorResponse & { position?: Position }) | null;
+    if (recordResponse?.error) {
       console.warn("[record-position] server", data);
-      setLastSendError((data as any).error);
+      setLastSendError(recordResponse.error);
       return;
     }
     setLastSendError(null);
     setPointsSent((n) => n + 1);
     setLastSendAt(Date.now());
     setError(null);
-    if (data?.position) {
-      const serverPos = data.position as Position;
+    if (recordResponse?.position) {
+      const serverPos = recordResponse.position;
       setLastPos((current) => ({
         ...serverPos,
         distance_along_route_m: serverPos.distance_along_route_m ?? current?.distance_along_route_m ?? null,
@@ -362,17 +372,18 @@ export default function TrackerPage() {
       setGarminError(error.message);
       return;
     }
-    if (data && (data as any).ok === false) {
+    const garminResponse = data as (FunctionErrorResponse & { latest_ms?: number; points?: number; position?: Position }) | null;
+    if (garminResponse?.ok === false) {
       console.warn("[garmin] response not ok", data);
-      setGarminError((data as any).error ?? "Erreur Garmin inconnue");
+      setGarminError(garminResponse.error ?? "Erreur Garmin inconnue");
       return;
     }
     setGarminError(null);
-    if (data?.latest_ms && data.latest_ms > garminSinceRef.current) {
-      garminSinceRef.current = data.latest_ms;
-      setGarminLastPointAt(data.latest_ms);
+    if (garminResponse?.latest_ms && garminResponse.latest_ms > garminSinceRef.current) {
+      garminSinceRef.current = garminResponse.latest_ms;
+      setGarminLastPointAt(garminResponse.latest_ms);
     }
-    if (data?.points > 0) {
+    if ((garminResponse?.points ?? 0) > 0) {
       garminFreshRef.current = true;
       if (garminFreshTimeoutRef.current != null) window.clearTimeout(garminFreshTimeoutRef.current);
       // expire freshness after 30s of silence
@@ -381,8 +392,8 @@ export default function TrackerPage() {
         garminFreshTimeoutRef.current = null;
       }, 30_000);
     }
-    if (data?.position) {
-      const p = data.position as Position;
+    if (garminResponse?.position) {
+      const p = garminResponse.position;
       setLastPos((current) => ({
         ...p,
         distance_along_route_m: p.distance_along_route_m ?? current?.distance_along_route_m ?? null,
@@ -435,8 +446,9 @@ export default function TrackerPage() {
 
   const acquireWakeLock = async () => {
     try {
-      if ("wakeLock" in navigator) {
-        wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
+      const wakeNavigator = navigator as WakeLockNavigator;
+      if (wakeNavigator.wakeLock) {
+        wakeLockRef.current = await wakeNavigator.wakeLock.request("screen");
         wakeLockRef.current?.addEventListener?.("release", () => {
           console.log("[wake-lock] released");
         });
