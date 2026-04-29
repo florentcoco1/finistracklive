@@ -202,7 +202,15 @@ Deno.serve(async (req) => {
 
     const query = admin.from("gmcap_import_sources").select("id, race_id, source_url, source_type, pending_content, enabled, last_import_at, last_import_status").eq("enabled", true);
     const { data: sources, error } = raceId ? await query.eq("race_id", raceId) : await query;
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (isMissingSchemaError(error.message)) {
+        return new Response(JSON.stringify({ ok: true, schema_ready: false, checked: 0, synced: [], message: "Import en attente, table de suivi GMCAP non disponible." }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(error.message);
+    }
 
     const due = (sources ?? []).filter((source: Source) => {
       if ((source as Source & { last_import_status?: string | null }).last_import_status === "pending_schema") return true;
