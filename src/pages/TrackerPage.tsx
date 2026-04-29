@@ -89,7 +89,7 @@ export default function TrackerPage() {
   const [tracking, setTracking] = useState(false);
   const [lastPos, setLastPos] = useState<Position | null>(null);
   const [livePoint, setLivePoint] = useState<{ lat: number; lng: number } | null>(null);
-  const [mapPoint, setMapPoint] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapPoint, setMapPoint] = useState<{ lat: number; lng: number; at: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pointsSent, setPointsSent] = useState(0);
   const [lastSendAt, setLastSendAt] = useState<number | null>(null);
@@ -168,7 +168,8 @@ export default function TrackerPage() {
   const updateLocalPosition = (lat: number, lng: number, nativeSpeed?: number | null) => {
     const now = Date.now();
     const distanceM = snapDistanceToRoute({ lat, lng }, race?.route_points ?? null);
-    const totalM = race?.distance_km ? race.distance_km * 1000 : race?.route_points?.at(-1)?.cumulativeDistanceM;
+    const routeEnd = race?.route_points?.length ? race.route_points[race.route_points.length - 1] : null;
+    const totalM = race?.distance_km ? race.distance_km * 1000 : routeEnd?.cumulativeDistanceM;
     const previous = lastMetricSampleRef.current;
 
     let rollingSpeedKmh =
@@ -216,7 +217,7 @@ export default function TrackerPage() {
     setError(null);
     setLivePoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
     if (Date.now() - lastMapRefreshRef.current >= RUNNER_MAP_REFRESH_MS) {
-      setMapPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      setMapPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude, at: Date.now() });
       lastMapRefreshRef.current = Date.now();
     }
     updateLocalPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.speed ?? null);
@@ -298,7 +299,7 @@ export default function TrackerPage() {
           lastMetricSampleRef.current = { distanceM: p.distance_along_route_m, at: Date.now() };
         }
         if (Date.now() - lastMapRefreshRef.current >= RUNNER_MAP_REFRESH_MS) {
-          setMapPoint({ lat: p.latitude, lng: p.longitude });
+          setMapPoint({ lat: p.latitude, lng: p.longitude, at: Date.now() });
           lastMapRefreshRef.current = Date.now();
         }
       }
