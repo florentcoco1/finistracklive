@@ -22,6 +22,16 @@ const formSchema = z.object({
   difficulty_level: z.coerce.number().int().min(1).max(5),
 });
 
+function isMissingColumnError(error: unknown, columnName: string) {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as { code?: string; message?: string };
+  return (
+    (maybeError.code === "PGRST204" || maybeError.code === "42703") &&
+    typeof maybeError.message === "string" &&
+    maybeError.message.includes(columnName)
+  );
+}
+
 export default function NewRace() {
   const { user, isOrganizer, loading } = useAuth();
   const navigate = useNavigate();
@@ -90,9 +100,7 @@ export default function NewRace() {
 
       const { data: pub } = supabase.storage.from("gpx-files").getPublicUrl(path);
 
-      const { data: race, error: insErr } = await supabase
-        .from("races")
-        .insert({
+      const racePayload = {
           organizer_id: user.id,
           name: parsed.data.name,
           description: parsed.data.description ?? null,
@@ -103,9 +111,25 @@ export default function NewRace() {
           distance_km: distanceKm,
           difficulty_level: parsed.data.difficulty_level,
           status: "upcoming",
-        } as never)
+        };
+
+      let { data: race, error: insErr } = await supabase
+        .from("races")
+        .insert(racePayload as never)
         .select("id")
         .single();
+
+      if (isMissingColumnError(insErr, "difficulty_level")) {
+        const { difficulty_level: _difficultyLevel, ...compatibleRacePayload } = racePayload;
+        const retry = await supabase
+          .from("races")
+          .insert(compatibleRacePayload as never)
+          .select("id")
+          .single();
+        race = retry.data;
+        insErr = retry.error;
+      }
+
       if (insErr) throw insErr;
 
       toast.success("Course créée !");
