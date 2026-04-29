@@ -473,13 +473,13 @@ export default function RaceAdmin() {
             </label>
             <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/50 bg-secondary/30 p-3">
               <Badge variant={source?.last_import_status === "error" ? "destructive" : "secondary"}>
-                {source?.last_import_status === "pending_schema" ? "import en attente" : source?.last_import_status ?? "non configuré"}
+                {source?.last_import_status === "pending_schema" || localPendingFile ? "import en attente" : source?.last_import_status ?? "non configuré"}
               </Badge>
               <p className="text-sm text-muted-foreground flex-1">
-                {source?.last_import_status === "pending_schema" && source.file_name ? `Fichier en attente : ${source.file_name}` : source?.last_import_at ? `Dernier import le ${format(new Date(source.last_import_at), "dd/MM/yyyy à HH:mm:ss", { locale: fr })}` : "Aucun import lancé"}
+                {localPendingFile ? `Fichier gardé sur ce PC : ${localPendingFile}` : source?.last_import_status === "pending_schema" && source.file_name ? `Fichier en attente : ${source.file_name}` : source?.last_import_at ? `Dernier import le ${format(new Date(source.last_import_at), "dd/MM/yyyy à HH:mm:ss", { locale: fr })}` : "Aucun import lancé"}
                 {source?.last_import_message ? ` · ${source.last_import_message}` : ""}
               </p>
-              <Button variant="glass" onClick={syncGmcap} disabled={!source || syncing}><RefreshCw className="h-4 w-4 mr-2" /> {syncing ? "Vérif…" : source?.last_import_status === "pending_schema" ? "Vérifier RFID" : "Sync maintenant"}</Button>
+              <Button variant="glass" onClick={localPendingFile ? retryLocalPendingImport : syncGmcap} disabled={(!source && !localPendingFile) || syncing || manualImporting}><RefreshCw className="h-4 w-4 mr-2" /> {syncing || manualImporting ? "Vérif…" : source?.last_import_status === "pending_schema" || localPendingFile ? "Vérifier RFID" : "Sync maintenant"}</Button>
             </div>
             <div className="space-y-3 rounded-lg border border-border/50 bg-secondary/20 p-4">
               <div>
