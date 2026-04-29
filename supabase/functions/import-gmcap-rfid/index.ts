@@ -23,7 +23,7 @@ function json(body: unknown, status = 200) {
 }
 
 function isMissingSchemaError(message: string) {
-  return message.includes("schema cache") || message.includes("rfid_timing_results") || message.includes("rfid_identifier");
+  return message.includes("schema cache") || message.includes("rfid_timing_results") || message.includes("gmcap_import_sources") || message.includes("rfid_identifier");
 }
 
 function missingSchemaResponse(parsedRows: number, matched: number) {
