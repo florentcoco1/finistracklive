@@ -47,7 +47,7 @@ function extractSplits(row: ParsedRow) {
 }
 
 function isMissingSchemaError(message: string) {
-  return message.includes("schema cache") || message.includes("rfid_timing_results") || message.includes("rfid_identifier");
+  return message.includes("schema cache") || message.includes("rfid_timing_results") || message.includes("gmcap_import_sources") || message.includes("rfid_identifier");
 }
 
 async function rfidSchemaAvailable(admin: ReturnType<typeof createClient>) {
