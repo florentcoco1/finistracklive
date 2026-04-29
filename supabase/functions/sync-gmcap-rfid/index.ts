@@ -182,11 +182,30 @@ Deno.serve(async (req) => {
       }
     }
 
-    const query = admin.from("gmcap_import_sources").select("id, race_id, source_url, enabled, last_import_at").eq("enabled", true);
+    const schemaReady = await rfidSchemaAvailable(admin);
+    if (!schemaReady) {
+      const now = new Date().toISOString();
+      const pendingQuery = admin.from("gmcap_import_sources").update({
+        schema_checked_at: now,
+        last_import_at: now,
+        last_import_status: "pending_schema",
+        last_import_message: "Import en attente : schéma RFID non disponible, nouvelle vérification automatique prévue.",
+        updated_at: now,
+      }).eq("last_import_status", "pending_schema");
+      if (raceId) await pendingQuery.eq("race_id", raceId);
+      else await pendingQuery;
+      return new Response(JSON.stringify({ ok: true, schema_ready: false, checked: 0, synced: [], message: "Import en attente, schéma RFID non disponible." }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const query = admin.from("gmcap_import_sources").select("id, race_id, source_url, source_type, pending_content, enabled, last_import_at, last_import_status").eq("enabled", true);
     const { data: sources, error } = raceId ? await query.eq("race_id", raceId) : await query;
     if (error) throw new Error(error.message);
 
     const due = (sources ?? []).filter((source: Source) => {
+      if ((source as Source & { last_import_status?: string | null }).last_import_status === "pending_schema") return true;
       if (raceId) return true;
       return !source.last_import_at || Date.now() - new Date(source.last_import_at).getTime() >= 55_000;
     });
