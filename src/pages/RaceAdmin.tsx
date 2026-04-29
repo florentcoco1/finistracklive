@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { AlertTriangle, ChevronLeft, Link2, Plus, RefreshCw, Save, Shield, Trash2, UserPlus, Users } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Link2, Plus, RefreshCw, Save, Shield, Trash2, Upload, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -72,6 +72,13 @@ interface SyncResponse {
   synced?: Array<{ error?: string; matched?: number }>;
 }
 
+interface ManualImportResponse {
+  error?: string;
+  imported?: number;
+  matched?: number;
+  unmatched?: number;
+}
+
 const emptyRegistration = { email: "", bib_number: "", category: "", emergency_phone: "" };
 
 function displayName(profile: AdminProfile | null) {
@@ -91,6 +98,8 @@ export default function RaceAdmin() {
   const [organizers, setOrganizers] = useState<OrganizerRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [manualImporting, setManualImporting] = useState(false);
+  const [gmcapFile, setGmcapFile] = useState<File | null>(null);
   const [newRunner, setNewRunner] = useState(emptyRegistration);
   const [newOrganizerEmail, setNewOrganizerEmail] = useState("");
 
@@ -181,6 +190,32 @@ export default function RaceAdmin() {
       toast.error((error as Error).message || "Synchronisation impossible");
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const importGmcapFile = async () => {
+    if (!raceId || !gmcapFile) {
+      toast.error("Sélectionne un fichier GMCAP à importer");
+      return;
+    }
+    if (gmcapFile.size > 8 * 1024 * 1024) {
+      toast.error("Fichier trop volumineux : limite 8 Mo");
+      return;
+    }
+
+    setManualImporting(true);
+    try {
+      const content = await gmcapFile.text();
+      const { data, error } = await supabase.functions.invoke("import-gmcap-rfid", { body: { race_id: raceId, content } });
+      const payload = data as ManualImportResponse;
+      if (error || payload?.error) throw new Error(error?.message ?? payload.error);
+      await load();
+      toast.success(`Import GMCAP terminé : ${payload.matched ?? 0} coureur(s) lié(s), ${payload.imported ?? 0} résultat(s) importé(s)`);
+      setGmcapFile(null);
+    } catch (error) {
+      toast.error((error as Error).message || "Import GMCAP impossible");
+    } finally {
+      setManualImporting(false);
     }
   };
 
