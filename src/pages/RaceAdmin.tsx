@@ -25,6 +25,8 @@ interface RaceSummary {
 interface GmcapSource {
   id: string;
   source_url: string;
+  source_type?: string | null;
+  file_name?: string | null;
   enabled: boolean;
   last_import_at: string | null;
   last_import_status: string | null;
@@ -69,6 +71,8 @@ interface AdminResponse {
 
 interface SyncResponse {
   error?: string;
+  schema_ready?: boolean;
+  message?: string;
   synced?: Array<{ error?: string; matched?: number }>;
 }
 
@@ -82,10 +86,49 @@ interface ManualImportResponse {
 }
 
 const emptyRegistration = { email: "", bib_number: "", category: "", emergency_phone: "" };
+const pendingDbName = "finistracklive-gmcap";
+const pendingStoreName = "pending-imports";
 
 function displayName(profile: AdminProfile | null) {
   const name = `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim();
   return name || profile?.email || "Utilisateur";
+}
+
+async function pendingStore(mode: IDBTransactionMode) {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(pendingDbName, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(pendingStoreName, { keyPath: "raceId" });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  return db.transaction(pendingStoreName, mode).objectStore(pendingStoreName);
+}
+
+async function saveLocalPendingImport(raceId: string, fileName: string, content: string) {
+  const store = await pendingStore("readwrite");
+  await new Promise<void>((resolve, reject) => {
+    const request = store.put({ raceId, fileName, content, savedAt: new Date().toISOString() });
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function readLocalPendingImport(raceId: string) {
+  const store = await pendingStore("readonly");
+  return await new Promise<{ raceId: string; fileName: string; content: string; savedAt: string } | null>((resolve, reject) => {
+    const request = store.get(raceId);
+    request.onsuccess = () => resolve(request.result ?? null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function clearLocalPendingImport(raceId: string) {
+  const store = await pendingStore("readwrite");
+  await new Promise<void>((resolve, reject) => {
+    const request = store.delete(raceId);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
 }
 
 export default function RaceAdmin() {
@@ -102,6 +145,7 @@ export default function RaceAdmin() {
   const [syncing, setSyncing] = useState(false);
   const [manualImporting, setManualImporting] = useState(false);
   const [gmcapFile, setGmcapFile] = useState<File | null>(null);
+  const [localPendingFile, setLocalPendingFile] = useState<string | null>(null);
   const [newRunner, setNewRunner] = useState(emptyRegistration);
   const [newOrganizerEmail, setNewOrganizerEmail] = useState("");
 
@@ -153,6 +197,8 @@ export default function RaceAdmin() {
       toast.error((error as Error).message || "Administration inaccessible");
       navigate(`/races/${raceId}`);
     });
+
+    readLocalPendingImport(raceId).then((pending) => setLocalPendingFile(pending?.fileName ?? null)).catch(() => undefined);
   }, [raceId, user, loading, navigate, load]);
 
   const stats = useMemo(() => {
@@ -186,7 +232,8 @@ export default function RaceAdmin() {
       if (error || payload?.error) throw new Error(error?.message ?? payload.error);
       await load();
       const result = payload.synced?.[0];
-      if (result?.error) toast.error(result.error);
+      if (payload.schema_ready === false) toast.warning(payload.message ?? "Import en attente, vérification RFID relancée automatiquement.");
+      else if (result?.error) toast.error(result.error);
       else toast.success(`GMCAP synchronisé : ${result?.matched ?? 0} correspondance(s)`);
     } catch (error) {
       toast.error((error as Error).message || "Synchronisation impossible");
@@ -194,6 +241,31 @@ export default function RaceAdmin() {
       setSyncing(false);
     }
   };
+
+  useEffect(() => {
+    if (!raceId || source?.last_import_status !== "pending_schema") return;
+    const checkPendingImport = async () => {
+      if (syncing) return;
+      setSyncing(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("sync-gmcap-rfid", { body: { race_id: raceId } });
+        const payload = data as SyncResponse;
+        if (!error && !payload?.error) await load();
+      } finally {
+        setSyncing(false);
+      }
+    };
+    const interval = window.setInterval(checkPendingImport, 30_000);
+    return () => window.clearInterval(interval);
+  }, [raceId, source?.last_import_status, syncing, load]);
+
+  useEffect(() => {
+    if (!raceId || !localPendingFile) return;
+    const interval = window.setInterval(() => {
+      retryLocalPendingImport().catch(() => undefined);
+    }, 30_000);
+    return () => window.clearInterval(interval);
+  }, [raceId, localPendingFile]);
 
   const importGmcapFile = async () => {
     if (!raceId || !gmcapFile) {
@@ -208,20 +280,47 @@ export default function RaceAdmin() {
     setManualImporting(true);
     try {
       const content = await gmcapFile.text();
-      const { data, error } = await supabase.functions.invoke("import-gmcap-rfid", { body: { race_id: raceId, content } });
+      const { data, error } = await supabase.functions.invoke("import-gmcap-rfid", { body: { race_id: raceId, content, file_name: gmcapFile.name } });
       const payload = data as ManualImportResponse;
       if (error) throw new Error(error.message);
-      if (payload?.warning === "RFID_SCHEMA_MISSING") {
-        toast.warning("Le schéma RFID est en cours d’initialisation. Réessaie dans quelques instants.");
+      if (payload?.warning === "RFID_IMPORT_PENDING" || payload?.warning === "RFID_SCHEMA_MISSING") {
+        await saveLocalPendingImport(raceId, gmcapFile.name, content);
+        setLocalPendingFile(gmcapFile.name);
+        await syncGmcap();
+        toast.warning("Import GMCAP enregistré en attente : FinisTrackLive le relancera automatiquement dès que le schéma RFID sera prêt.");
         return;
       }
       if (payload?.error) throw new Error(payload.error);
       await load();
       toast.success(`Import GMCAP terminé : ${payload.matched ?? 0} coureur(s) lié(s), ${payload.imported ?? 0} résultat(s) importé(s)`);
+      await clearLocalPendingImport(raceId);
+      setLocalPendingFile(null);
       setGmcapFile(null);
     } catch (error) {
       const message = (error as Error).message || "Import GMCAP impossible";
-      toast.error(message.includes("RFID_SCHEMA_MISSING") ? "Le schéma RFID est en cours d’initialisation. Réessaie dans quelques instants." : message);
+      toast.error(message.includes("RFID_SCHEMA_MISSING") ? "Import enregistré en attente : relance automatique dès que le schéma RFID sera prêt." : message);
+    } finally {
+      setManualImporting(false);
+    }
+  };
+
+  const retryLocalPendingImport = async () => {
+    if (!raceId) return;
+    const pending = await readLocalPendingImport(raceId);
+    if (!pending) return;
+    setManualImporting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("import-gmcap-rfid", { body: { race_id: raceId, content: pending.content, file_name: pending.fileName } });
+      const payload = data as ManualImportResponse;
+      if (error) throw new Error(error.message);
+      if (payload?.warning === "RFID_IMPORT_PENDING" || payload?.warning === "RFID_SCHEMA_MISSING") return;
+      if (payload?.error) throw new Error(payload.error);
+      await clearLocalPendingImport(raceId);
+      setLocalPendingFile(null);
+      await load();
+      toast.success(`Import en attente terminé : ${payload.matched ?? 0} coureur(s) lié(s), ${payload.imported ?? 0} résultat(s) importé(s)`);
+    } catch {
+      // Le fichier reste conservé localement pour la prochaine vérification automatique.
     } finally {
       setManualImporting(false);
     }
@@ -373,17 +472,19 @@ export default function RaceAdmin() {
               <input type="checkbox" checked={sourceEnabled} onChange={(e) => setSourceEnabled(e.target.checked)} className="accent-current" /> Synchronisation automatique toutes les minutes
             </label>
             <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/50 bg-secondary/30 p-3">
-              <Badge variant={source?.last_import_status === "error" ? "destructive" : "secondary"}>{source?.last_import_status ?? "non configuré"}</Badge>
+              <Badge variant={source?.last_import_status === "error" ? "destructive" : "secondary"}>
+                {source?.last_import_status === "pending_schema" || localPendingFile ? "import en attente" : source?.last_import_status ?? "non configuré"}
+              </Badge>
               <p className="text-sm text-muted-foreground flex-1">
-                {source?.last_import_at ? `Dernier import le ${format(new Date(source.last_import_at), "dd/MM/yyyy à HH:mm:ss", { locale: fr })}` : "Aucun import lancé"}
+                {localPendingFile ? `Fichier gardé sur ce PC : ${localPendingFile}` : source?.last_import_status === "pending_schema" && source.file_name ? `Fichier en attente : ${source.file_name}` : source?.last_import_at ? `Dernier import le ${format(new Date(source.last_import_at), "dd/MM/yyyy à HH:mm:ss", { locale: fr })}` : "Aucun import lancé"}
                 {source?.last_import_message ? ` · ${source.last_import_message}` : ""}
               </p>
-              <Button variant="glass" onClick={syncGmcap} disabled={!source || syncing}><RefreshCw className="h-4 w-4 mr-2" /> {syncing ? "Sync…" : "Sync maintenant"}</Button>
+              <Button variant="glass" onClick={localPendingFile ? retryLocalPendingImport : syncGmcap} disabled={(!source && !localPendingFile) || syncing || manualImporting}><RefreshCw className="h-4 w-4 mr-2" /> {syncing || manualImporting ? "Vérif…" : source?.last_import_status === "pending_schema" || localPendingFile ? "Vérifier RFID" : "Sync maintenant"}</Button>
             </div>
             <div className="space-y-3 rounded-lg border border-border/50 bg-secondary/20 p-4">
               <div>
                 <h3 className="font-display text-lg font-semibold">Import manuel depuis le PC GMCAP</h3>
-                <p className="text-sm text-muted-foreground mt-1">Sélectionne l’export texte/TSV généré par GMCAP sur cet ordinateur, puis lance l’import immédiat.</p>
+                <p className="text-sm text-muted-foreground mt-1">Sélectionne l’export texte/TSV généré par GMCAP sur cet ordinateur. Si le schéma RFID n’est pas prêt, le fichier est gardé en attente puis importé automatiquement.</p>
               </div>
               <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
                 <div className="space-y-2">
