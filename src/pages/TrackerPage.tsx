@@ -167,6 +167,54 @@ export default function TrackerPage() {
     });
   }, [raceId, user]);
 
+  useEffect(() => {
+    if (!raceId || !tracking) {
+      setLeaderboardRows([]);
+      return;
+    }
+
+    let active = true;
+    const reloadLeaderboard = async () => {
+      const { data, error } = await supabase
+        .from("live_leaderboard")
+        .select("*")
+        .eq("race_id", raceId);
+
+      if (error) {
+        console.warn("[runner-leaderboard] reload error", error);
+        return;
+      }
+      if (active) setLeaderboardRows((data ?? []) as LeaderboardRow[]);
+    };
+
+    void reloadLeaderboard();
+    const channel = supabase
+      .channel(`runner-leaderboard:${raceId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "runner_positions" },
+        () => reloadLeaderboard(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "race_registrations", filter: `race_id=eq.${raceId}` },
+        () => reloadLeaderboard(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rfid_timing_results", filter: `race_id=eq.${raceId}` },
+        () => reloadLeaderboard(),
+      )
+      .subscribe();
+    const poll = window.setInterval(reloadLeaderboard, 5000);
+
+    return () => {
+      active = false;
+      window.clearInterval(poll);
+      supabase.removeChannel(channel);
+    };
+  }, [raceId, tracking]);
+
   const sendPosition = async (lat: number, lng: number, accuracy?: number, speed?: number) => {
     if (!reg) return;
     // Priority Garmin: if a fresh Garmin point arrived in the last 30s, skip phone GPS
