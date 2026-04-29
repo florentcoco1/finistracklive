@@ -710,7 +710,7 @@ export default function TrackerPage() {
               routeCoords={race.route_points.map((p) => [p.lat, p.lng])}
               routePoints={race.route_points}
               runners={
-                livePoint
+                mapPoint
                   ? [{
                       registration_id: reg.id,
                       race_id: race.id,
@@ -726,8 +726,8 @@ export default function TrackerPage() {
                       problem_description: null,
                       first_name: null,
                       last_name: null,
-                      latitude: livePoint.lat,
-                      longitude: livePoint.lng,
+                      latitude: mapPoint.lat,
+                      longitude: mapPoint.lng,
                       distance_along_route_m: lastPos?.distance_along_route_m ?? null,
                       progress_percent: lastPos?.progress_percent ?? null,
                       rolling_speed_kmh: lastPos?.rolling_speed_kmh ?? null,
@@ -736,7 +736,7 @@ export default function TrackerPage() {
                     } as LeaderboardRow]
                   : []
               }
-              focusedRunnerId={livePoint ? reg.id : null}
+              focusedRunnerId={mapPoint ? reg.id : null}
             />
           </div>
         </Card>
