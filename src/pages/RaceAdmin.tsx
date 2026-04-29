@@ -75,6 +75,7 @@ interface SyncResponse {
 interface ManualImportResponse {
   error?: string;
   code?: string;
+  warning?: string;
   imported?: number;
   matched?: number;
   unmatched?: number;
@@ -209,7 +210,12 @@ export default function RaceAdmin() {
       const content = await gmcapFile.text();
       const { data, error } = await supabase.functions.invoke("import-gmcap-rfid", { body: { race_id: raceId, content } });
       const payload = data as ManualImportResponse;
-      if (error || payload?.error) throw new Error(error?.message ?? payload.error);
+      if (error) throw new Error(error.message);
+      if (payload?.warning === "RFID_SCHEMA_MISSING") {
+        toast.warning("Le schéma RFID est en cours d’initialisation. Réessaie dans quelques instants.");
+        return;
+      }
+      if (payload?.error) throw new Error(payload.error);
       await load();
       toast.success(`Import GMCAP terminé : ${payload.matched ?? 0} coureur(s) lié(s), ${payload.imported ?? 0} résultat(s) importé(s)`);
       setGmcapFile(null);
