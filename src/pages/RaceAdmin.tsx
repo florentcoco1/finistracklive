@@ -292,6 +292,28 @@ export default function RaceAdmin() {
     }
   };
 
+  const retryLocalPendingImport = async () => {
+    if (!raceId) return;
+    const pending = await readLocalPendingImport(raceId);
+    if (!pending) return;
+    setManualImporting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("import-gmcap-rfid", { body: { race_id: raceId, content: pending.content, file_name: pending.fileName } });
+      const payload = data as ManualImportResponse;
+      if (error) throw new Error(error.message);
+      if (payload?.warning === "RFID_IMPORT_PENDING" || payload?.warning === "RFID_SCHEMA_MISSING") return;
+      if (payload?.error) throw new Error(payload.error);
+      await clearLocalPendingImport(raceId);
+      setLocalPendingFile(null);
+      await load();
+      toast.success(`Import en attente terminé : ${payload.matched ?? 0} coureur(s) lié(s), ${payload.imported ?? 0} résultat(s) importé(s)`);
+    } catch {
+      // Le fichier reste conservé localement pour la prochaine vérification automatique.
+    } finally {
+      setManualImporting(false);
+    }
+  };
+
   const updateRegistration = async (registration: RegistrationRow) => {
     if (!raceId) return;
     setBusy(true);
