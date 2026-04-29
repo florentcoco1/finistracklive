@@ -25,6 +25,7 @@ export default function NewRace() {
   const navigate = useNavigate();
   const [gpxFile, setGpxFile] = useState<File | null>(null);
   const [gpxPreview, setGpxPreview] = useState<{ distanceKm: number; points: number } | null>(null);
+  const [difficultyLevel, setDifficultyLevel] = useState(1);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => { document.title = "Créer une course — FinisTrackLive"; }, []);
@@ -100,7 +101,7 @@ export default function NewRace() {
           distance_km: distanceKm,
           difficulty_level: parsed.data.difficulty_level,
           status: "upcoming",
-        })
+        } as never)
         .select("id")
         .single();
       if (insErr) throw insErr;
@@ -136,14 +137,14 @@ export default function NewRace() {
 
           <div>
             <Label htmlFor="difficulty_level">Difficulté du parcours</Label>
-            <select id="difficulty_level" name="difficulty_level" defaultValue="1" className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+            <select id="difficulty_level" name="difficulty_level" value={difficultyLevel} onChange={(e) => setDifficultyLevel(Number(e.target.value))} className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
               <option value="1">1 étoile — parcours facile</option>
               <option value="2">2 étoiles — parcours accessible</option>
               <option value="3">3 étoiles — parcours intermédiaire</option>
               <option value="4">4 étoiles — parcours difficile</option>
               <option value="5">5 étoiles — parcours très difficile</option>
             </select>
-            <DifficultyStars level={1} className="mt-2" />
+            <DifficultyStars level={difficultyLevel} className="mt-2" />
           </div>
 
           <div>
