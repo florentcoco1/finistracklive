@@ -18,6 +18,14 @@ const integer = (value: unknown) => {
   return Number.isFinite(n) ? n : null;
 };
 
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
+function isMissingSchemaError(message: string) {
+  return message.includes("schema cache") || message.includes("rfid_timing_results") || message.includes("rfid_identifier");
+}
+
 function parseTsv(content: string): ParsedRow[] {
   const lines = content.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length < 2) return [];
@@ -61,17 +69,17 @@ Deno.serve(async (req) => {
     const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return json({ error: "Non autorisé" }, 401);
     }
 
     const { race_id, content } = await req.json();
     if (typeof race_id !== "string" || typeof content !== "string" || content.length < 10) {
-      return new Response(JSON.stringify({ error: "Fichier GMCAP invalide" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return json({ error: "Fichier GMCAP invalide" }, 400);
     }
 
     const admin = createClient(supabaseUrl, serviceKey);
     if (!(await isRaceAdmin(admin, race_id, user.id))) {
-      return new Response(JSON.stringify({ error: "Import réservé aux organisateurs de cette course" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return json({ error: "Import réservé aux organisateurs de cette course" }, 403);
     }
 
     const rows = parseTsv(content);
