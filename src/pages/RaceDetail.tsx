@@ -299,6 +299,14 @@ export default function RaceDetail() {
     else toast.success(`GMCAP synchronisé : ${result?.matched ?? 0} correspondance(s)`);
   };
 
+  useEffect(() => {
+    if (!isOrganizer || !gmcapSourceId || !gmcapEnabled || !raceId) return;
+    const timer = window.setInterval(() => {
+      void supabase.functions.invoke("sync-gmcap-rfid", { body: { race_id: raceId } });
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [isOrganizer, gmcapSourceId, gmcapEnabled, raceId]);
+
   const medalFor = (rank: number, status: string | null) => {
     if (status === "dnf" || status === "problem") return null;
     if (rank === 0) return { emoji: "🥇", label: "Or", ring: "ring-2 ring-amber-400 shadow-[0_0_20px_hsl(45_95%_55%/0.5)]", bg: "bg-gradient-to-br from-amber-300/20 to-amber-500/10 border-amber-400/50" };
