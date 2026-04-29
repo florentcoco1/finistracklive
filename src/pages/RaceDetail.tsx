@@ -33,6 +33,12 @@ interface Race {
   organizer_id: string;
 }
 
+interface UntypedRaceQuery {
+  select: (columns: string) => {
+    eq: (column: string, value: string) => { single: () => Promise<{ data: unknown | null; error: { message: string } | null }> };
+  };
+}
+
 export default function RaceDetail() {
   const { id: raceId } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -53,8 +59,7 @@ export default function RaceDetail() {
 
   useEffect(() => {
     if (!raceId) return;
-    supabase
-      .from("races")
+    (supabase.from as unknown as (table: string) => UntypedRaceQuery)("races")
       .select("id, name, description, start_time, distance_km, difficulty_level, status, gpx_geojson, route_points, organizer_id")
       .eq("id", raceId)
       .single()
@@ -63,8 +68,9 @@ export default function RaceDetail() {
           toast.error("Course introuvable");
           return;
         }
-        setRace(data as any);
-        document.title = `${data.name} — FinisTrackLive`;
+        const nextRace = data as Race;
+        setRace(nextRace);
+        document.title = `${nextRace.name} — FinisTrackLive`;
       });
   }, [raceId]);
 
