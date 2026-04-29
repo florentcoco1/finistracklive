@@ -41,6 +41,7 @@ interface Position {
 }
 
 const PHONE_SEND_INTERVAL_MS = 10_000;
+const RUNNER_STATS_REFRESH_MS = 5_000;
 const RUNNER_MAP_REFRESH_MS = 8_000;
 const GPS_WAKE_AFTER_MS = 45_000;
 const GPS_RESTART_AFTER_MS = 90_000;
@@ -104,6 +105,7 @@ export default function TrackerPage() {
   const garminFreshTimeoutRef = useRef<number | null>(null);
   const lastMetricSampleRef = useRef<{ distanceM: number; at: number } | null>(null);
   const lastMapRefreshRef = useRef<number>(0);
+  const lastStatsRefreshRef = useRef<number>(0);
 
   // Garmin LiveTrack
   const [garminUrl, setGarminUrl] = useState<string>(() => localStorage.getItem("garmin_livetrack_url") ?? "");
@@ -167,6 +169,9 @@ export default function TrackerPage() {
 
   const updateLocalPosition = (lat: number, lng: number, nativeSpeed?: number | null) => {
     const now = Date.now();
+    if (now - lastStatsRefreshRef.current < RUNNER_STATS_REFRESH_MS) return;
+    lastStatsRefreshRef.current = now;
+
     const distanceM = snapDistanceToRoute({ lat, lng }, race?.route_points ?? null);
     const routeEnd = race?.route_points?.length ? race.route_points[race.route_points.length - 1] : null;
     const totalM = race?.distance_km ? race.distance_km * 1000 : routeEnd?.cumulativeDistanceM;
@@ -426,6 +431,8 @@ export default function TrackerPage() {
     setPointsSent(0);
     setLastSendError(null);
     lastMetricSampleRef.current = null;
+    lastStatsRefreshRef.current = 0;
+    lastMapRefreshRef.current = 0;
     lastGpsEventAtRef.current = Date.now();
     acquireWakeLock();
     toast.success("Suivi GPS démarré");
