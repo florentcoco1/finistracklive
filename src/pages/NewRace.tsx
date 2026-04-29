@@ -11,11 +11,13 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { parseGpx } from "@/lib/gpx";
 import { Upload, MapPin } from "lucide-react";
+import { DifficultyStars } from "@/components/DifficultyStars";
 
 const formSchema = z.object({
   name: z.string().trim().min(2).max(120),
   description: z.string().max(2000).optional(),
   start_time: z.string().min(1),
+  difficulty_level: z.coerce.number().int().min(1).max(5),
 });
 
 export default function NewRace() {
@@ -67,6 +69,7 @@ export default function NewRace() {
       name: fd.get("name"),
       description: fd.get("description") || undefined,
       start_time: fd.get("start_time"),
+      difficulty_level: fd.get("difficulty_level"),
     });
     if (!parsed.success) { toast.error(parsed.error.errors[0].message); return; }
 
@@ -95,6 +98,7 @@ export default function NewRace() {
           gpx_geojson: geojson as any,
           route_points: routePoints as any,
           distance_km: distanceKm,
+          difficulty_level: parsed.data.difficulty_level,
           status: "upcoming",
         })
         .select("id")
@@ -128,6 +132,18 @@ export default function NewRace() {
           <div>
             <Label htmlFor="description">Description (optionnel)</Label>
             <Textarea id="description" name="description" rows={3} maxLength={2000} placeholder="Trail technique, 850m de D+, ravitaillement au km 15…" />
+          </div>
+
+          <div>
+            <Label htmlFor="difficulty_level">Difficulté du parcours</Label>
+            <select id="difficulty_level" name="difficulty_level" defaultValue="1" className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+              <option value="1">1 étoile — parcours facile</option>
+              <option value="2">2 étoiles — parcours accessible</option>
+              <option value="3">3 étoiles — parcours intermédiaire</option>
+              <option value="4">4 étoiles — parcours difficile</option>
+              <option value="5">5 étoiles — parcours très difficile</option>
+            </select>
+            <DifficultyStars level={1} className="mt-2" />
           </div>
 
           <div>
