@@ -39,6 +39,10 @@ interface UntypedRaceQuery {
   };
 }
 
+function isMissingDifficultyColumn(error: { message: string } | null) {
+  return !!error?.message?.includes("difficulty_level");
+}
+
 export default function RaceDetail() {
   const { id: raceId } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -59,11 +63,18 @@ export default function RaceDetail() {
 
   useEffect(() => {
     if (!raceId) return;
-    (supabase.from as unknown as (table: string) => UntypedRaceQuery)("races")
-      .select("id, name, description, start_time, distance_km, difficulty_level, status, gpx_geojson, route_points, organizer_id")
+    const loadRace = (columns: string) => (supabase.from as unknown as (table: string) => UntypedRaceQuery)("races")
+      .select(columns)
       .eq("id", raceId)
-      .single()
-      .then(({ data, error }) => {
+      .single();
+
+    loadRace("id, name, description, start_time, distance_km, difficulty_level, status, gpx_geojson, route_points, organizer_id")
+      .then(async ({ data, error }) => {
+        if (isMissingDifficultyColumn(error)) {
+          const fallback = await loadRace("id, name, description, start_time, distance_km, status, gpx_geojson, route_points, organizer_id");
+          data = fallback.data ? { ...(fallback.data as Omit<Race, "difficulty_level">), difficulty_level: 1 } : null;
+          error = fallback.error;
+        }
         if (error || !data) {
           toast.error("Course introuvable");
           return;
