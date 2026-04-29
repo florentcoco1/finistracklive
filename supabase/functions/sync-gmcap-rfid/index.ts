@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
       const { data: { user } } = await userClient.auth.getUser();
       const { data: isAdmin } = user
         ? await admin.rpc("is_race_admin", { _race_id: raceId, _user_id: user.id })
-        : { data: false } as any;
+        : { data: false };
       if (!user || !isAdmin) {
         return new Response(JSON.stringify({ error: "Synchronisation réservée à l'organisateur" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
