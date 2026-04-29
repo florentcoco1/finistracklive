@@ -879,6 +879,48 @@ export default function TrackerPage() {
           📱 L'écran reste allumé pendant le suivi. Évite de fermer l'onglet.
         </p>
       </Card>
+
+      {tracking && !isDnfOrProblem && (
+        <Card className="glass-card p-5 mt-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Trophy className="h-4 w-4 text-primary-glow" />
+            <p className="text-sm font-medium">Classement en direct</p>
+            <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-success">
+              <Timer className="h-3 w-3" /> Live
+            </span>
+          </div>
+
+          {myLiveRank && (
+            <div className="rounded-lg bg-primary/10 border border-primary/20 p-3 mb-3">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Ma position</p>
+              <p className="font-display text-2xl font-bold text-primary">{myLiveRank}<sup className="text-sm">e</sup></p>
+            </div>
+          )}
+
+          {visibleLeaderboardRows.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-4">Classement en attente des premiers points GPS.</p>
+          ) : (
+            <ol className="space-y-2">
+              {visibleLeaderboardRows.map((row) => {
+                const rank = sortedLeaderboard.findIndex((item) => item.registration_id === row.registration_id) + 1;
+                const isMe = row.registration_id === reg.id;
+                return (
+                  <li key={row.registration_id} className={`flex items-center gap-3 rounded-lg border p-3 ${isMe ? "border-primary/40 bg-primary/10" : "border-border/50 bg-secondary/40"}`}>
+                    <span className={`w-7 shrink-0 text-center font-display text-sm font-bold ${isMe ? "text-primary" : "text-muted-foreground"}`}>{rank}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">#{row.bib_number}{isMe ? " · Moi" : row.first_name || row.last_name ? ` · ${row.first_name ?? ""} ${row.last_name ?? ""}` : ""}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {row.rfid_rounded_time ?? row.rfid_official_time ?? `${formatDistance(row.distance_along_route_m)}${row.progress_percent != null ? ` · ${row.progress_percent.toFixed(0)}%` : ""}`}
+                      </p>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{formatSpeed(row.rolling_speed_kmh)}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </Card>
+      )}
     </main>
   );
 }
