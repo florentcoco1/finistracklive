@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { AlertTriangle, ChevronLeft, Link2, Plus, RefreshCw, Save, Shield, Trash2, UserPlus, Users } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Link2, Plus, RefreshCw, Save, Shield, Trash2, Upload, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -72,6 +72,13 @@ interface SyncResponse {
   synced?: Array<{ error?: string; matched?: number }>;
 }
 
+interface ManualImportResponse {
+  error?: string;
+  imported?: number;
+  matched?: number;
+  unmatched?: number;
+}
+
 const emptyRegistration = { email: "", bib_number: "", category: "", emergency_phone: "" };
 
 function displayName(profile: AdminProfile | null) {
@@ -91,6 +98,8 @@ export default function RaceAdmin() {
   const [organizers, setOrganizers] = useState<OrganizerRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [manualImporting, setManualImporting] = useState(false);
+  const [gmcapFile, setGmcapFile] = useState<File | null>(null);
   const [newRunner, setNewRunner] = useState(emptyRegistration);
   const [newOrganizerEmail, setNewOrganizerEmail] = useState("");
 
@@ -181,6 +190,32 @@ export default function RaceAdmin() {
       toast.error((error as Error).message || "Synchronisation impossible");
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const importGmcapFile = async () => {
+    if (!raceId || !gmcapFile) {
+      toast.error("Sélectionne un fichier GMCAP à importer");
+      return;
+    }
+    if (gmcapFile.size > 8 * 1024 * 1024) {
+      toast.error("Fichier trop volumineux : limite 8 Mo");
+      return;
+    }
+
+    setManualImporting(true);
+    try {
+      const content = await gmcapFile.text();
+      const { data, error } = await supabase.functions.invoke("import-gmcap-rfid", { body: { race_id: raceId, content } });
+      const payload = data as ManualImportResponse;
+      if (error || payload?.error) throw new Error(error?.message ?? payload.error);
+      await load();
+      toast.success(`Import GMCAP terminé : ${payload.matched ?? 0} coureur(s) lié(s), ${payload.imported ?? 0} résultat(s) importé(s)`);
+      setGmcapFile(null);
+    } catch (error) {
+      toast.error((error as Error).message || "Import GMCAP impossible");
+    } finally {
+      setManualImporting(false);
     }
   };
 
@@ -337,9 +372,30 @@ export default function RaceAdmin() {
               </p>
               <Button variant="glass" onClick={syncGmcap} disabled={!source || syncing}><RefreshCw className="h-4 w-4 mr-2" /> {syncing ? "Sync…" : "Sync maintenant"}</Button>
             </div>
+            <div className="space-y-3 rounded-lg border border-border/50 bg-secondary/20 p-4">
+              <div>
+                <h3 className="font-display text-lg font-semibold">Import manuel depuis le PC GMCAP</h3>
+                <p className="text-sm text-muted-foreground mt-1">Sélectionne l’export texte/TSV généré par GMCAP sur cet ordinateur, puis lance l’import immédiat.</p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="gmcap-file">Fichier export GMCAP</Label>
+                  <Input
+                    id="gmcap-file"
+                    type="file"
+                    accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values"
+                    onChange={(e) => setGmcapFile(e.target.files?.[0] ?? null)}
+                  />
+                  {gmcapFile && <p className="text-xs text-muted-foreground">{gmcapFile.name} · {(gmcapFile.size / 1024).toFixed(1)} Ko</p>}
+                </div>
+                <Button variant="hero" onClick={importGmcapFile} disabled={!gmcapFile || manualImporting}>
+                  <Upload className="h-4 w-4 mr-2" /> {manualImporting ? "Import…" : "Importer maintenant"}
+                </Button>
+              </div>
+            </div>
             <div className="flex gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-muted-foreground">
               <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
-              <p>Le fichier FTP/dossier doit être exposé via un lien HTTP/HTTPS accessible par FinisTrackLive.</p>
+              <p>La synchronisation automatique nécessite un lien HTTP/HTTPS accessible par FinisTrackLive. L’import manuel fonctionne directement avec un fichier local du PC utilisé pour GMCAP.</p>
             </div>
           </Card>
         </TabsContent>
