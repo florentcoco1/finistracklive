@@ -17,14 +17,17 @@ interface Race {
   status: "upcoming" | "live" | "finished";
 }
 
+interface UntypedRacesQuery {
+  select: (columns: string) => { order: (column: string, options: { ascending: boolean }) => Promise<{ data: unknown[] | null }> };
+}
+
 export default function RacesList() {
   const [races, setRaces] = useState<Race[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     document.title = "Toutes les courses — FinisTrackLive";
-    supabase
-      .from("races")
+    (supabase.from as unknown as (table: string) => UntypedRacesQuery)("races")
       .select("id, name, description, start_time, distance_km, difficulty_level, status")
       .order("start_time", { ascending: false })
       .then(({ data }) => {
