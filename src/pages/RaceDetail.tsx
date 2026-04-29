@@ -9,7 +9,7 @@ import { StatusBadge } from "./Index";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { ChevronLeft, Trophy, Radio, UserPlus, Smartphone, AlertTriangle, Flag, Phone } from "lucide-react";
+import { ChevronLeft, Trophy, Radio, UserPlus, Smartphone, AlertTriangle, Flag, Phone, FileUp, Timer } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ export default function RaceDetail() {
   const [signupOpen, setSignupOpen] = useState(false);
   const [bibInput, setBibInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
+  const [importingRfid, setImportingRfid] = useState(false);
 
   useEffect(() => {
     if (!raceId) return;
@@ -142,6 +143,11 @@ export default function RaceDetail() {
           reload();
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rfid_timing_results", filter: `race_id=eq.${raceId}` },
+        () => reload(),
+      )
       .subscribe((status) => {
         console.log("[realtime] channel status:", status);
       });
@@ -188,6 +194,16 @@ export default function RaceDetail() {
   const sorted = useMemo(() => {
     const rank = (s: string | null) => (s === "dnf" ? 2 : s === "problem" ? 1 : 0);
     return [...rows].sort((a, b) => {
+      const ar = a.rfid_overall_rank;
+      const br = b.rfid_overall_rank;
+      if (ar != null && br != null) return ar - br;
+      if (ar != null) return -1;
+      if (br != null) return 1;
+      const at = a.rfid_official_seconds;
+      const bt = b.rfid_official_seconds;
+      if (at != null && bt != null) return at - bt;
+      if (at != null) return -1;
+      if (bt != null) return 1;
       const ra = rank(a.runner_status);
       const rb = rank(b.runner_status);
       if (ra !== rb) return ra - rb;
@@ -201,6 +217,24 @@ export default function RaceDetail() {
       return db - da;
     });
   }, [rows]);
+
+  const handleGmcapImport = async (file: File | null) => {
+    if (!file || !raceId) return;
+    setImportingRfid(true);
+    try {
+      const content = new TextDecoder("iso-8859-1").decode(await file.arrayBuffer());
+      const { data, error } = await supabase.functions.invoke("import-gmcap-rfid", {
+        body: { race_id: raceId, content },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(`RFID GMCAP importé : ${(data as any).matched} correspondance(s), ${(data as any).unmatched} non associée(s)`);
+    } catch (error) {
+      toast.error((error as Error).message || "Import RFID impossible");
+    } finally {
+      setImportingRfid(false);
+    }
+  };
 
   const medalFor = (rank: number, status: string | null) => {
     if (status === "dnf" || status === "problem") return null;
