@@ -9,7 +9,7 @@ import { StatusBadge } from "./Index";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { ChevronLeft, Trophy, Radio, UserPlus, Smartphone, AlertTriangle, Flag, Phone, FileUp, Timer } from "lucide-react";
+import { ChevronLeft, Trophy, UserPlus, Smartphone, AlertTriangle, Flag, Phone, FileUp, Timer } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
