@@ -379,17 +379,19 @@ export default function RaceAdmin() {
               <input type="checkbox" checked={sourceEnabled} onChange={(e) => setSourceEnabled(e.target.checked)} className="accent-current" /> Synchronisation automatique toutes les minutes
             </label>
             <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/50 bg-secondary/30 p-3">
-              <Badge variant={source?.last_import_status === "error" ? "destructive" : "secondary"}>{source?.last_import_status ?? "non configuré"}</Badge>
+              <Badge variant={source?.last_import_status === "error" ? "destructive" : "secondary"}>
+                {source?.last_import_status === "pending_schema" ? "import en attente" : source?.last_import_status ?? "non configuré"}
+              </Badge>
               <p className="text-sm text-muted-foreground flex-1">
-                {source?.last_import_at ? `Dernier import le ${format(new Date(source.last_import_at), "dd/MM/yyyy à HH:mm:ss", { locale: fr })}` : "Aucun import lancé"}
+                {source?.last_import_status === "pending_schema" && source.file_name ? `Fichier en attente : ${source.file_name}` : source?.last_import_at ? `Dernier import le ${format(new Date(source.last_import_at), "dd/MM/yyyy à HH:mm:ss", { locale: fr })}` : "Aucun import lancé"}
                 {source?.last_import_message ? ` · ${source.last_import_message}` : ""}
               </p>
-              <Button variant="glass" onClick={syncGmcap} disabled={!source || syncing}><RefreshCw className="h-4 w-4 mr-2" /> {syncing ? "Sync…" : "Sync maintenant"}</Button>
+              <Button variant="glass" onClick={syncGmcap} disabled={!source || syncing}><RefreshCw className="h-4 w-4 mr-2" /> {syncing ? "Vérif…" : source?.last_import_status === "pending_schema" ? "Vérifier RFID" : "Sync maintenant"}</Button>
             </div>
             <div className="space-y-3 rounded-lg border border-border/50 bg-secondary/20 p-4">
               <div>
                 <h3 className="font-display text-lg font-semibold">Import manuel depuis le PC GMCAP</h3>
-                <p className="text-sm text-muted-foreground mt-1">Sélectionne l’export texte/TSV généré par GMCAP sur cet ordinateur, puis lance l’import immédiat.</p>
+                <p className="text-sm text-muted-foreground mt-1">Sélectionne l’export texte/TSV généré par GMCAP sur cet ordinateur. Si le schéma RFID n’est pas prêt, le fichier est gardé en attente puis importé automatiquement.</p>
               </div>
               <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
                 <div className="space-y-2">
