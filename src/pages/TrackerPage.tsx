@@ -161,7 +161,14 @@ export default function TrackerPage() {
     setLastSendAt(Date.now());
     setError(null);
     if (data?.position) {
-      setLastPos(data.position as Position);
+      const serverPos = data.position as Position;
+      setLastPos((current) => ({
+        ...serverPos,
+        distance_along_route_m: serverPos.distance_along_route_m ?? current?.distance_along_route_m ?? null,
+        progress_percent: serverPos.progress_percent ?? current?.progress_percent ?? null,
+        rolling_speed_kmh: serverPos.rolling_speed_kmh ?? current?.rolling_speed_kmh ?? null,
+        rolling_pace_sec_per_km: serverPos.rolling_pace_sec_per_km ?? current?.rolling_pace_sec_per_km ?? null,
+      }));
       console.log("[record-position] ok", data.position);
     }
   };
@@ -294,8 +301,14 @@ export default function TrackerPage() {
       }, 30_000);
     }
     if (data?.position) {
-      setLastPos(data.position as Position);
       const p = data.position as Position;
+      setLastPos((current) => ({
+        ...p,
+        distance_along_route_m: p.distance_along_route_m ?? current?.distance_along_route_m ?? null,
+        progress_percent: p.progress_percent ?? current?.progress_percent ?? null,
+        rolling_speed_kmh: p.rolling_speed_kmh ?? current?.rolling_speed_kmh ?? null,
+        rolling_pace_sec_per_km: p.rolling_pace_sec_per_km ?? current?.rolling_pace_sec_per_km ?? null,
+      }));
       if (p.latitude != null && p.longitude != null) {
         if (p.distance_along_route_m != null) {
           lastMetricSampleRef.current = { distanceM: p.distance_along_route_m, at: Date.now() };
