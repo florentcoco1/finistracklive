@@ -289,6 +289,9 @@ export default function TrackerPage() {
       const p = data.position as Position;
       if (p.latitude != null && p.longitude != null) {
         setLivePoint({ lat: p.latitude, lng: p.longitude });
+        if (p.distance_along_route_m != null) {
+          lastMetricSampleRef.current = { distanceM: p.distance_along_route_m, at: Date.now() };
+        }
       }
     }
   };
@@ -501,6 +504,16 @@ export default function TrackerPage() {
       "Problème signalé. L'organisation est prévenue.",
     );
   };
+
+  useEffect(() => {
+    if (!livePoint) return;
+    setMapPoint(livePoint);
+    const refresh = window.setInterval(() => {
+      setMapPoint(livePoint);
+    }, RUNNER_MAP_REFRESH_MS);
+
+    return () => window.clearInterval(refresh);
+  }, [livePoint]);
 
   useEffect(() => {
     return () => {
