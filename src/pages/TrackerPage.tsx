@@ -524,7 +524,7 @@ export default function TrackerPage() {
         tracking_active: true,
         started_at: new Date().toISOString(),
         finished_at: null,
-      } as any)
+      })
       .eq("id", reg.id);
     if (error) { toast.error(error.message); return; }
 
@@ -604,7 +604,7 @@ export default function TrackerPage() {
 
     const { error } = await supabase
       .from("race_registrations")
-      .update(update as any)
+      .update(update)
       .eq("id", reg.id);
 
     if (error) { toast.error(error.message); return; }
