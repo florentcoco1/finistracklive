@@ -103,6 +103,7 @@ export default function TrackerPage() {
   const trackingRef = useRef(false);
   const garminFreshTimeoutRef = useRef<number | null>(null);
   const lastMetricSampleRef = useRef<{ distanceM: number; at: number } | null>(null);
+  const lastMapRefreshRef = useRef<number>(0);
 
   // Garmin LiveTrack
   const [garminUrl, setGarminUrl] = useState<string>(() => localStorage.getItem("garmin_livetrack_url") ?? "");
@@ -214,6 +215,10 @@ export default function TrackerPage() {
     lastGpsEventAtRef.current = Date.now();
     setError(null);
     setLivePoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+    if (Date.now() - lastMapRefreshRef.current >= RUNNER_MAP_REFRESH_MS) {
+      setMapPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      lastMapRefreshRef.current = Date.now();
+    }
     updateLocalPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.speed ?? null);
     console.log("[geo] watchPosition", pos.coords.latitude, pos.coords.longitude, "acc:", pos.coords.accuracy);
     void sendPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed ?? undefined);
@@ -291,6 +296,10 @@ export default function TrackerPage() {
         setLivePoint({ lat: p.latitude, lng: p.longitude });
         if (p.distance_along_route_m != null) {
           lastMetricSampleRef.current = { distanceM: p.distance_along_route_m, at: Date.now() };
+        }
+        if (Date.now() - lastMapRefreshRef.current >= RUNNER_MAP_REFRESH_MS) {
+          setMapPoint({ lat: p.latitude, lng: p.longitude });
+          lastMapRefreshRef.current = Date.now();
         }
       }
     }
