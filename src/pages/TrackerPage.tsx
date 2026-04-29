@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { ChevronLeft, Play, Square, Activity, Satellite, Flag, AlertTriangle, Watch } from "lucide-react";
-import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
+import { formatDistance, formatPace, formatSpeed, haversineMeters } from "@/lib/gpx";
 import type { RunnerStatus, RouteCoord, LeaderboardRow } from "@/lib/types";
 import RaceMap from "@/components/RaceMap";
 import { Input } from "@/components/ui/input";
@@ -35,8 +35,47 @@ interface Position {
   rolling_speed_kmh: number | null;
   rolling_pace_sec_per_km: number | null;
   recorded_at: string;
+  speed?: number | null;
   latitude?: number | null;
   longitude?: number | null;
+}
+
+const PHONE_SEND_INTERVAL_MS = 10_000;
+const RUNNER_MAP_REFRESH_MS = 8_000;
+const GPS_WAKE_AFTER_MS = 45_000;
+const GPS_RESTART_AFTER_MS = 90_000;
+const GPS_HEARTBEAT_MS = 30_000;
+
+function snapDistanceToRoute(point: { lat: number; lng: number }, route: RouteCoord[] | null): number | null {
+  if (!route || route.length < 2) return null;
+
+  let bestDist = Infinity;
+  let bestAlong = 0;
+
+  for (let i = 0; i < route.length - 1; i++) {
+    const a = route[i];
+    const b = route[i + 1];
+    const meanLat = ((a.lat + b.lat) / 2) * (Math.PI / 180);
+    const mPerDegLat = 111320;
+    const mPerDegLng = 111320 * Math.cos(meanLat);
+    const bx = (b.lng - a.lng) * mPerDegLng;
+    const by = (b.lat - a.lat) * mPerDegLat;
+    const px = (point.lng - a.lng) * mPerDegLng;
+    const py = (point.lat - a.lat) * mPerDegLat;
+    const segLen2 = bx * bx + by * by;
+    const t = Math.max(0, Math.min(1, segLen2 > 0 ? (px * bx + py * by) / segLen2 : 0));
+    const dx = px - t * bx;
+    const dy = py - t * by;
+    const distM = Math.sqrt(dx * dx + dy * dy);
+
+    if (distM < bestDist) {
+      bestDist = distM;
+      const segLengthM = haversineMeters(a, b);
+      bestAlong = a.cumulativeDistanceM + t * segLengthM;
+    }
+  }
+
+  return Math.max(0, Math.round(bestAlong));
 }
 
 export default function TrackerPage() {
