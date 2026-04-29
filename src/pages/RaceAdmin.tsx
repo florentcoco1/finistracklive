@@ -259,6 +259,14 @@ export default function RaceAdmin() {
     return () => window.clearInterval(interval);
   }, [raceId, source?.last_import_status, syncing, load]);
 
+  useEffect(() => {
+    if (!raceId || !localPendingFile) return;
+    const interval = window.setInterval(() => {
+      retryLocalPendingImport().catch(() => undefined);
+    }, 30_000);
+    return () => window.clearInterval(interval);
+  }, [raceId, localPendingFile]);
+
   const importGmcapFile = async () => {
     if (!raceId || !gmcapFile) {
       toast.error("Sélectionne un fichier GMCAP à importer");
