@@ -29,6 +29,14 @@ interface Registration {
   tracking_active: boolean;
   runner_status: RunnerStatus;
 }
+interface RegistrationUpdate {
+  tracking_active?: boolean;
+  started_at?: string | null;
+  finished_at?: string | null;
+  runner_status?: RunnerStatus;
+  dnf_reason?: string | null;
+  problem_description?: string | null;
+}
 interface Position {
   distance_along_route_m: number | null;
   progress_percent: number | null;
@@ -583,7 +591,7 @@ export default function TrackerPage() {
     setTracking(false);
     trackingRef.current = false;
 
-    const update: Record<string, unknown> = {
+    const update: RegistrationUpdate = {
       tracking_active: false,
       finished_at: new Date().toISOString(),
     };
