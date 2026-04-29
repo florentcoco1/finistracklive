@@ -542,6 +542,11 @@ export default function TrackerPage() {
     };
   }, []);
 
+  const routeCoords = useMemo<[number, number][]>(
+    () => race?.route_points?.map((p) => [p.lat, p.lng]) ?? [],
+    [race?.route_points],
+  );
+
   if (loading) return <main className="container py-12"><p className="text-muted-foreground">Chargement…</p></main>;
   if (!user) return <Navigate to="/auth" replace />;
 
@@ -557,10 +562,6 @@ export default function TrackerPage() {
   }
 
   const isDnfOrProblem = reg.runner_status === "dnf" || reg.runner_status === "problem";
-  const routeCoords = useMemo<[number, number][]>(
-    () => race.route_points?.map((p) => [p.lat, p.lng]) ?? [],
-    [race.route_points],
-  );
 
   return (
     <main className="container py-6 max-w-md">
