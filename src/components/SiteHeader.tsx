@@ -14,7 +14,7 @@ export function SiteHeader() {
 
   const links = [
     { to: "/races", label: "Courses" },
-    ...(user ? [{ to: "/dashboard", label: "Mon espace" }] : []),
+    ...(user && !isOrganizer ? [{ to: "/dashboard", label: "Mon espace" }] : []),
     ...(isOrganizer ? [{ to: "/dashboard", label: "Administration" }] : []),
     ...(isOrganizer ? [{ to: "/organizer/new-race", label: "Créer une course" }] : []),
   ];
