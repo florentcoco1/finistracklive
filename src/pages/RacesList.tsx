@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { StatusBadge } from "./Index";
+import { DifficultyStars } from "@/components/DifficultyStars";
 
 interface Race {
   id: string;
@@ -12,7 +13,12 @@ interface Race {
   description: string | null;
   start_time: string;
   distance_km: number | null;
+  difficulty_level: number | null;
   status: "upcoming" | "live" | "finished";
+}
+
+interface UntypedRacesQuery {
+  select: (columns: string) => { order: (column: string, options: { ascending: boolean }) => Promise<{ data: unknown[] | null }> };
 }
 
 export default function RacesList() {
@@ -21,9 +27,8 @@ export default function RacesList() {
 
   useEffect(() => {
     document.title = "Toutes les courses — FinisTrackLive";
-    supabase
-      .from("races")
-      .select("id, name, description, start_time, distance_km, status")
+    (supabase.from as unknown as (table: string) => UntypedRacesQuery)("races")
+      .select("id, name, description, start_time, distance_km, difficulty_level, status")
       .order("start_time", { ascending: false })
       .then(({ data }) => {
         setRaces((data ?? []) as Race[]);
@@ -52,6 +57,7 @@ export default function RacesList() {
                   {r.distance_km && <span className="text-xs text-muted-foreground">{r.distance_km} km</span>}
                 </div>
                 <h3 className="font-display font-semibold text-lg mb-1">{r.name}</h3>
+                <DifficultyStars level={r.difficulty_level} className="mb-2" />
                 <p className="text-sm text-muted-foreground mb-2">
                   {format(new Date(r.start_time), "EEEE d MMMM yyyy, HH:mm", { locale: fr })}
                 </p>
