@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -60,6 +60,18 @@ interface OrganizerRow {
   profile: AdminProfile | null;
 }
 
+interface AdminResponse {
+  error?: string;
+  source?: GmcapSource | null;
+  registrations?: RegistrationRow[];
+  organizers?: OrganizerRow[];
+}
+
+interface SyncResponse {
+  error?: string;
+  synced?: Array<{ error?: string; matched?: number }>;
+}
+
 const emptyRegistration = { email: "", bib_number: "", category: "", emergency_phone: "" };
 
 function displayName(profile: AdminProfile | null) {
@@ -85,11 +97,12 @@ export default function RaceAdmin() {
   const invokeAdmin = async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("manage-race-admin", { body });
     if (error) throw error;
-    if ((data as any)?.error) throw new Error((data as any).error);
-    return data as any;
+    const payload = data as AdminResponse;
+    if (payload?.error) throw new Error(payload.error);
+    return payload;
   };
 
-  const applyAdminData = (data: any) => {
+  const applyAdminData = (data: AdminResponse) => {
     setSource(data.source ?? null);
     setSourceUrl(data.source?.source_url ?? "");
     setSourceEnabled(data.source?.enabled ?? true);
@@ -97,11 +110,11 @@ export default function RaceAdmin() {
     setOrganizers(data.organizers ?? []);
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!raceId) return;
     const data = await invokeAdmin({ action: "load", race_id: raceId });
     applyAdminData(data);
-  };
+  }, [raceId]);
 
   useEffect(() => {
     if (!raceId || loading) return;
@@ -129,7 +142,7 @@ export default function RaceAdmin() {
       toast.error((error as Error).message || "Administration inaccessible");
       navigate(`/races/${raceId}`);
     });
-  }, [raceId, user, loading, navigate]);
+  }, [raceId, user, loading, navigate, load]);
 
   const stats = useMemo(() => {
     const linked = registrations.filter((r) => r.rfid_identifier).length;
@@ -158,9 +171,10 @@ export default function RaceAdmin() {
     setSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke("sync-gmcap-rfid", { body: { race_id: raceId } });
-      if (error || (data as any)?.error) throw new Error(error?.message ?? (data as any).error);
+      const payload = data as SyncResponse;
+      if (error || payload?.error) throw new Error(error?.message ?? payload.error);
       await load();
-      const result = (data as any).synced?.[0];
+      const result = payload.synced?.[0];
       if (result?.error) toast.error(result.error);
       else toast.success(`GMCAP synchronisé : ${result?.matched ?? 0} correspondance(s)`);
     } catch (error) {
