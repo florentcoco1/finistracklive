@@ -145,6 +145,7 @@ export default function RaceAdmin() {
   const [syncing, setSyncing] = useState(false);
   const [manualImporting, setManualImporting] = useState(false);
   const [gmcapFile, setGmcapFile] = useState<File | null>(null);
+  const [localPendingFile, setLocalPendingFile] = useState<string | null>(null);
   const [newRunner, setNewRunner] = useState(emptyRegistration);
   const [newOrganizerEmail, setNewOrganizerEmail] = useState("");
 
@@ -196,6 +197,8 @@ export default function RaceAdmin() {
       toast.error((error as Error).message || "Administration inaccessible");
       navigate(`/races/${raceId}`);
     });
+
+    readLocalPendingImport(raceId).then((pending) => setLocalPendingFile(pending?.fileName ?? null)).catch(() => undefined);
   }, [raceId, user, loading, navigate, load]);
 
   const stats = useMemo(() => {
