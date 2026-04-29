@@ -9,7 +9,7 @@ import { StatusBadge } from "./Index";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { ChevronLeft, Trophy, UserPlus, Smartphone, AlertTriangle, Flag, Phone, Link2, RefreshCw, Timer } from "lucide-react";
+import { ChevronLeft, Trophy, UserPlus, Smartphone, AlertTriangle, Flag, Phone, Link2, RefreshCw, Timer, Shield } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -377,6 +377,9 @@ export default function RaceDetail() {
         <div className="flex flex-wrap gap-2">
           {isOrganizer && (
             <div className="flex flex-wrap gap-2">
+              <Button asChild variant="hero">
+                <Link to={`/organizer/races/${race.id}/admin`}><Shield className="h-4 w-4 mr-2" /> Administration</Link>
+              </Button>
               <Dialog open={sourceOpen} onOpenChange={setSourceOpen}>
                 <DialogTrigger asChild>
                   <Button variant="glass"><Link2 className="h-4 w-4 mr-2" /> Source GMCAP</Button>
