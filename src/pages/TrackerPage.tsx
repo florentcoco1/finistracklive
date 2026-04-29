@@ -515,16 +515,6 @@ export default function TrackerPage() {
   };
 
   useEffect(() => {
-    if (!livePoint) return;
-    setMapPoint(livePoint);
-    const refresh = window.setInterval(() => {
-      setMapPoint(livePoint);
-    }, RUNNER_MAP_REFRESH_MS);
-
-    return () => window.clearInterval(refresh);
-  }, [livePoint]);
-
-  useEffect(() => {
     return () => {
       clearPhoneWatcher();
       if (garminIntervalRef.current != null) window.clearInterval(garminIntervalRef.current);
