@@ -200,6 +200,23 @@ export default function RaceAdmin() {
     }
   };
 
+  useEffect(() => {
+    if (!raceId || source?.last_import_status !== "pending_schema") return;
+    const checkPendingImport = async () => {
+      if (syncing) return;
+      setSyncing(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("sync-gmcap-rfid", { body: { race_id: raceId } });
+        const payload = data as SyncResponse;
+        if (!error && !payload?.error) await load();
+      } finally {
+        setSyncing(false);
+      }
+    };
+    const interval = window.setInterval(checkPendingImport, 30_000);
+    return () => window.clearInterval(interval);
+  }, [raceId, source?.last_import_status, syncing, load]);
+
   const importGmcapFile = async () => {
     if (!raceId || !gmcapFile) {
       toast.error("Sélectionne un fichier GMCAP à importer");
@@ -227,7 +244,7 @@ export default function RaceAdmin() {
       setGmcapFile(null);
     } catch (error) {
       const message = (error as Error).message || "Import GMCAP impossible";
-      toast.error(message.includes("RFID_SCHEMA_MISSING") ? "Le schéma RFID est en cours d’initialisation. Réessaie dans quelques instants." : message);
+      toast.error(message.includes("RFID_SCHEMA_MISSING") ? "Import enregistré en attente : relance automatique dès que le schéma RFID sera prêt." : message);
     } finally {
       setManualImporting(false);
     }
