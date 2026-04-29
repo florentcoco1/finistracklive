@@ -141,23 +141,33 @@ Deno.serve(async (req) => {
       });
     }
 
-    await Promise.all(updates);
+    const updateResults = await Promise.all(updates);
+    const missingRegistrationSchema = updateResults.find((result) => result.error && isMissingSchemaError(result.error.message));
+    if (missingRegistrationSchema?.error) {
+      return json({
+        error: "Le schéma RFID n’est pas encore initialisé dans Lovable Cloud. La migration de réparation a été ajoutée ; relance l’import quand elle sera appliquée.",
+        code: "RFID_SCHEMA_MISSING",
+      }, 503);
+    }
+    const updateError = updateResults.find((result) => result.error)?.error;
+    if (updateError) return json({ error: updateError.message }, 500);
+
     const { error: upsertError } = await admin
       .from("rfid_timing_results")
       .upsert(results, { onConflict: "race_id,rfid_identifier" });
 
     if (upsertError) {
-      return new Response(JSON.stringify({ error: upsertError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (isMissingSchemaError(upsertError.message)) {
+        return json({
+          error: "Le schéma RFID n’est pas encore initialisé dans Lovable Cloud. La migration de réparation a été ajoutée ; relance l’import quand elle sera appliquée.",
+          code: "RFID_SCHEMA_MISSING",
+        }, 503);
+      }
+      return json({ error: upsertError.message }, 500);
     }
 
-    return new Response(JSON.stringify({ ok: true, imported: results.length, matched, unmatched: results.length - matched }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ ok: true, imported: results.length, matched, unmatched: results.length - matched });
   } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message ?? "Erreur import GMCAP" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: (error as Error).message ?? "Erreur import GMCAP" }, 500);
   }
 });
