@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { ChevronLeft, Play, Square, Activity, Satellite, Flag, AlertTriangle, Watch } from "lucide-react";
-import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
+import { formatDistance, formatPace, formatSpeed, haversineMeters } from "@/lib/gpx";
 import type { RunnerStatus, RouteCoord, LeaderboardRow } from "@/lib/types";
 import RaceMap from "@/components/RaceMap";
 import { Input } from "@/components/ui/input";
@@ -35,8 +35,48 @@ interface Position {
   rolling_speed_kmh: number | null;
   rolling_pace_sec_per_km: number | null;
   recorded_at: string;
+  speed?: number | null;
   latitude?: number | null;
   longitude?: number | null;
+}
+
+const PHONE_SEND_INTERVAL_MS = 10_000;
+const RUNNER_STATS_REFRESH_MS = 5_000;
+const RUNNER_MAP_REFRESH_MS = 8_000;
+const GPS_WAKE_AFTER_MS = 45_000;
+const GPS_RESTART_AFTER_MS = 90_000;
+const GPS_HEARTBEAT_MS = 30_000;
+
+function snapDistanceToRoute(point: { lat: number; lng: number }, route: RouteCoord[] | null): number | null {
+  if (!route || route.length < 2) return null;
+
+  let bestDist = Infinity;
+  let bestAlong = 0;
+
+  for (let i = 0; i < route.length - 1; i++) {
+    const a = route[i];
+    const b = route[i + 1];
+    const meanLat = ((a.lat + b.lat) / 2) * (Math.PI / 180);
+    const mPerDegLat = 111320;
+    const mPerDegLng = 111320 * Math.cos(meanLat);
+    const bx = (b.lng - a.lng) * mPerDegLng;
+    const by = (b.lat - a.lat) * mPerDegLat;
+    const px = (point.lng - a.lng) * mPerDegLng;
+    const py = (point.lat - a.lat) * mPerDegLat;
+    const segLen2 = bx * bx + by * by;
+    const t = Math.max(0, Math.min(1, segLen2 > 0 ? (px * bx + py * by) / segLen2 : 0));
+    const dx = px - t * bx;
+    const dy = py - t * by;
+    const distM = Math.sqrt(dx * dx + dy * dy);
+
+    if (distM < bestDist) {
+      bestDist = distM;
+      const segLengthM = haversineMeters(a, b);
+      bestAlong = a.cumulativeDistanceM + t * segLengthM;
+    }
+  }
+
+  return Math.max(0, Math.round(bestAlong));
 }
 
 export default function TrackerPage() {
@@ -49,7 +89,7 @@ export default function TrackerPage() {
   const [reg, setReg] = useState<Registration | null>(null);
   const [tracking, setTracking] = useState(false);
   const [lastPos, setLastPos] = useState<Position | null>(null);
-  const [livePoint, setLivePoint] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapPoint, setMapPoint] = useState<{ lat: number; lng: number; at: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pointsSent, setPointsSent] = useState(0);
   const [lastSendAt, setLastSendAt] = useState<number | null>(null);
@@ -62,6 +102,9 @@ export default function TrackerPage() {
   const restartCooldownRef = useRef<number>(0);
   const trackingRef = useRef(false);
   const garminFreshTimeoutRef = useRef<number | null>(null);
+  const lastMetricSampleRef = useRef<{ distanceM: number; at: number } | null>(null);
+  const lastMapRefreshRef = useRef<number>(0);
+  const lastStatsRefreshRef = useRef<number>(0);
 
   // Garmin LiveTrack
   const [garminUrl, setGarminUrl] = useState<string>(() => localStorage.getItem("garmin_livetrack_url") ?? "");
@@ -95,9 +138,9 @@ export default function TrackerPage() {
     if (!reg) return;
     // Priority Garmin: if a fresh Garmin point arrived in the last 30s, skip phone GPS
     if (garminFreshRef.current) return;
-    // throttle locally to ~3s (server enforces 2s minimum)
+    // throttle locally: smoother GPS capture, calmer UI + fewer backend writes
     const now = Date.now();
-    if (now - lastSentRef.current < 3000) return;
+    if (now - lastSentRef.current < PHONE_SEND_INTERVAL_MS) return;
     lastSentRef.current = now;
 
     const { data, error } = await supabase.functions.invoke("record-position", {
@@ -118,9 +161,59 @@ export default function TrackerPage() {
     setLastSendAt(Date.now());
     setError(null);
     if (data?.position) {
-      setLastPos(data.position as Position);
+      const serverPos = data.position as Position;
+      setLastPos((current) => ({
+        ...serverPos,
+        distance_along_route_m: serverPos.distance_along_route_m ?? current?.distance_along_route_m ?? null,
+        progress_percent: serverPos.progress_percent ?? current?.progress_percent ?? null,
+        rolling_speed_kmh: serverPos.rolling_speed_kmh ?? current?.rolling_speed_kmh ?? null,
+        rolling_pace_sec_per_km: serverPos.rolling_pace_sec_per_km ?? current?.rolling_pace_sec_per_km ?? null,
+      }));
       console.log("[record-position] ok", data.position);
     }
+  };
+
+  const updateLocalPosition = (lat: number, lng: number, nativeSpeed?: number | null) => {
+    const now = Date.now();
+    if (now - lastStatsRefreshRef.current < RUNNER_STATS_REFRESH_MS) return;
+    lastStatsRefreshRef.current = now;
+
+    const distanceM = snapDistanceToRoute({ lat, lng }, race?.route_points ?? null);
+    const routeEnd = race?.route_points?.length ? race.route_points[race.route_points.length - 1] : null;
+    const totalM = race?.distance_km ? race.distance_km * 1000 : routeEnd?.cumulativeDistanceM;
+    const previous = lastMetricSampleRef.current;
+
+    let rollingSpeedKmh =
+      typeof nativeSpeed === "number" && Number.isFinite(nativeSpeed) && nativeSpeed >= 0
+        ? nativeSpeed * 3.6
+        : lastPos?.rolling_speed_kmh ?? null;
+
+    if (previous && distanceM != null) {
+      const elapsedS = (now - previous.at) / 1000;
+      const deltaM = Math.max(0, distanceM - previous.distanceM);
+      if (elapsedS >= 3 && deltaM >= 2) {
+        rollingSpeedKmh = (deltaM / 1000) / (elapsedS / 3600);
+      }
+    }
+
+    if (distanceM != null) {
+      lastMetricSampleRef.current = { distanceM, at: now };
+    }
+
+    setLastPos((current) => ({
+      distance_along_route_m: distanceM ?? current?.distance_along_route_m ?? null,
+      progress_percent:
+        distanceM != null && totalM && totalM > 0
+          ? Math.max(0, Math.min(100, (distanceM / totalM) * 100))
+          : current?.progress_percent ?? null,
+      rolling_speed_kmh: rollingSpeedKmh,
+      rolling_pace_sec_per_km:
+        rollingSpeedKmh && rollingSpeedKmh > 0 ? Math.round(3600 / rollingSpeedKmh) : current?.rolling_pace_sec_per_km ?? null,
+      speed: nativeSpeed ?? current?.speed ?? null,
+      recorded_at: new Date(now).toISOString(),
+      latitude: lat,
+      longitude: lng,
+    }));
   };
 
   const clearPhoneWatcher = () => {
@@ -133,7 +226,11 @@ export default function TrackerPage() {
   const handleGeoSuccess = (pos: GeolocationPosition) => {
     lastGpsEventAtRef.current = Date.now();
     setError(null);
-    setLivePoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+    if (Date.now() - lastMapRefreshRef.current >= RUNNER_MAP_REFRESH_MS) {
+      setMapPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude, at: Date.now() });
+      lastMapRefreshRef.current = Date.now();
+    }
+    updateLocalPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.speed ?? null);
     console.log("[geo] watchPosition", pos.coords.latitude, pos.coords.longitude, "acc:", pos.coords.accuracy);
     void sendPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed ?? undefined);
   };
@@ -204,10 +301,22 @@ export default function TrackerPage() {
       }, 30_000);
     }
     if (data?.position) {
-      setLastPos(data.position as Position);
       const p = data.position as Position;
+      setLastPos((current) => ({
+        ...p,
+        distance_along_route_m: p.distance_along_route_m ?? current?.distance_along_route_m ?? null,
+        progress_percent: p.progress_percent ?? current?.progress_percent ?? null,
+        rolling_speed_kmh: p.rolling_speed_kmh ?? current?.rolling_speed_kmh ?? null,
+        rolling_pace_sec_per_km: p.rolling_pace_sec_per_km ?? current?.rolling_pace_sec_per_km ?? null,
+      }));
       if (p.latitude != null && p.longitude != null) {
-        setLivePoint({ lat: p.latitude, lng: p.longitude });
+        if (p.distance_along_route_m != null) {
+          lastMetricSampleRef.current = { distanceM: p.distance_along_route_m, at: Date.now() };
+        }
+        if (Date.now() - lastMapRefreshRef.current >= RUNNER_MAP_REFRESH_MS) {
+          setMapPoint({ lat: p.latitude, lng: p.longitude, at: Date.now() });
+          lastMapRefreshRef.current = Date.now();
+        }
       }
     }
   };
@@ -286,19 +395,19 @@ export default function TrackerPage() {
       if (garminFreshRef.current) return;
 
       const silenceMs = Date.now() - lastGpsEventAtRef.current;
-      if (silenceMs < 12000) return;
+      if (silenceMs < GPS_WAKE_AFTER_MS) return;
 
       console.warn("[geo] heartbeat stalled", silenceMs);
       navigator.geolocation.getCurrentPosition(handleGeoSuccess, handleGeoError, geoOptions);
 
-      if (silenceMs > 25000) {
+      if (silenceMs > GPS_RESTART_AFTER_MS) {
         const now = Date.now();
         if (now - restartCooldownRef.current >= 8000) {
           restartCooldownRef.current = now;
           startPhoneWatcher();
         }
       }
-    }, 10000);
+    }, GPS_HEARTBEAT_MS);
 
     return () => {
       if (gpsHeartbeatRef.current != null) {
@@ -331,6 +440,9 @@ export default function TrackerPage() {
     setError(null);
     setPointsSent(0);
     setLastSendError(null);
+    lastMetricSampleRef.current = null;
+    lastStatsRefreshRef.current = 0;
+    lastMapRefreshRef.current = 0;
     lastGpsEventAtRef.current = Date.now();
     acquireWakeLock();
     toast.success("Suivi GPS démarré");
@@ -429,6 +541,11 @@ export default function TrackerPage() {
       releaseWakeLock();
     };
   }, []);
+
+  const routeCoords = useMemo<[number, number][]>(
+    () => race?.route_points?.map((p) => [p.lat, p.lng]) ?? [],
+    [race?.route_points],
+  );
 
   if (loading) return <main className="container py-12"><p className="text-muted-foreground">Chargement…</p></main>;
   if (!user) return <Navigate to="/auth" replace />;
@@ -613,10 +730,10 @@ export default function TrackerPage() {
         <Card className="glass-card p-3 mb-4 overflow-hidden">
           <div className="h-72 w-full">
             <RaceMap
-              routeCoords={race.route_points.map((p) => [p.lat, p.lng])}
+              routeCoords={routeCoords}
               routePoints={race.route_points}
               runners={
-                livePoint
+                mapPoint
                   ? [{
                       registration_id: reg.id,
                       race_id: race.id,
@@ -632,17 +749,17 @@ export default function TrackerPage() {
                       problem_description: null,
                       first_name: null,
                       last_name: null,
-                      latitude: livePoint.lat,
-                      longitude: livePoint.lng,
+                      latitude: mapPoint.lat,
+                      longitude: mapPoint.lng,
                       distance_along_route_m: lastPos?.distance_along_route_m ?? null,
                       progress_percent: lastPos?.progress_percent ?? null,
                       rolling_speed_kmh: lastPos?.rolling_speed_kmh ?? null,
                       rolling_pace_sec_per_km: lastPos?.rolling_pace_sec_per_km ?? null,
-                      last_position_at: lastPos?.recorded_at ?? new Date().toISOString(),
+                      last_position_at: new Date(mapPoint.at).toISOString(),
                     } as LeaderboardRow]
                   : []
               }
-              focusedRunnerId={livePoint ? reg.id : null}
+              focusedRunnerId={mapPoint ? reg.id : null}
             />
           </div>
         </Card>
