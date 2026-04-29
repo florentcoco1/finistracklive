@@ -30,6 +30,10 @@ interface OrganizerRace {
   status: "upcoming" | "live" | "finished";
 }
 
+interface DelegatedRaceRow {
+  race: OrganizerRace | null;
+}
+
 export default function Dashboard() {
   const { user, loading, isOrganizer, roles } = useAuth();
   const navigate = useNavigate();
@@ -47,7 +51,7 @@ export default function Dashboard() {
       .select("id, bib_number, race:race_id ( id, name, start_time, distance_km, status )")
       .eq("runner_id", user.id)
       .order("created_at", { ascending: false })
-      .then(({ data }) => setRegistrations((data ?? []) as any));
+      .then(({ data }) => setRegistrations((data ?? []) as unknown as MyRegistration[]));
   }, [user]);
 
   useEffect(() => {
@@ -59,11 +63,11 @@ export default function Dashboard() {
         .eq("organizer_id", user.id)
         .order("start_time", { ascending: false }),
       supabase
-        .from("race_organizers" as any)
+        .from("race_organizers")
         .select("race:races ( id, name, start_time, distance_km, status )")
         .eq("user_id", user.id),
     ]).then(([owned, delegated]) => {
-      const delegatedRaces = ((delegated.data ?? []) as any[]).map((row) => row.race).filter(Boolean);
+      const delegatedRaces = ((delegated.data ?? []) as unknown as DelegatedRaceRow[]).map((row) => row.race).filter(Boolean) as OrganizerRace[];
       const byId = new Map<string, OrganizerRace>();
       [...((owned.data ?? []) as OrganizerRace[]), ...delegatedRaces].forEach((race) => byId.set(race.id, race));
       setOrganizerRaces([...byId.values()].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()));
