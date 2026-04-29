@@ -56,7 +56,7 @@ async function requireRaceAdmin(admin: ReturnType<typeof createClient>, userId: 
 
 async function loadRace(admin: ReturnType<typeof createClient>, raceId: string) {
   const [{ data: source }, { data: registrations }, { data: organizers }, { data: race }] = await Promise.all([
-    admin.from("gmcap_import_sources").select("id, source_url, enabled, last_import_at, last_import_status, last_import_message").eq("race_id", raceId).maybeSingle(),
+    admin.from("gmcap_import_sources").select("id, source_url, source_type, file_name, enabled, last_import_at, last_import_status, last_import_message").eq("race_id", raceId).maybeSingle(),
     admin.from("race_registrations").select("id, runner_id, bib_number, category, emergency_phone, runner_status, rfid_identifier, rfid_matched_at, rfid_source, created_at").eq("race_id", raceId).order("bib_number"),
     admin.from("race_organizers").select("id, user_id, role, created_at").eq("race_id", raceId).order("created_at"),
     admin.from("races").select("id, name, organizer_id").eq("id", raceId).single(),
