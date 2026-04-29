@@ -43,11 +43,11 @@ interface FunctionErrorResponse {
   error?: string;
   ok?: boolean;
 }
-interface WakeLockNavigator extends Navigator {
-  wakeLock?: {
+type WakeLockNavigator = Navigator & {
+  wakeLock: {
     request: (type: "screen") => Promise<WakeLockSentinel>;
   };
-}
+};
 
 const PHONE_SEND_INTERVAL_MS = 10_000;
 const RUNNER_STATS_REFRESH_MS = 5_000;
@@ -446,8 +446,8 @@ export default function TrackerPage() {
 
   const acquireWakeLock = async () => {
     try {
-      const wakeNavigator = navigator as WakeLockNavigator;
-      if (wakeNavigator.wakeLock) {
+      if ("wakeLock" in navigator) {
+        const wakeNavigator = navigator as WakeLockNavigator;
         wakeLockRef.current = await wakeNavigator.wakeLock.request("screen");
         wakeLockRef.current?.addEventListener?.("release", () => {
           console.log("[wake-lock] released");
