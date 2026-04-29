@@ -86,10 +86,49 @@ interface ManualImportResponse {
 }
 
 const emptyRegistration = { email: "", bib_number: "", category: "", emergency_phone: "" };
+const pendingDbName = "finistracklive-gmcap";
+const pendingStoreName = "pending-imports";
 
 function displayName(profile: AdminProfile | null) {
   const name = `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim();
   return name || profile?.email || "Utilisateur";
+}
+
+async function pendingStore(mode: IDBTransactionMode) {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(pendingDbName, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(pendingStoreName, { keyPath: "raceId" });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  return db.transaction(pendingStoreName, mode).objectStore(pendingStoreName);
+}
+
+async function saveLocalPendingImport(raceId: string, fileName: string, content: string) {
+  const store = await pendingStore("readwrite");
+  await new Promise<void>((resolve, reject) => {
+    const request = store.put({ raceId, fileName, content, savedAt: new Date().toISOString() });
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function readLocalPendingImport(raceId: string) {
+  const store = await pendingStore("readonly");
+  return await new Promise<{ raceId: string; fileName: string; content: string; savedAt: string } | null>((resolve, reject) => {
+    const request = store.get(raceId);
+    request.onsuccess = () => resolve(request.result ?? null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function clearLocalPendingImport(raceId: string) {
+  const store = await pendingStore("readwrite");
+  await new Promise<void>((resolve, reject) => {
+    const request = store.delete(raceId);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
 }
 
 export default function RaceAdmin() {
