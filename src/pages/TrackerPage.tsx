@@ -214,6 +214,7 @@ export default function TrackerPage() {
     lastGpsEventAtRef.current = Date.now();
     setError(null);
     setLivePoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+    updateLocalPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.speed ?? null);
     console.log("[geo] watchPosition", pos.coords.latitude, pos.coords.longitude, "acc:", pos.coords.accuracy);
     void sendPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed ?? undefined);
   };
@@ -366,19 +367,19 @@ export default function TrackerPage() {
       if (garminFreshRef.current) return;
 
       const silenceMs = Date.now() - lastGpsEventAtRef.current;
-      if (silenceMs < 12000) return;
+      if (silenceMs < GPS_WAKE_AFTER_MS) return;
 
       console.warn("[geo] heartbeat stalled", silenceMs);
       navigator.geolocation.getCurrentPosition(handleGeoSuccess, handleGeoError, geoOptions);
 
-      if (silenceMs > 25000) {
+      if (silenceMs > GPS_RESTART_AFTER_MS) {
         const now = Date.now();
         if (now - restartCooldownRef.current >= 8000) {
           restartCooldownRef.current = now;
           startPhoneWatcher();
         }
       }
-    }, 10000);
+    }, GPS_HEARTBEAT_MS);
 
     return () => {
       if (gpsHeartbeatRef.current != null) {
@@ -411,6 +412,7 @@ export default function TrackerPage() {
     setError(null);
     setPointsSent(0);
     setLastSendError(null);
+    lastMetricSampleRef.current = null;
     lastGpsEventAtRef.current = Date.now();
     acquireWakeLock();
     toast.success("Suivi GPS démarré");
