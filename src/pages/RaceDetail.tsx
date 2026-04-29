@@ -304,6 +304,21 @@ export default function RaceDetail() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {isOrganizer && (
+            <Button asChild variant="glass" disabled={importingRfid}>
+              <Label htmlFor="gmcap-import" className="cursor-pointer">
+                <FileUp className="h-4 w-4 mr-2" /> {importingRfid ? "Import RFID…" : "Importer GMCAP"}
+                <Input
+                  id="gmcap-import"
+                  type="file"
+                  accept=".txt,.tsv,.csv"
+                  className="sr-only"
+                  disabled={importingRfid}
+                  onChange={(event) => void handleGmcapImport(event.target.files?.[0] ?? null)}
+                />
+              </Label>
+            </Button>
+          )}
           {user && myRegistration ? (
             <Button asChild variant="hero">
               <Link to={`/race/${race.id}/track`}>
@@ -418,7 +433,7 @@ export default function RaceDetail() {
             <Trophy className="h-5 w-5 text-primary-glow" />
             <h2 className="font-display font-semibold text-lg">Classement live</h2>
             <span className="ml-auto inline-flex items-center gap-1 text-xs text-success">
-              <Radio className="h-3 w-3" /> Temps réel
+              <Timer className="h-3 w-3" /> RFID prioritaire
             </span>
           </div>
           {sorted.length === 0 ? (
@@ -453,12 +468,18 @@ export default function RaceDetail() {
                         {r.first_name} {r.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatDistance(r.distance_along_route_m)}
-                        {r.progress_percent != null && ` · ${r.progress_percent.toFixed(0)}%`}
+                        {r.rfid_official_time
+                          ? `Temps officiel ${r.rfid_rounded_time ?? r.rfid_official_time}`
+                          : `${formatDistance(r.distance_along_route_m)}${r.progress_percent != null ? ` · ${r.progress_percent.toFixed(0)}%` : ""}`}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatSpeed(r.rolling_speed_kmh)} · {formatPace(r.rolling_pace_sec_per_km)}
+                        {r.rfid_identifier
+                          ? `RFID ${r.rfid_identifier}${r.rfid_category_rank ? ` · cat. ${r.rfid_category_rank}` : ""}`
+                          : `${formatSpeed(r.rolling_speed_kmh)} · ${formatPace(r.rolling_pace_sec_per_km)}`}
                       </p>
+                      {r.rfid_overall_rank == null && r.last_position_at && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5">GPS support · {formatSpeed(r.rolling_speed_kmh)}</p>
+                      )}
                       {r.finished_at && (
                         <p className="text-[10px] text-success mt-0.5 font-semibold">
                           🏁 Arrivée {format(new Date(r.finished_at), "HH:mm:ss", { locale: fr })}
