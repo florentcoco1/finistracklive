@@ -26,6 +26,17 @@ function isMissingSchemaError(message: string) {
   return message.includes("schema cache") || message.includes("rfid_timing_results") || message.includes("rfid_identifier");
 }
 
+function missingSchemaResponse(parsedRows: number, matched: number) {
+  return json({
+    ok: false,
+    warning: "RFID_SCHEMA_MISSING",
+    error: "Le schéma RFID n’est pas encore initialisé dans Lovable Cloud. La migration de réparation a été ajoutée ; relance l’import quand elle sera appliquée.",
+    parsed: parsedRows,
+    matched,
+    imported: 0,
+  });
+}
+
 function parseTsv(content: string): ParsedRow[] {
   const lines = content.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length < 2) return [];
@@ -144,10 +155,7 @@ Deno.serve(async (req) => {
     const updateResults = await Promise.all(updates);
     const missingRegistrationSchema = updateResults.find((result) => result.error && isMissingSchemaError(result.error.message));
     if (missingRegistrationSchema?.error) {
-      return json({
-        error: "Le schéma RFID n’est pas encore initialisé dans Lovable Cloud. La migration de réparation a été ajoutée ; relance l’import quand elle sera appliquée.",
-        code: "RFID_SCHEMA_MISSING",
-      }, 503);
+      return missingSchemaResponse(results.length, matched);
     }
     const updateError = updateResults.find((result) => result.error)?.error;
     if (updateError) return json({ error: updateError.message }, 500);
@@ -158,10 +166,7 @@ Deno.serve(async (req) => {
 
     if (upsertError) {
       if (isMissingSchemaError(upsertError.message)) {
-        return json({
-          error: "Le schéma RFID n’est pas encore initialisé dans Lovable Cloud. La migration de réparation a été ajoutée ; relance l’import quand elle sera appliquée.",
-          code: "RFID_SCHEMA_MISSING",
-        }, 503);
+        return missingSchemaResponse(results.length, matched);
       }
       return json({ error: upsertError.message }, 500);
     }
