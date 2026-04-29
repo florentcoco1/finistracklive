@@ -29,12 +29,32 @@ function isMissingSchemaError(message: string) {
 function missingSchemaResponse(parsedRows: number, matched: number) {
   return json({
     ok: false,
-    warning: "RFID_SCHEMA_MISSING",
-    error: "Le schéma RFID n’est pas encore initialisé dans Lovable Cloud. La migration de réparation a été ajoutée ; relance l’import quand elle sera appliquée.",
+    warning: "RFID_IMPORT_PENDING",
+    error: "Import enregistré en attente. FinisTrackLive le relancera automatiquement dès que le schéma RFID sera disponible.",
     parsed: parsedRows,
     matched,
     imported: 0,
   });
+}
+
+async function savePendingImport(admin: ReturnType<typeof createClient>, raceId: string, content: string, fileName: string | null, parsedRows: number, matched: number) {
+  const now = new Date().toISOString();
+  const safeName = clean(fileName) || `gmcap-import-${now}.txt`;
+  const { error } = await admin.from("gmcap_import_sources").upsert({
+    race_id: raceId,
+    source_url: `manual://${encodeURIComponent(safeName)}`,
+    source_type: "manual_file",
+    file_name: safeName,
+    pending_content: content,
+    pending_import_at: now,
+    schema_checked_at: now,
+    enabled: true,
+    last_import_at: now,
+    last_import_status: "pending_schema",
+    last_import_message: `Import en attente : ${parsedRows} ligne(s) lue(s), ${matched} correspondance(s) pré-détectée(s).`,
+    updated_at: now,
+  }, { onConflict: "race_id" });
+  if (error && !isMissingSchemaError(error.message)) throw new Error(error.message);
 }
 
 function parseTsv(content: string): ParsedRow[] {
@@ -83,7 +103,7 @@ Deno.serve(async (req) => {
       return json({ error: "Non autorisé" }, 401);
     }
 
-    const { race_id, content } = await req.json();
+    const { race_id, content, file_name } = await req.json();
     if (typeof race_id !== "string" || typeof content !== "string" || content.length < 10) {
       return json({ error: "Fichier GMCAP invalide" }, 400);
     }
@@ -155,6 +175,7 @@ Deno.serve(async (req) => {
     const updateResults = await Promise.all(updates);
     const missingRegistrationSchema = updateResults.find((result) => result.error && isMissingSchemaError(result.error.message));
     if (missingRegistrationSchema?.error) {
+      await savePendingImport(admin, race_id, content, typeof file_name === "string" ? file_name : null, results.length, matched);
       return missingSchemaResponse(results.length, matched);
     }
     const updateError = updateResults.find((result) => result.error)?.error;
@@ -166,6 +187,7 @@ Deno.serve(async (req) => {
 
     if (upsertError) {
       if (isMissingSchemaError(upsertError.message)) {
+        await savePendingImport(admin, race_id, content, typeof file_name === "string" ? file_name : null, results.length, matched);
         return missingSchemaResponse(results.length, matched);
       }
       return json({ error: upsertError.message }, 500);
