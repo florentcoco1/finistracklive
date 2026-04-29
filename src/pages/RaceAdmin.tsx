@@ -1,0 +1,430 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import { AlertTriangle, ChevronLeft, Link2, Plus, RefreshCw, Save, Shield, Trash2, UserPlus, Users } from "lucide-react";
+import { toast } from "sonner";
+
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+
+interface RaceSummary {
+  id: string;
+  name: string;
+  start_time: string;
+  status: string;
+}
+
+interface GmcapSource {
+  id: string;
+  source_url: string;
+  enabled: boolean;
+  last_import_at: string | null;
+  last_import_status: string | null;
+  last_import_message: string | null;
+}
+
+interface AdminProfile {
+  email: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  phone?: string | null;
+}
+
+interface RegistrationRow {
+  id: string;
+  runner_id: string;
+  bib_number: string;
+  category: string | null;
+  emergency_phone: string | null;
+  runner_status: string;
+  rfid_identifier: string | null;
+  rfid_matched_at: string | null;
+  rfid_source: string | null;
+  created_at: string;
+  profile: AdminProfile | null;
+}
+
+interface OrganizerRow {
+  id: string;
+  user_id: string;
+  role: string;
+  created_at: string | null;
+  profile: AdminProfile | null;
+}
+
+interface AdminResponse {
+  error?: string;
+  source?: GmcapSource | null;
+  registrations?: RegistrationRow[];
+  organizers?: OrganizerRow[];
+}
+
+interface SyncResponse {
+  error?: string;
+  synced?: Array<{ error?: string; matched?: number }>;
+}
+
+const emptyRegistration = { email: "", bib_number: "", category: "", emergency_phone: "" };
+
+function displayName(profile: AdminProfile | null) {
+  const name = `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim();
+  return name || profile?.email || "Utilisateur";
+}
+
+export default function RaceAdmin() {
+  const { id: raceId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { user, loading } = useAuth();
+  const [race, setRace] = useState<RaceSummary | null>(null);
+  const [source, setSource] = useState<GmcapSource | null>(null);
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [sourceEnabled, setSourceEnabled] = useState(true);
+  const [registrations, setRegistrations] = useState<RegistrationRow[]>([]);
+  const [organizers, setOrganizers] = useState<OrganizerRow[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [newRunner, setNewRunner] = useState(emptyRegistration);
+  const [newOrganizerEmail, setNewOrganizerEmail] = useState("");
+
+  const invokeAdmin = useCallback(async (body: Record<string, unknown>) => {
+    const { data, error } = await supabase.functions.invoke("manage-race-admin", { body });
+    if (error) throw error;
+    const payload = data as AdminResponse;
+    if (payload?.error) throw new Error(payload.error);
+    return payload;
+  }, []);
+
+  const applyAdminData = useCallback((data: AdminResponse) => {
+    setSource(data.source ?? null);
+    setSourceUrl(data.source?.source_url ?? "");
+    setSourceEnabled(data.source?.enabled ?? true);
+    setRegistrations(data.registrations ?? []);
+    setOrganizers(data.organizers ?? []);
+  }, []);
+
+  const load = useCallback(async () => {
+    if (!raceId) return;
+    const data = await invokeAdmin({ action: "load", race_id: raceId });
+    applyAdminData(data);
+  }, [raceId, invokeAdmin, applyAdminData]);
+
+  useEffect(() => {
+    if (!raceId || loading) return;
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+
+    supabase
+      .from("races")
+      .select("id, name, start_time, status")
+      .eq("id", raceId)
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) {
+          toast.error("Course introuvable");
+          navigate("/races");
+          return;
+        }
+        setRace(data as RaceSummary);
+        document.title = `Administration ${data.name} — FinisTrackLive`;
+      });
+
+    load().catch((error) => {
+      toast.error((error as Error).message || "Administration inaccessible");
+      navigate(`/races/${raceId}`);
+    });
+  }, [raceId, user, loading, navigate, load]);
+
+  const stats = useMemo(() => {
+    const linked = registrations.filter((r) => r.rfid_identifier).length;
+    return { total: registrations.length, linked, organizers: organizers.length };
+  }, [registrations, organizers]);
+
+  const saveGmcap = async () => {
+    if (!raceId || !sourceUrl.trim()) {
+      toast.error("Lien GMCAP requis");
+      return;
+    }
+    setBusy(true);
+    try {
+      const data = await invokeAdmin({ action: "save_gmcap", race_id: raceId, source_url: sourceUrl.trim(), enabled: sourceEnabled });
+      applyAdminData(data);
+      toast.success("Lien GMCAP enregistré");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const syncGmcap = async () => {
+    if (!raceId) return;
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-gmcap-rfid", { body: { race_id: raceId } });
+      const payload = data as SyncResponse;
+      if (error || payload?.error) throw new Error(error?.message ?? payload.error);
+      await load();
+      const result = payload.synced?.[0];
+      if (result?.error) toast.error(result.error);
+      else toast.success(`GMCAP synchronisé : ${result?.matched ?? 0} correspondance(s)`);
+    } catch (error) {
+      toast.error((error as Error).message || "Synchronisation impossible");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const updateRegistration = async (registration: RegistrationRow) => {
+    if (!raceId) return;
+    setBusy(true);
+    try {
+      const data = await invokeAdmin({
+        action: "update_registration",
+        race_id: raceId,
+        registration_id: registration.id,
+        bib_number: registration.bib_number,
+        category: registration.category || null,
+        emergency_phone: registration.emergency_phone || null,
+        rfid_identifier: registration.rfid_identifier || null,
+      });
+      applyAdminData(data);
+      toast.success("Inscription mise à jour");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteRegistration = async (registrationId: string) => {
+    if (!raceId || !window.confirm("Retirer ce coureur de la course ?")) return;
+    setBusy(true);
+    try {
+      const data = await invokeAdmin({ action: "delete_registration", race_id: raceId, registration_id: registrationId });
+      applyAdminData(data);
+      toast.success("Coureur retiré");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addRegistration = async () => {
+    if (!raceId || !newRunner.email.trim() || !newRunner.bib_number.trim()) {
+      toast.error("Email et dossard requis");
+      return;
+    }
+    setBusy(true);
+    try {
+      const data = await invokeAdmin({
+        action: "add_registration",
+        race_id: raceId,
+        email: newRunner.email.trim(),
+        bib_number: newRunner.bib_number.trim(),
+        category: newRunner.category.trim() || null,
+        emergency_phone: newRunner.emergency_phone.trim() || null,
+      });
+      applyAdminData(data);
+      setNewRunner(emptyRegistration);
+      toast.success("Coureur ajouté");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addOrganizer = async () => {
+    if (!raceId || !newOrganizerEmail.trim()) {
+      toast.error("Email organisateur requis");
+      return;
+    }
+    setBusy(true);
+    try {
+      const data = await invokeAdmin({ action: "add_organizer", race_id: raceId, email: newOrganizerEmail.trim() });
+      applyAdminData(data);
+      setNewOrganizerEmail("");
+      toast.success("Organisateur ajouté");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeOrganizer = async (organizerId: string) => {
+    if (!raceId || !window.confirm("Retirer cet organisateur de cette course ?")) return;
+    setBusy(true);
+    try {
+      const data = await invokeAdmin({ action: "remove_organizer", race_id: raceId, organizer_id: organizerId });
+      applyAdminData(data);
+      toast.success("Organisateur retiré");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!race) {
+    return (
+      <main className="container py-12">
+        <p className="text-muted-foreground">Chargement de l’administration…</p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="container py-6 md:py-10">
+      <Link to={`/races/${race.id}`} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4">
+        <ChevronLeft className="h-4 w-4 mr-1" /> Retour à la course
+      </Link>
+
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div>
+          <Badge variant="secondary" className="mb-2">Administration</Badge>
+          <h1 className="font-display text-3xl md:text-4xl font-bold">{race.name}</h1>
+          <p className="text-muted-foreground mt-1">
+            {format(new Date(race.start_time), "EEEE d MMMM yyyy, HH:mm", { locale: fr })}
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-muted-foreground">coureurs</p></Card>
+          <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.linked}</p><p className="text-xs text-muted-foreground">RFID liés</p></Card>
+          <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.organizers}</p><p className="text-xs text-muted-foreground">organisateurs</p></Card>
+        </div>
+      </div>
+
+      <Tabs defaultValue="gmcap" className="space-y-4">
+        <TabsList className="grid w-full max-w-2xl grid-cols-3">
+          <TabsTrigger value="gmcap"><Link2 className="h-4 w-4 mr-2" /> GMCAP</TabsTrigger>
+          <TabsTrigger value="runners"><Users className="h-4 w-4 mr-2" /> Coureurs</TabsTrigger>
+          <TabsTrigger value="organizers"><Shield className="h-4 w-4 mr-2" /> Organisateurs</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="gmcap">
+          <Card className="glass-card p-5 space-y-5">
+            <div>
+              <h2 className="font-display text-xl font-semibold">Lien avec le fichier GMCAP</h2>
+              <p className="text-sm text-muted-foreground mt-1">Le classement RFID reste la référence principale, synchronisé toutes les minutes lorsque la source est active.</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+              <div className="space-y-2">
+                <Label htmlFor="source-url">URL HTTP/HTTPS de l’export GMCAP</Label>
+                <Input id="source-url" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://.../GmCAP-Export.txt" />
+              </div>
+              <Button variant="hero" onClick={saveGmcap} disabled={busy}><Save className="h-4 w-4 mr-2" /> Enregistrer</Button>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" checked={sourceEnabled} onChange={(e) => setSourceEnabled(e.target.checked)} className="accent-current" /> Synchronisation automatique toutes les minutes
+            </label>
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/50 bg-secondary/30 p-3">
+              <Badge variant={source?.last_import_status === "error" ? "destructive" : "secondary"}>{source?.last_import_status ?? "non configuré"}</Badge>
+              <p className="text-sm text-muted-foreground flex-1">
+                {source?.last_import_at ? `Dernier import le ${format(new Date(source.last_import_at), "dd/MM/yyyy à HH:mm:ss", { locale: fr })}` : "Aucun import lancé"}
+                {source?.last_import_message ? ` · ${source.last_import_message}` : ""}
+              </p>
+              <Button variant="glass" onClick={syncGmcap} disabled={!source || syncing}><RefreshCw className="h-4 w-4 mr-2" /> {syncing ? "Sync…" : "Sync maintenant"}</Button>
+            </div>
+            <div className="flex gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-muted-foreground">
+              <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+              <p>Le fichier FTP/dossier doit être exposé via un lien HTTP/HTTPS accessible par FinisTrackLive.</p>
+            </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="runners">
+          <Card className="glass-card p-5 space-y-5">
+            <div>
+              <h2 className="font-display text-xl font-semibold">Inscrits coureurs</h2>
+              <p className="text-sm text-muted-foreground mt-1">Associe les dossards, catégories et identifiants RFID utilisés par GMCAP.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-[1fr_120px_120px_160px_auto] md:items-end">
+              <div className="space-y-2"><Label>Email utilisateur</Label><Input value={newRunner.email} onChange={(e) => setNewRunner((v) => ({ ...v, email: e.target.value }))} placeholder="coureur@email.fr" /></div>
+              <div className="space-y-2"><Label>Dossard</Label><Input value={newRunner.bib_number} onChange={(e) => setNewRunner((v) => ({ ...v, bib_number: e.target.value }))} /></div>
+              <div className="space-y-2"><Label>Catégorie</Label><Input value={newRunner.category} onChange={(e) => setNewRunner((v) => ({ ...v, category: e.target.value }))} /></div>
+              <div className="space-y-2"><Label>Téléphone</Label><Input value={newRunner.emergency_phone} onChange={(e) => setNewRunner((v) => ({ ...v, emergency_phone: e.target.value }))} /></div>
+              <Button variant="hero" onClick={addRegistration} disabled={busy}><UserPlus className="h-4 w-4 mr-2" /> Ajouter</Button>
+            </div>
+            <div className="rounded-lg border border-border/50 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Coureur</TableHead>
+                    <TableHead>Dossard</TableHead>
+                    <TableHead>Catégorie</TableHead>
+                    <TableHead>RFID GMCAP</TableHead>
+                    <TableHead>Téléphone</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {registrations.map((registration) => (
+                    <TableRow key={registration.id}>
+                      <TableCell>
+                        <p className="font-medium">{displayName(registration.profile)}</p>
+                        <p className="text-xs text-muted-foreground">{registration.profile?.email}</p>
+                      </TableCell>
+                      <TableCell><Input value={registration.bib_number} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, bib_number: e.target.value } : r))} className="min-w-20" /></TableCell>
+                      <TableCell><Input value={registration.category ?? ""} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, category: e.target.value } : r))} className="min-w-24" /></TableCell>
+                      <TableCell><Input value={registration.rfid_identifier ?? ""} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, rfid_identifier: e.target.value } : r))} placeholder="ID RFID" className="min-w-28" /></TableCell>
+                      <TableCell><Input value={registration.emergency_phone ?? ""} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, emergency_phone: e.target.value } : r))} className="min-w-32" /></TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="glass" size="icon" onClick={() => updateRegistration(registration)} disabled={busy} aria-label="Enregistrer"><Save className="h-4 w-4" /></Button>
+                          <Button variant="destructive" size="icon" onClick={() => deleteRegistration(registration.id)} disabled={busy} aria-label="Retirer"><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="organizers">
+          <Card className="glass-card p-5 space-y-5">
+            <div>
+              <h2 className="font-display text-xl font-semibold">Organisateurs de la course</h2>
+              <p className="text-sm text-muted-foreground mt-1">Donne accès à l’administration GMCAP et à la gestion des inscrits pour cette course.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+              <div className="space-y-2"><Label>Email utilisateur</Label><Input value={newOrganizerEmail} onChange={(e) => setNewOrganizerEmail(e.target.value)} placeholder="organisateur@email.fr" /></div>
+              <Button variant="hero" onClick={addOrganizer} disabled={busy}><Plus className="h-4 w-4 mr-2" /> Ajouter organisateur</Button>
+            </div>
+            <div className="rounded-lg border border-border/50 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow><TableHead>Organisateur</TableHead><TableHead>Rôle</TableHead><TableHead className="text-right">Actions</TableHead></TableRow>
+                </TableHeader>
+                <TableBody>
+                  {organizers.map((organizer) => (
+                    <TableRow key={`${organizer.id}-${organizer.user_id}`}>
+                      <TableCell><p className="font-medium">{displayName(organizer.profile)}</p><p className="text-xs text-muted-foreground">{organizer.profile?.email}</p></TableCell>
+                      <TableCell><Badge variant="secondary">{organizer.role}</Badge></TableCell>
+                      <TableCell className="text-right">
+                        {organizer.id !== "owner" && <Button variant="destructive" size="icon" onClick={() => removeOrganizer(organizer.user_id)} disabled={busy} aria-label="Retirer"><Trash2 className="h-4 w-4" /></Button>}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </main>
+  );
+}

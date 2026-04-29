@@ -22,10 +22,27 @@ interface MyRegistration {
   };
 }
 
+interface OrganizerRace {
+  id: string;
+  name: string;
+  start_time: string;
+  distance_km: number | null;
+  status: "upcoming" | "live" | "finished";
+}
+
+interface DelegatedRaceRow {
+  race: OrganizerRace | null;
+}
+
+interface UntypedQuery {
+  select: (columns: string) => { eq: (column: string, value: string) => Promise<{ data: unknown[] | null }> };
+}
+
 export default function Dashboard() {
   const { user, loading, isOrganizer, roles } = useAuth();
   const navigate = useNavigate();
   const [registrations, setRegistrations] = useState<MyRegistration[]>([]);
+  const [organizerRaces, setOrganizerRaces] = useState<OrganizerRace[]>([]);
 
   useEffect(() => {
     document.title = "Mon espace — FinisTrackLive";
@@ -38,8 +55,27 @@ export default function Dashboard() {
       .select("id, bib_number, race:race_id ( id, name, start_time, distance_km, status )")
       .eq("runner_id", user.id)
       .order("created_at", { ascending: false })
-      .then(({ data }) => setRegistrations((data ?? []) as any));
+      .then(({ data }) => setRegistrations((data ?? []) as unknown as MyRegistration[]));
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !isOrganizer) return;
+    Promise.all([
+      supabase
+        .from("races")
+        .select("id, name, start_time, distance_km, status")
+        .eq("organizer_id", user.id)
+        .order("start_time", { ascending: false }),
+      (supabase.from as unknown as (table: string) => UntypedQuery)("race_organizers")
+        .select("race:races ( id, name, start_time, distance_km, status )")
+        .eq("user_id", user.id),
+    ]).then(([owned, delegated]) => {
+      const delegatedRaces = ((delegated.data ?? []) as unknown as DelegatedRaceRow[]).map((row) => row.race).filter(Boolean) as OrganizerRace[];
+      const byId = new Map<string, OrganizerRace>();
+      [...((owned.data ?? []) as OrganizerRace[]), ...delegatedRaces].forEach((race) => byId.set(race.id, race));
+      setOrganizerRaces([...byId.values()].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()));
+    });
+  }, [user, isOrganizer]);
 
   const becomeOrganizer = async () => {
     if (!user) return;
@@ -90,6 +126,44 @@ export default function Dashboard() {
           )}
         </Card>
       </div>
+
+      {isOrganizer && (
+        <section className="mb-10">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <h2 className="font-display text-2xl font-semibold">Administration courses</h2>
+            <Button asChild variant="hero" size="sm"><Link to="/organizer/new-race">Créer une course</Link></Button>
+          </div>
+          {organizerRaces.length === 0 ? (
+            <Card className="glass-card p-8 text-center">
+              <p className="text-muted-foreground mb-4">Aucune course organisée pour le moment.</p>
+              <Button asChild variant="hero"><Link to="/organizer/new-race">Créer ma première course</Link></Button>
+            </Card>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {organizerRaces.map((race) => (
+                <Card key={race.id} className="glass-card p-5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <StatusBadge status={race.status} />
+                    {race.distance_km && <span className="ml-auto text-xs text-muted-foreground">{race.distance_km} km</span>}
+                  </div>
+                  <h3 className="font-display font-semibold text-lg mb-1">{race.name}</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {format(new Date(race.start_time), "d MMM yyyy, HH:mm", { locale: fr })}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button asChild variant="hero" size="sm" className="flex-1">
+                      <Link to={`/organizer/races/${race.id}/admin`}>Administrer</Link>
+                    </Button>
+                    <Button asChild variant="glass" size="sm">
+                      <Link to={`/races/${race.id}`}>Voir</Link>
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <h2 className="font-display text-2xl font-semibold mb-4">Mes courses</h2>
       {registrations.length === 0 ? (

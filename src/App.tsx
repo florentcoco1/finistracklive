@@ -12,6 +12,7 @@ import RaceDetail from "./pages/RaceDetail.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
 import NewRace from "./pages/NewRace.tsx";
 import TrackerPage from "./pages/TrackerPage.tsx";
+import RaceAdmin from "./pages/RaceAdmin.tsx";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/races/:id" element={<RaceDetail />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/organizer/new-race" element={<NewRace />} />
+          <Route path="/organizer/races/:id/admin" element={<RaceAdmin />} />
           <Route path="/race/:id/track" element={<TrackerPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

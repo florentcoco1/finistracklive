@@ -8,6 +8,7 @@ const corsHeaders = {
 
 type ParsedRow = Record<string, string>;
 type Source = { id: string; race_id: string; source_url: string; enabled: boolean; last_import_at: string | null };
+type Registration = { id: string; bib_number: string };
 
 const clean = (value: unknown) => String(value ?? "").trim();
 const decimal = (value: unknown) => {
@@ -46,7 +47,7 @@ async function importContent(admin: ReturnType<typeof createClient>, raceId: str
     .select("id, bib_number")
     .eq("race_id", raceId);
 
-  const byBib = new Map((registrations ?? []).map((reg: any) => [clean(reg.bib_number), reg.id]));
+  const byBib = new Map(((registrations ?? []) as Registration[]).map((reg) => [clean(reg.bib_number), reg.id]));
   const updates = [];
   const results = [];
   let matched = 0;
@@ -142,8 +143,10 @@ Deno.serve(async (req) => {
       const authHeader = req.headers.get("Authorization") ?? "";
       const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
       const { data: { user } } = await userClient.auth.getUser();
-      const { data: race } = await admin.from("races").select("id, organizer_id").eq("id", raceId).single();
-      if (!user || !race || race.organizer_id !== user.id) {
+      const { data: isAdmin } = user
+        ? await admin.rpc("is_race_admin", { _race_id: raceId, _user_id: user.id })
+        : { data: false };
+      if (!user || !isAdmin) {
         return new Response(JSON.stringify({ error: "Synchronisation réservée à l'organisateur" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
