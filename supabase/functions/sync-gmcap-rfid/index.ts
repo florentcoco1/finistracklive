@@ -192,8 +192,8 @@ Deno.serve(async (req) => {
         last_import_message: "Import en attente : schéma RFID non disponible, nouvelle vérification automatique prévue.",
         updated_at: now,
       }).eq("last_import_status", "pending_schema");
-      if (raceId) await pendingQuery.eq("race_id", raceId);
-      else await pendingQuery;
+      const { error: pendingError } = raceId ? await pendingQuery.eq("race_id", raceId) : await pendingQuery;
+      if (pendingError && !isMissingSchemaError(pendingError.message)) throw new Error(pendingError.message);
       return new Response(JSON.stringify({ ok: true, schema_ready: false, checked: 0, synced: [], message: "Import en attente, schéma RFID non disponible." }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
