@@ -143,10 +143,13 @@ Deno.serve(async (req) => {
       const authHeader = req.headers.get("Authorization") ?? "";
       const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
       const { data: { user } } = await userClient.auth.getUser();
-      const { data: isAdmin } = user
+      const { data: isAdmin, error: adminCheckError } = user
         ? await admin.rpc("is_race_admin", { _race_id: raceId, _user_id: user.id })
-        : { data: false };
-      if (!user || !isAdmin) {
+        : { data: false, error: null };
+      const { data: race } = user && adminCheckError
+        ? await admin.from("races").select("organizer_id").eq("id", raceId).single()
+        : { data: null };
+      if (!user || (!isAdmin && race?.organizer_id !== user.id)) {
         return new Response(JSON.stringify({ error: "Synchronisation réservée à l'organisateur" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
