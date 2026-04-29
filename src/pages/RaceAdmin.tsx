@@ -94,27 +94,27 @@ export default function RaceAdmin() {
   const [newRunner, setNewRunner] = useState(emptyRegistration);
   const [newOrganizerEmail, setNewOrganizerEmail] = useState("");
 
-  const invokeAdmin = async (body: Record<string, unknown>) => {
+  const invokeAdmin = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("manage-race-admin", { body });
     if (error) throw error;
     const payload = data as AdminResponse;
     if (payload?.error) throw new Error(payload.error);
     return payload;
-  };
+  }, []);
 
-  const applyAdminData = (data: AdminResponse) => {
+  const applyAdminData = useCallback((data: AdminResponse) => {
     setSource(data.source ?? null);
     setSourceUrl(data.source?.source_url ?? "");
     setSourceEnabled(data.source?.enabled ?? true);
     setRegistrations(data.registrations ?? []);
     setOrganizers(data.organizers ?? []);
-  };
+  }, []);
 
   const load = useCallback(async () => {
     if (!raceId) return;
     const data = await invokeAdmin({ action: "load", race_id: raceId });
     applyAdminData(data);
-  }, [raceId]);
+  }, [raceId, invokeAdmin, applyAdminData]);
 
   useEffect(() => {
     if (!raceId || loading) return;
