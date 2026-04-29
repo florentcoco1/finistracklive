@@ -9,7 +9,7 @@ import { StatusBadge } from "./Index";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { ChevronLeft, Trophy, UserPlus, Smartphone, AlertTriangle, Flag, Phone, FileUp, Timer } from "lucide-react";
+import { ChevronLeft, Trophy, UserPlus, Smartphone, AlertTriangle, Flag, Phone, Link2, RefreshCw, Timer } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,12 @@ export default function RaceDetail() {
   const [bibInput, setBibInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [importingRfid, setImportingRfid] = useState(false);
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const [gmcapSourceId, setGmcapSourceId] = useState<string | null>(null);
+  const [gmcapSourceUrl, setGmcapSourceUrl] = useState("");
+  const [gmcapEnabled, setGmcapEnabled] = useState(true);
+  const [gmcapStatus, setGmcapStatus] = useState<string | null>(null);
+  const [savingSource, setSavingSource] = useState(false);
 
   useEffect(() => {
     if (!raceId) return;
@@ -186,6 +192,23 @@ export default function RaceDetail() {
 
   const isOrganizer = user && race && race.organizer_id === user.id;
 
+  useEffect(() => {
+    if (!raceId || !isOrganizer) return;
+    supabase
+      .from("gmcap_import_sources" as any)
+      .select("id, source_url, enabled, last_import_at, last_import_status, last_import_message")
+      .eq("race_id", raceId)
+      .maybeSingle()
+      .then(({ data }) => {
+        const source = data as any;
+        if (!source) return;
+        setGmcapSourceId(source.id);
+        setGmcapSourceUrl(source.source_url ?? "");
+        setGmcapEnabled(source.enabled ?? true);
+        setGmcapStatus(source.last_import_status ? `${source.last_import_status} · ${source.last_import_message ?? ""}` : null);
+      });
+  }, [raceId, isOrganizer]);
+
   const alerts = useMemo(
     () => rows.filter((r) => r.runner_status === "dnf" || r.runner_status === "problem"),
     [rows],
@@ -234,6 +257,46 @@ export default function RaceDetail() {
     } finally {
       setImportingRfid(false);
     }
+  };
+
+  const saveGmcapSource = async () => {
+    if (!raceId || !gmcapSourceUrl.trim()) {
+      toast.error("Lien GMCAP requis");
+      return;
+    }
+    setSavingSource(true);
+    const payload = {
+      race_id: raceId,
+      source_url: gmcapSourceUrl.trim(),
+      enabled: gmcapEnabled,
+      updated_at: new Date().toISOString(),
+    };
+    const query = gmcapSourceId
+      ? supabase.from("gmcap_import_sources" as any).update(payload).eq("id", gmcapSourceId).select("id").single()
+      : supabase.from("gmcap_import_sources" as any).insert(payload).select("id").single();
+    const { data, error } = await query;
+    setSavingSource(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setGmcapSourceId((data as any).id);
+    setSourceOpen(false);
+    toast.success("Synchronisation GMCAP configurée");
+  };
+
+  const syncGmcapNow = async () => {
+    if (!raceId) return;
+    setImportingRfid(true);
+    const { data, error } = await supabase.functions.invoke("sync-gmcap-rfid", { body: { race_id: raceId } });
+    setImportingRfid(false);
+    if (error || (data as any)?.error) {
+      toast.error(error?.message ?? (data as any).error);
+      return;
+    }
+    const result = (data as any).synced?.[0];
+    if (result?.error) toast.error(result.error);
+    else toast.success(`GMCAP synchronisé : ${result?.matched ?? 0} correspondance(s)`);
   };
 
   const medalFor = (rank: number, status: string | null) => {
