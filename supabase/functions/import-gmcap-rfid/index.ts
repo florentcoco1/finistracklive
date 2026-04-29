@@ -18,6 +18,14 @@ const integer = (value: unknown) => {
   return Number.isFinite(n) ? n : null;
 };
 
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
+function isMissingSchemaError(message: string) {
+  return message.includes("schema cache") || message.includes("rfid_timing_results") || message.includes("rfid_identifier");
+}
+
 function parseTsv(content: string): ParsedRow[] {
   const lines = content.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length < 2) return [];
@@ -61,17 +69,17 @@ Deno.serve(async (req) => {
     const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return json({ error: "Non autorisé" }, 401);
     }
 
     const { race_id, content } = await req.json();
     if (typeof race_id !== "string" || typeof content !== "string" || content.length < 10) {
-      return new Response(JSON.stringify({ error: "Fichier GMCAP invalide" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return json({ error: "Fichier GMCAP invalide" }, 400);
     }
 
     const admin = createClient(supabaseUrl, serviceKey);
     if (!(await isRaceAdmin(admin, race_id, user.id))) {
-      return new Response(JSON.stringify({ error: "Import réservé aux organisateurs de cette course" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return json({ error: "Import réservé aux organisateurs de cette course" }, 403);
     }
 
     const rows = parseTsv(content);
@@ -133,23 +141,33 @@ Deno.serve(async (req) => {
       });
     }
 
-    await Promise.all(updates);
+    const updateResults = await Promise.all(updates);
+    const missingRegistrationSchema = updateResults.find((result) => result.error && isMissingSchemaError(result.error.message));
+    if (missingRegistrationSchema?.error) {
+      return json({
+        error: "Le schéma RFID n’est pas encore initialisé dans Lovable Cloud. La migration de réparation a été ajoutée ; relance l’import quand elle sera appliquée.",
+        code: "RFID_SCHEMA_MISSING",
+      }, 503);
+    }
+    const updateError = updateResults.find((result) => result.error)?.error;
+    if (updateError) return json({ error: updateError.message }, 500);
+
     const { error: upsertError } = await admin
       .from("rfid_timing_results")
       .upsert(results, { onConflict: "race_id,rfid_identifier" });
 
     if (upsertError) {
-      return new Response(JSON.stringify({ error: upsertError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (isMissingSchemaError(upsertError.message)) {
+        return json({
+          error: "Le schéma RFID n’est pas encore initialisé dans Lovable Cloud. La migration de réparation a été ajoutée ; relance l’import quand elle sera appliquée.",
+          code: "RFID_SCHEMA_MISSING",
+        }, 503);
+      }
+      return json({ error: upsertError.message }, 500);
     }
 
-    return new Response(JSON.stringify({ ok: true, imported: results.length, matched, unmatched: results.length - matched }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ ok: true, imported: results.length, matched, unmatched: results.length - matched });
   } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message ?? "Erreur import GMCAP" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: (error as Error).message ?? "Erreur import GMCAP" }, 500);
   }
 });
