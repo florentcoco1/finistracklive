@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ChevronLeft, Play, Square, Activity, Satellite, Flag, AlertTriangle, Watch } from "lucide-react";
+import { ChevronLeft, Play, Square, Activity, Satellite, Flag, AlertTriangle, Watch, Trophy, Timer } from "lucide-react";
 import { formatDistance, formatPace, formatSpeed, haversineMeters } from "@/lib/gpx";
 import type { RunnerStatus, RouteCoord, LeaderboardRow } from "@/lib/types";
 import RaceMap from "@/components/RaceMap";
@@ -29,6 +29,14 @@ interface Registration {
   tracking_active: boolean;
   runner_status: RunnerStatus;
 }
+interface RegistrationUpdate {
+  tracking_active?: boolean;
+  started_at?: string | null;
+  finished_at?: string | null;
+  runner_status?: RunnerStatus;
+  dnf_reason?: string | null;
+  problem_description?: string | null;
+}
 interface Position {
   distance_along_route_m: number | null;
   progress_percent: number | null;
@@ -39,6 +47,15 @@ interface Position {
   latitude?: number | null;
   longitude?: number | null;
 }
+interface FunctionErrorResponse {
+  error?: string;
+  ok?: boolean;
+}
+type WakeLockNavigator = Navigator & {
+  wakeLock: {
+    request: (type: "screen") => Promise<WakeLockSentinel>;
+  };
+};
 
 const PHONE_SEND_INTERVAL_MS = 10_000;
 const RUNNER_STATS_REFRESH_MS = 5_000;
@@ -94,6 +111,7 @@ export default function TrackerPage() {
   const [pointsSent, setPointsSent] = useState(0);
   const [lastSendAt, setLastSendAt] = useState<number | null>(null);
   const [lastSendError, setLastSendError] = useState<string | null>(null);
+  const [leaderboardRows, setLeaderboardRows] = useState<LeaderboardRow[]>([]);
   const watchIdRef = useRef<number | null>(null);
   const lastSentRef = useRef<number>(0);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -120,6 +138,38 @@ export default function TrackerPage() {
   useEffect(() => { document.title = "Suivi GPS — FinisTrackLive"; }, []);
   useEffect(() => { trackingRef.current = tracking; }, [tracking]);
 
+  const sortedLeaderboard = useMemo(() => {
+    const rankStatus = (status: string | null) => (status === "dnf" ? 2 : status === "problem" ? 1 : 0);
+    return [...leaderboardRows].sort((a, b) => {
+      if (a.rfid_overall_rank != null && b.rfid_overall_rank != null) return a.rfid_overall_rank - b.rfid_overall_rank;
+      if (a.rfid_overall_rank != null) return -1;
+      if (b.rfid_overall_rank != null) return 1;
+      if (a.rfid_official_seconds != null && b.rfid_official_seconds != null) return a.rfid_official_seconds - b.rfid_official_seconds;
+      if (a.rfid_official_seconds != null) return -1;
+      if (b.rfid_official_seconds != null) return 1;
+      const statusDelta = rankStatus(a.runner_status) - rankStatus(b.runner_status);
+      if (statusDelta !== 0) return statusDelta;
+      if (a.finished_at && b.finished_at) return new Date(a.finished_at).getTime() - new Date(b.finished_at).getTime();
+      if (a.finished_at) return -1;
+      if (b.finished_at) return 1;
+      return (b.distance_along_route_m ?? -1) - (a.distance_along_route_m ?? -1);
+    });
+  }, [leaderboardRows]);
+
+  const myLiveRank = useMemo(() => {
+    if (!reg) return null;
+    const index = sortedLeaderboard.findIndex((row) => row.registration_id === reg.id);
+    return index >= 0 ? index + 1 : null;
+  }, [reg, sortedLeaderboard]);
+
+  const visibleLeaderboardRows = useMemo(() => {
+    if (!reg) return sortedLeaderboard.slice(0, 5);
+    const topRows = sortedLeaderboard.slice(0, 5);
+    const mine = sortedLeaderboard.find((row) => row.registration_id === reg.id);
+    if (mine && !topRows.some((row) => row.registration_id === reg.id)) return [...topRows, mine];
+    return topRows;
+  }, [reg, sortedLeaderboard]);
+
   useEffect(() => {
     if (!raceId || !user) return;
     Promise.all([
@@ -133,6 +183,54 @@ export default function TrackerPage() {
       }
     });
   }, [raceId, user]);
+
+  useEffect(() => {
+    if (!raceId || !tracking) {
+      setLeaderboardRows([]);
+      return;
+    }
+
+    let active = true;
+    const reloadLeaderboard = async () => {
+      const { data, error } = await supabase
+        .from("live_leaderboard")
+        .select("*")
+        .eq("race_id", raceId);
+
+      if (error) {
+        console.warn("[runner-leaderboard] reload error", error);
+        return;
+      }
+      if (active) setLeaderboardRows((data ?? []) as LeaderboardRow[]);
+    };
+
+    void reloadLeaderboard();
+    const channel = supabase
+      .channel(`runner-leaderboard:${raceId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "runner_positions" },
+        () => reloadLeaderboard(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "race_registrations", filter: `race_id=eq.${raceId}` },
+        () => reloadLeaderboard(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rfid_timing_results", filter: `race_id=eq.${raceId}` },
+        () => reloadLeaderboard(),
+      )
+      .subscribe();
+    const poll = window.setInterval(reloadLeaderboard, 5000);
+
+    return () => {
+      active = false;
+      window.clearInterval(poll);
+      supabase.removeChannel(channel);
+    };
+  }, [raceId, tracking]);
 
   const sendPosition = async (lat: number, lng: number, accuracy?: number, speed?: number) => {
     if (!reg) return;
@@ -151,17 +249,18 @@ export default function TrackerPage() {
       setLastSendError(error.message ?? "Envoi échoué");
       return;
     }
-    if ((data as any)?.error) {
+    const recordResponse = data as (FunctionErrorResponse & { position?: Position }) | null;
+    if (recordResponse?.error) {
       console.warn("[record-position] server", data);
-      setLastSendError((data as any).error);
+      setLastSendError(recordResponse.error);
       return;
     }
     setLastSendError(null);
     setPointsSent((n) => n + 1);
     setLastSendAt(Date.now());
     setError(null);
-    if (data?.position) {
-      const serverPos = data.position as Position;
+    if (recordResponse?.position) {
+      const serverPos = recordResponse.position;
       setLastPos((current) => ({
         ...serverPos,
         distance_along_route_m: serverPos.distance_along_route_m ?? current?.distance_along_route_m ?? null,
@@ -281,17 +380,18 @@ export default function TrackerPage() {
       setGarminError(error.message);
       return;
     }
-    if (data && (data as any).ok === false) {
+    const garminResponse = data as (FunctionErrorResponse & { latest_ms?: number; points?: number; position?: Position }) | null;
+    if (garminResponse?.ok === false) {
       console.warn("[garmin] response not ok", data);
-      setGarminError((data as any).error ?? "Erreur Garmin inconnue");
+      setGarminError(garminResponse.error ?? "Erreur Garmin inconnue");
       return;
     }
     setGarminError(null);
-    if (data?.latest_ms && data.latest_ms > garminSinceRef.current) {
-      garminSinceRef.current = data.latest_ms;
-      setGarminLastPointAt(data.latest_ms);
+    if (garminResponse?.latest_ms && garminResponse.latest_ms > garminSinceRef.current) {
+      garminSinceRef.current = garminResponse.latest_ms;
+      setGarminLastPointAt(garminResponse.latest_ms);
     }
-    if (data?.points > 0) {
+    if ((garminResponse?.points ?? 0) > 0) {
       garminFreshRef.current = true;
       if (garminFreshTimeoutRef.current != null) window.clearTimeout(garminFreshTimeoutRef.current);
       // expire freshness after 30s of silence
@@ -300,8 +400,8 @@ export default function TrackerPage() {
         garminFreshTimeoutRef.current = null;
       }, 30_000);
     }
-    if (data?.position) {
-      const p = data.position as Position;
+    if (garminResponse?.position) {
+      const p = garminResponse.position;
       setLastPos((current) => ({
         ...p,
         distance_along_route_m: p.distance_along_route_m ?? current?.distance_along_route_m ?? null,
@@ -355,7 +455,8 @@ export default function TrackerPage() {
   const acquireWakeLock = async () => {
     try {
       if ("wakeLock" in navigator) {
-        wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
+        const wakeNavigator = navigator as WakeLockNavigator;
+        wakeLockRef.current = await wakeNavigator.wakeLock.request("screen");
         wakeLockRef.current?.addEventListener?.("release", () => {
           console.log("[wake-lock] released");
         });
@@ -431,7 +532,7 @@ export default function TrackerPage() {
         tracking_active: true,
         started_at: new Date().toISOString(),
         finished_at: null,
-      } as any)
+      })
       .eq("id", reg.id);
     if (error) { toast.error(error.message); return; }
 
@@ -490,7 +591,7 @@ export default function TrackerPage() {
     setTracking(false);
     trackingRef.current = false;
 
-    const update: Record<string, unknown> = {
+    const update: RegistrationUpdate = {
       tracking_active: false,
       finished_at: new Date().toISOString(),
     };
@@ -511,7 +612,7 @@ export default function TrackerPage() {
 
     const { error } = await supabase
       .from("race_registrations")
-      .update(update as any)
+      .update(update)
       .eq("id", reg.id);
 
     if (error) { toast.error(error.message); return; }
@@ -798,6 +899,48 @@ export default function TrackerPage() {
           📱 L'écran reste allumé pendant le suivi. Évite de fermer l'onglet.
         </p>
       </Card>
+
+      {tracking && !isDnfOrProblem && (
+        <Card className="glass-card p-5 mt-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Trophy className="h-4 w-4 text-primary-glow" />
+            <p className="text-sm font-medium">Classement en direct</p>
+            <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-success">
+              <Timer className="h-3 w-3" /> Live
+            </span>
+          </div>
+
+          {myLiveRank && (
+            <div className="rounded-lg bg-primary/10 border border-primary/20 p-3 mb-3">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Ma position</p>
+              <p className="font-display text-2xl font-bold text-primary">{myLiveRank}<sup className="text-sm">e</sup></p>
+            </div>
+          )}
+
+          {visibleLeaderboardRows.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-4">Classement en attente des premiers points GPS.</p>
+          ) : (
+            <ol className="space-y-2">
+              {visibleLeaderboardRows.map((row) => {
+                const rank = sortedLeaderboard.findIndex((item) => item.registration_id === row.registration_id) + 1;
+                const isMe = row.registration_id === reg.id;
+                return (
+                  <li key={row.registration_id} className={`flex items-center gap-3 rounded-lg border p-3 ${isMe ? "border-primary/40 bg-primary/10" : "border-border/50 bg-secondary/40"}`}>
+                    <span className={`w-7 shrink-0 text-center font-display text-sm font-bold ${isMe ? "text-primary" : "text-muted-foreground"}`}>{rank}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">#{row.bib_number}{isMe ? " · Moi" : row.first_name || row.last_name ? ` · ${row.first_name ?? ""} ${row.last_name ?? ""}` : ""}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {row.rfid_rounded_time ?? row.rfid_official_time ?? `${formatDistance(row.distance_along_route_m)}${row.progress_percent != null ? ` · ${row.progress_percent.toFixed(0)}%` : ""}`}
+                      </p>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{formatSpeed(row.rolling_speed_kmh)}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </Card>
+      )}
     </main>
   );
 }
