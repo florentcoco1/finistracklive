@@ -37,6 +37,25 @@ function missingSchemaResponse(parsedRows: number, matched: number) {
   });
 }
 
+async function markImportSuccess(admin: ReturnType<typeof createClient>, raceId: string, content: string, fileName: string | null, imported: number, matched: number) {
+  const now = new Date().toISOString();
+  const safeName = clean(fileName) || `gmcap-import-${now}.txt`;
+  await admin.from("gmcap_import_sources").upsert({
+    race_id: raceId,
+    source_url: `manual://${encodeURIComponent(safeName)}`,
+    source_type: "manual_file",
+    file_name: safeName,
+    pending_content: null,
+    pending_import_at: null,
+    schema_checked_at: now,
+    enabled: true,
+    last_import_at: now,
+    last_import_status: "success",
+    last_import_message: `${matched} correspondance(s), ${imported - matched} non associée(s) depuis ${safeName}`,
+    updated_at: now,
+  }, { onConflict: "race_id" });
+}
+
 async function savePendingImport(admin: ReturnType<typeof createClient>, raceId: string, content: string, fileName: string | null, parsedRows: number, matched: number) {
   const now = new Date().toISOString();
   const safeName = clean(fileName) || `gmcap-import-${now}.txt`;
@@ -193,6 +212,7 @@ Deno.serve(async (req) => {
       return json({ error: upsertError.message }, 500);
     }
 
+    await markImportSuccess(admin, race_id, content, typeof file_name === "string" ? file_name : null, results.length, matched);
     return json({ ok: true, imported: results.length, matched, unmatched: results.length - matched });
   } catch (error) {
     return json({ error: (error as Error).message ?? "Erreur import GMCAP" }, 500);
