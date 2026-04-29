@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,11 +15,11 @@ function difficultyLabel(level: number | null | undefined) {
   return labels[safeLevel];
 }
 
-export function DifficultyStars({ level, className }: { level?: number | null; className?: string }) {
+export const DifficultyStars = forwardRef<HTMLSpanElement, { level?: number | null; className?: string }>(function DifficultyStars({ level, className }, ref) {
   const safeLevel = Math.min(5, Math.max(1, Number(level) || 1));
 
   return (
-    <span className={cn("inline-flex items-center gap-1 text-xs text-muted-foreground", className)} title={difficultyLabel(safeLevel)}>
+    <span ref={ref} className={cn("inline-flex items-center gap-1 text-xs text-muted-foreground", className)} title={difficultyLabel(safeLevel)}>
       <span className="inline-flex items-center gap-0.5" aria-hidden="true">
         {Array.from({ length: 5 }, (_, index) => (
           <Star
@@ -30,4 +31,4 @@ export function DifficultyStars({ level, className }: { level?: number | null; c
       <span>{difficultyLabel(safeLevel)}</span>
     </span>
   );
-}
+});
