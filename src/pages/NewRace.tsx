@@ -13,6 +13,8 @@ import { parseGpx } from "@/lib/gpx";
 import { Upload, MapPin } from "lucide-react";
 import { DifficultyStars } from "@/components/DifficultyStars";
 
+type JsonValue = string | number | boolean | null | { [key: string]: JsonValue } | JsonValue[];
+
 const formSchema = z.object({
   name: z.string().trim().min(2).max(120),
   description: z.string().max(2000).optional(),
@@ -96,8 +98,8 @@ export default function NewRace() {
           description: parsed.data.description ?? null,
           start_time: new Date(parsed.data.start_time).toISOString(),
           gpx_url: pub.publicUrl,
-          gpx_geojson: geojson as any,
-          route_points: routePoints as any,
+          gpx_geojson: geojson as JsonValue,
+          route_points: routePoints as JsonValue,
           distance_km: distanceKm,
           difficulty_level: parsed.data.difficulty_level,
           status: "upcoming",
@@ -108,8 +110,8 @@ export default function NewRace() {
 
       toast.success("Course créée !");
       navigate(`/races/${race.id}`);
-    } catch (err: any) {
-      toast.error(err.message ?? "Erreur lors de la création");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur lors de la création");
     } finally {
       setSubmitting(false);
     }
