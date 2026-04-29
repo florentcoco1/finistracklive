@@ -34,6 +34,10 @@ interface DelegatedRaceRow {
   race: OrganizerRace | null;
 }
 
+interface UntypedQuery {
+  select: (columns: string) => { eq: (column: string, value: string) => Promise<{ data: unknown[] | null }> };
+}
+
 export default function Dashboard() {
   const { user, loading, isOrganizer, roles } = useAuth();
   const navigate = useNavigate();
@@ -62,8 +66,7 @@ export default function Dashboard() {
         .select("id, name, start_time, distance_km, status")
         .eq("organizer_id", user.id)
         .order("start_time", { ascending: false }),
-      supabase
-        .from("race_organizers")
+      (supabase.from as unknown as (table: string) => UntypedQuery)("race_organizers")
         .select("race:races ( id, name, start_time, distance_km, status )")
         .eq("user_id", user.id),
     ]).then(([owned, delegated]) => {
