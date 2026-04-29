@@ -19,8 +19,15 @@ interface Race {
 
 interface UntypedRacesQuery {
   select: (columns: string) => {
-    order: (column: string, options: { ascending: boolean }) => { limit: (count: number) => Promise<{ data: unknown[] | null }> };
+    order: (column: string, options: { ascending: boolean }) => { limit: (count: number) => Promise<{ data: unknown[] | null; error: { code?: string; message?: string } | null }> };
   };
+}
+
+const raceColumns = "id, name, start_time, distance_km, difficulty_level, status";
+const compatibleRaceColumns = "id, name, start_time, distance_km, status";
+
+function isMissingDifficultyColumn(error: { code?: string; message?: string } | null) {
+  return !!error && (error.code === "42703" || error.code === "PGRST204") && !!error.message?.includes("difficulty_level");
 }
 
 const Index = () => {
@@ -28,11 +35,19 @@ const Index = () => {
 
   useEffect(() => {
     document.title = "FinisTrackLive — Suivi de course en direct";
-    (supabase.from as unknown as (table: string) => UntypedRacesQuery)("races")
-      .select("id, name, start_time, distance_km, difficulty_level, status")
+    const loadRaces = (columns: string) => (supabase.from as unknown as (table: string) => UntypedRacesQuery)("races")
+      .select(columns)
       .order("start_time", { ascending: true })
-      .limit(6)
-      .then(({ data }) => setRaces((data ?? []) as Race[]));
+      .limit(6);
+
+    loadRaces(raceColumns).then(async ({ data, error }) => {
+      if (isMissingDifficultyColumn(error)) {
+        const fallback = await loadRaces(compatibleRaceColumns);
+        setRaces(((fallback.data ?? []) as Omit<Race, "difficulty_level">[]).map((race) => ({ ...race, difficulty_level: 1 })) as Race[]);
+        return;
+      }
+      setRaces((data ?? []) as Race[]);
+    });
   }, []);
 
   return (
