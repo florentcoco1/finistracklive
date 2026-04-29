@@ -25,6 +25,8 @@ interface RaceSummary {
 interface GmcapSource {
   id: string;
   source_url: string;
+  source_type?: string | null;
+  file_name?: string | null;
   enabled: boolean;
   last_import_at: string | null;
   last_import_status: string | null;
@@ -69,6 +71,8 @@ interface AdminResponse {
 
 interface SyncResponse {
   error?: string;
+  schema_ready?: boolean;
+  message?: string;
   synced?: Array<{ error?: string; matched?: number }>;
 }
 
@@ -186,7 +190,8 @@ export default function RaceAdmin() {
       if (error || payload?.error) throw new Error(error?.message ?? payload.error);
       await load();
       const result = payload.synced?.[0];
-      if (result?.error) toast.error(result.error);
+      if (payload.schema_ready === false) toast.warning(payload.message ?? "Import en attente, vérification RFID relancée automatiquement.");
+      else if (result?.error) toast.error(result.error);
       else toast.success(`GMCAP synchronisé : ${result?.matched ?? 0} correspondance(s)`);
     } catch (error) {
       toast.error((error as Error).message || "Synchronisation impossible");
@@ -208,11 +213,12 @@ export default function RaceAdmin() {
     setManualImporting(true);
     try {
       const content = await gmcapFile.text();
-      const { data, error } = await supabase.functions.invoke("import-gmcap-rfid", { body: { race_id: raceId, content } });
+      const { data, error } = await supabase.functions.invoke("import-gmcap-rfid", { body: { race_id: raceId, content, file_name: gmcapFile.name } });
       const payload = data as ManualImportResponse;
       if (error) throw new Error(error.message);
-      if (payload?.warning === "RFID_SCHEMA_MISSING") {
-        toast.warning("Le schéma RFID est en cours d’initialisation. Réessaie dans quelques instants.");
+      if (payload?.warning === "RFID_IMPORT_PENDING" || payload?.warning === "RFID_SCHEMA_MISSING") {
+        await syncGmcap();
+        toast.warning("Import GMCAP enregistré en attente : FinisTrackLive le relancera automatiquement dès que le schéma RFID sera prêt.");
         return;
       }
       if (payload?.error) throw new Error(payload.error);
