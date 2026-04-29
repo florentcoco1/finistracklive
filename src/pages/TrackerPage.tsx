@@ -755,7 +755,7 @@ export default function TrackerPage() {
                       progress_percent: lastPos?.progress_percent ?? null,
                       rolling_speed_kmh: lastPos?.rolling_speed_kmh ?? null,
                       rolling_pace_sec_per_km: lastPos?.rolling_pace_sec_per_km ?? null,
-                      last_position_at: lastPos?.recorded_at ?? new Date().toISOString(),
+                      last_position_at: new Date(mapPoint.at).toISOString(),
                     } as LeaderboardRow]
                   : []
               }
