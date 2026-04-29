@@ -89,6 +89,7 @@ export default function TrackerPage() {
   const [tracking, setTracking] = useState(false);
   const [lastPos, setLastPos] = useState<Position | null>(null);
   const [livePoint, setLivePoint] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapPoint, setMapPoint] = useState<{ lat: number; lng: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pointsSent, setPointsSent] = useState(0);
   const [lastSendAt, setLastSendAt] = useState<number | null>(null);
@@ -101,6 +102,7 @@ export default function TrackerPage() {
   const restartCooldownRef = useRef<number>(0);
   const trackingRef = useRef(false);
   const garminFreshTimeoutRef = useRef<number | null>(null);
+  const lastMetricSampleRef = useRef<{ distanceM: number; at: number } | null>(null);
 
   // Garmin LiveTrack
   const [garminUrl, setGarminUrl] = useState<string>(() => localStorage.getItem("garmin_livetrack_url") ?? "");
@@ -134,9 +136,9 @@ export default function TrackerPage() {
     if (!reg) return;
     // Priority Garmin: if a fresh Garmin point arrived in the last 30s, skip phone GPS
     if (garminFreshRef.current) return;
-    // throttle locally to ~3s (server enforces 2s minimum)
+    // throttle locally: smoother GPS capture, calmer UI + fewer backend writes
     const now = Date.now();
-    if (now - lastSentRef.current < 3000) return;
+    if (now - lastSentRef.current < PHONE_SEND_INTERVAL_MS) return;
     lastSentRef.current = now;
 
     const { data, error } = await supabase.functions.invoke("record-position", {
@@ -160,6 +162,45 @@ export default function TrackerPage() {
       setLastPos(data.position as Position);
       console.log("[record-position] ok", data.position);
     }
+  };
+
+  const updateLocalPosition = (lat: number, lng: number, nativeSpeed?: number | null) => {
+    const now = Date.now();
+    const distanceM = snapDistanceToRoute({ lat, lng }, race?.route_points ?? null);
+    const totalM = race?.distance_km ? race.distance_km * 1000 : race?.route_points?.at(-1)?.cumulativeDistanceM;
+    const previous = lastMetricSampleRef.current;
+
+    let rollingSpeedKmh =
+      typeof nativeSpeed === "number" && Number.isFinite(nativeSpeed) && nativeSpeed >= 0
+        ? nativeSpeed * 3.6
+        : lastPos?.rolling_speed_kmh ?? null;
+
+    if (previous && distanceM != null) {
+      const elapsedS = (now - previous.at) / 1000;
+      const deltaM = Math.max(0, distanceM - previous.distanceM);
+      if (elapsedS >= 3 && deltaM >= 2) {
+        rollingSpeedKmh = (deltaM / 1000) / (elapsedS / 3600);
+      }
+    }
+
+    if (distanceM != null) {
+      lastMetricSampleRef.current = { distanceM, at: now };
+    }
+
+    setLastPos((current) => ({
+      distance_along_route_m: distanceM ?? current?.distance_along_route_m ?? null,
+      progress_percent:
+        distanceM != null && totalM && totalM > 0
+          ? Math.max(0, Math.min(100, (distanceM / totalM) * 100))
+          : current?.progress_percent ?? null,
+      rolling_speed_kmh: rollingSpeedKmh,
+      rolling_pace_sec_per_km:
+        rollingSpeedKmh && rollingSpeedKmh > 0 ? Math.round(3600 / rollingSpeedKmh) : current?.rolling_pace_sec_per_km ?? null,
+      speed: nativeSpeed ?? current?.speed ?? null,
+      recorded_at: new Date(now).toISOString(),
+      latitude: lat,
+      longitude: lng,
+    }));
   };
 
   const clearPhoneWatcher = () => {
