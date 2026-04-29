@@ -22,6 +22,17 @@ export interface LeaderboardRow {
   rolling_speed_kmh: number | null;
   rolling_pace_sec_per_km: number | null;
   last_position_at: string | null;
+  rfid_identifier: string | null;
+  rfid_matched_at: string | null;
+  rfid_source: string | null;
+  rfid_official_time: string | null;
+  rfid_official_seconds: number | null;
+  rfid_rounded_time: string | null;
+  rfid_rounded_seconds: number | null;
+  rfid_overall_rank: number | null;
+  rfid_category_rank: number | null;
+  rfid_gender_rank: number | null;
+  rfid_imported_at: string | null;
 }
 
 export interface RouteCoord {
