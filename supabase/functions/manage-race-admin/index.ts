@@ -44,7 +44,14 @@ function json(body: unknown, status = 200) {
 
 async function requireRaceAdmin(admin: ReturnType<typeof createClient>, userId: string, raceId: string) {
   const { data, error } = await admin.rpc("is_race_admin", { _race_id: raceId, _user_id: userId });
-  if (error || !data) throw new Error("Administration réservée aux organisateurs de cette course");
+  if (!error && data) return;
+
+  const { data: race, error: raceError } = await admin
+    .from("races")
+    .select("organizer_id")
+    .eq("id", raceId)
+    .single();
+  if (raceError || race?.organizer_id !== userId) throw new Error("Administration réservée aux organisateurs de cette course");
 }
 
 async function loadRace(admin: ReturnType<typeof createClient>, raceId: string) {
@@ -169,6 +176,8 @@ Deno.serve(async (req) => {
 
     return json({ error: "Action inconnue" }, 400);
   } catch (error) {
-    return json({ error: (error as Error).message || "Erreur administration" }, 500);
+    const message = (error as Error).message || "Erreur administration";
+    const status = message.includes("réservée aux organisateurs") || message.includes("Connexion requise") ? 403 : 500;
+    return json({ error: message }, status);
   }
 });
