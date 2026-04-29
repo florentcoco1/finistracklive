@@ -9,7 +9,7 @@ const labels: Record<number, string> = {
   5: "Parcours très difficile",
 };
 
-export function difficultyLabel(level: number | null | undefined) {
+function difficultyLabel(level: number | null | undefined) {
   const safeLevel = Math.min(5, Math.max(1, Number(level) || 1));
   return labels[safeLevel];
 }
