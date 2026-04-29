@@ -9,7 +9,7 @@ import { StatusBadge } from "./Index";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { ChevronLeft, Trophy, Radio, UserPlus, Smartphone, AlertTriangle, Flag, Phone } from "lucide-react";
+import { ChevronLeft, Trophy, UserPlus, Smartphone, AlertTriangle, Flag, Phone, FileUp, Timer } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ export default function RaceDetail() {
   const [signupOpen, setSignupOpen] = useState(false);
   const [bibInput, setBibInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
+  const [importingRfid, setImportingRfid] = useState(false);
 
   useEffect(() => {
     if (!raceId) return;
@@ -142,6 +143,11 @@ export default function RaceDetail() {
           reload();
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rfid_timing_results", filter: `race_id=eq.${raceId}` },
+        () => reload(),
+      )
       .subscribe((status) => {
         console.log("[realtime] channel status:", status);
       });
@@ -188,6 +194,16 @@ export default function RaceDetail() {
   const sorted = useMemo(() => {
     const rank = (s: string | null) => (s === "dnf" ? 2 : s === "problem" ? 1 : 0);
     return [...rows].sort((a, b) => {
+      const ar = a.rfid_overall_rank;
+      const br = b.rfid_overall_rank;
+      if (ar != null && br != null) return ar - br;
+      if (ar != null) return -1;
+      if (br != null) return 1;
+      const at = a.rfid_official_seconds;
+      const bt = b.rfid_official_seconds;
+      if (at != null && bt != null) return at - bt;
+      if (at != null) return -1;
+      if (bt != null) return 1;
       const ra = rank(a.runner_status);
       const rb = rank(b.runner_status);
       if (ra !== rb) return ra - rb;
@@ -201,6 +217,24 @@ export default function RaceDetail() {
       return db - da;
     });
   }, [rows]);
+
+  const handleGmcapImport = async (file: File | null) => {
+    if (!file || !raceId) return;
+    setImportingRfid(true);
+    try {
+      const content = new TextDecoder("iso-8859-1").decode(await file.arrayBuffer());
+      const { data, error } = await supabase.functions.invoke("import-gmcap-rfid", {
+        body: { race_id: raceId, content },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(`RFID GMCAP importé : ${(data as any).matched} correspondance(s), ${(data as any).unmatched} non associée(s)`);
+    } catch (error) {
+      toast.error((error as Error).message || "Import RFID impossible");
+    } finally {
+      setImportingRfid(false);
+    }
+  };
 
   const medalFor = (rank: number, status: string | null) => {
     if (status === "dnf" || status === "problem") return null;
@@ -270,6 +304,21 @@ export default function RaceDetail() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {isOrganizer && (
+            <Button asChild variant="glass" disabled={importingRfid}>
+              <Label htmlFor="gmcap-import" className="cursor-pointer">
+                <FileUp className="h-4 w-4 mr-2" /> {importingRfid ? "Import RFID…" : "Importer GMCAP"}
+                <Input
+                  id="gmcap-import"
+                  type="file"
+                  accept=".txt,.tsv,.csv"
+                  className="sr-only"
+                  disabled={importingRfid}
+                  onChange={(event) => void handleGmcapImport(event.target.files?.[0] ?? null)}
+                />
+              </Label>
+            </Button>
+          )}
           {user && myRegistration ? (
             <Button asChild variant="hero">
               <Link to={`/race/${race.id}/track`}>
@@ -384,7 +433,7 @@ export default function RaceDetail() {
             <Trophy className="h-5 w-5 text-primary-glow" />
             <h2 className="font-display font-semibold text-lg">Classement live</h2>
             <span className="ml-auto inline-flex items-center gap-1 text-xs text-success">
-              <Radio className="h-3 w-3" /> Temps réel
+              <Timer className="h-3 w-3" /> RFID prioritaire
             </span>
           </div>
           {sorted.length === 0 ? (
@@ -419,12 +468,18 @@ export default function RaceDetail() {
                         {r.first_name} {r.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatDistance(r.distance_along_route_m)}
-                        {r.progress_percent != null && ` · ${r.progress_percent.toFixed(0)}%`}
+                        {r.rfid_official_time
+                          ? `Temps officiel ${r.rfid_rounded_time ?? r.rfid_official_time}`
+                          : `${formatDistance(r.distance_along_route_m)}${r.progress_percent != null ? ` · ${r.progress_percent.toFixed(0)}%` : ""}`}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatSpeed(r.rolling_speed_kmh)} · {formatPace(r.rolling_pace_sec_per_km)}
+                        {r.rfid_identifier
+                          ? `RFID ${r.rfid_identifier}${r.rfid_category_rank ? ` · cat. ${r.rfid_category_rank}` : ""}`
+                          : `${formatSpeed(r.rolling_speed_kmh)} · ${formatPace(r.rolling_pace_sec_per_km)}`}
                       </p>
+                      {r.rfid_overall_rank == null && r.last_position_at && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5">GPS support · {formatSpeed(r.rolling_speed_kmh)}</p>
+                      )}
                       {r.finished_at && (
                         <p className="text-[10px] text-success mt-0.5 font-semibold">
                           🏁 Arrivée {format(new Date(r.finished_at), "HH:mm:ss", { locale: fr })}
