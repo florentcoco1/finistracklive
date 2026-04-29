@@ -34,6 +34,10 @@ const BodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("remove_organizer"), race_id: uuid, organizer_id: uuid }),
 ]);
 
+type ProfileRow = { user_id: string; email: string | null; first_name: string | null; last_name: string | null; phone: string | null };
+type RegistrationRow = { id: string; runner_id: string; bib_number: string; category: string | null; emergency_phone: string | null; runner_status: string; rfid_identifier: string | null; rfid_matched_at: string | null; rfid_source: string | null; created_at: string };
+type OrganizerRow = { id: string; user_id: string; role: string; created_at: string | null };
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
@@ -51,24 +55,26 @@ async function loadRace(admin: ReturnType<typeof createClient>, raceId: string) 
     admin.from("races").select("id, name, organizer_id").eq("id", raceId).single(),
   ]);
 
+  const registrationRows = (registrations ?? []) as RegistrationRow[];
+  const organizerRows = (organizers ?? []) as OrganizerRow[];
   const profileIds = [
     ...new Set([
       race?.organizer_id,
-      ...((registrations ?? []).map((r: any) => r.runner_id)),
-      ...((organizers ?? []).map((o: any) => o.user_id)),
+      ...registrationRows.map((r) => r.runner_id),
+      ...organizerRows.map((o) => o.user_id),
     ].filter(Boolean)),
   ];
   const { data: profiles } = profileIds.length
     ? await admin.from("profiles").select("user_id, email, first_name, last_name, phone").in("user_id", profileIds)
-    : { data: [] as any[] };
-  const profileById = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
+    : { data: [] as ProfileRow[] };
+  const profileById = new Map(((profiles ?? []) as ProfileRow[]).map((p) => [p.user_id, p]));
 
   return {
     source,
-    registrations: (registrations ?? []).map((r: any) => ({ ...r, profile: profileById.get(r.runner_id) ?? null })),
+    registrations: registrationRows.map((r) => ({ ...r, profile: profileById.get(r.runner_id) ?? null })),
     organizers: [
       race?.organizer_id && { id: "owner", user_id: race.organizer_id, role: "propriétaire", created_at: null, profile: profileById.get(race.organizer_id) ?? null },
-      ...((organizers ?? []).map((o: any) => ({ ...o, profile: profileById.get(o.user_id) ?? null }))),
+      ...organizerRows.map((o) => ({ ...o, profile: profileById.get(o.user_id) ?? null })),
     ].filter(Boolean),
   };
 }
