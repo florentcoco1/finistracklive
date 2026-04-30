@@ -548,6 +548,16 @@ export default function RaceAdmin() {
                   <Upload className="h-4 w-4 mr-2" /> {manualImporting ? "Import…" : "Importer maintenant"}
                 </Button>
               </div>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={markFinishedOnImport}
+                  onChange={(e) => setMarkFinishedOnImport(e.target.checked)}
+                  className="accent-current"
+                />
+                Marquer la course comme terminée après cet import (dernier fichier GMCAP)
+                {race.status === "finished" && <Badge variant="secondary" className="ml-2">déjà terminée</Badge>}
+              </label>
             </div>
             <div className="flex gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-muted-foreground">
               <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
