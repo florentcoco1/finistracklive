@@ -118,7 +118,7 @@ export default function Dashboard() {
           {isOrganizer ? (
             <>
               <p className="text-base font-semibold">Organisateur</p>
-              <Button asChild variant="link" className="px-0 h-auto"><Link to="/organizer/new-race">+ Créer une course</Link></Button>
+              <Button asChild variant="link" className="px-0 h-auto"><Link to="/organizer/new-event">+ Créer une épreuve</Link></Button>
             </>
           ) : (
             <>
@@ -128,6 +128,45 @@ export default function Dashboard() {
           )}
         </Card>
       </div>
+
+      {isOrganizer && (
+        <section className="mb-10">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <h2 className="font-display text-2xl font-semibold">Mes épreuves</h2>
+            <Button asChild variant="hero" size="sm"><Link to="/organizer/new-event">Créer une épreuve</Link></Button>
+          </div>
+          {organizerEvents.length === 0 ? (
+            <Card className="glass-card p-8 text-center">
+              <p className="text-muted-foreground mb-4">Aucune épreuve créée pour le moment.</p>
+              <Button asChild variant="hero"><Link to="/organizer/new-event">Créer ma première épreuve</Link></Button>
+            </Card>
+          ) : (
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {organizerEvents.map((ev) => (
+                <Card key={ev.id} className="glass-card overflow-hidden">
+                  <div className="aspect-[3/4] bg-secondary/40">
+                    {ev.poster_url
+                      ? <img src={ev.poster_url} alt={`Affiche ${ev.name}`} className="w-full h-full object-cover" loading="lazy" />
+                      : <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">Sans affiche</div>}
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-display font-semibold mb-1 line-clamp-2">{ev.name}</h3>
+                    {ev.start_date && (
+                      <p className="text-xs text-muted-foreground mb-3">
+                        {format(new Date(ev.start_date), "d MMM yyyy", { locale: fr })}
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button asChild variant="hero" size="sm" className="flex-1"><Link to={`/events/${ev.id}`}>Voir</Link></Button>
+                      <Button asChild variant="glass" size="sm"><Link to={`/organizer/events/${ev.id}/edit`}>Modifier</Link></Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {isOrganizer && (
         <section className="mb-10">
