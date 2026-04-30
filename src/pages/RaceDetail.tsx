@@ -433,6 +433,10 @@ export default function RaceDetail() {
       toast.error("Connecte-toi pour t'inscrire");
       return;
     }
+    if (race?.status === "finished") {
+      toast.error("Les inscriptions sont closes : la course est terminée");
+      return;
+    }
     if (!bibInput.trim()) {
       toast.error("N° de dossard requis");
       return;
