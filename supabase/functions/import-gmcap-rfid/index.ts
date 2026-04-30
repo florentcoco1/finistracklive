@@ -186,6 +186,13 @@ Deno.serve(async (req) => {
       if (rawGender.startsWith("M") || rawGender === "H") gender = "M";
       else if (rawGender.startsWith("F") || rawGender === "W") gender = "F";
 
+      const officialTimeText = pick(row, "Temps Arrondi", "Temps") || null;
+      const officialTimeSeconds = integer(pick(row, "Nb.Secondes Arrondi", "Nb.Secondes")) ?? (decimal(pick(row, "Nb.Secondes Arrondi", "Nb.Secondes")) != null ? Math.round(decimal(pick(row, "Nb.Secondes Arrondi", "Nb.Secondes"))!) : null);
+
+      // Un temps à 00:00:00 (ou non renseigné) signifie que le coureur n'a pas de chrono officiel : exclu du classement
+      const hasValidTime = !!officialTimeText && !/^0+([:.]0+)+$/.test(officialTimeText.trim()) && (officialTimeSeconds == null || officialTimeSeconds > 0);
+      const finalStatus = !hasValidTime && status === "classified" ? "not_started" : status;
+
       results.push({
         race_id,
         bib_number: bib,
@@ -195,12 +202,12 @@ Deno.serve(async (req) => {
         gender,
         category: pick(row, "Abbrev. Catégorie", "Abbrev. Categorie", "Catégorie", "Categorie") || null,
         club: pick(row, "Club") || null,
-        status,
-        official_time_text: pick(row, "Temps Arrondi", "Temps") || null,
-        official_time_seconds: integer(pick(row, "Nb.Secondes Arrondi", "Nb.Secondes")) ?? (decimal(pick(row, "Nb.Secondes Arrondi", "Nb.Secondes")) != null ? Math.round(decimal(pick(row, "Nb.Secondes Arrondi", "Nb.Secondes"))!) : null),
-        scratch_rank: integer(pick(row, "Classement")),
-        category_rank: integer(pick(row, "Classement par Cat.", "Classement par Cat")),
-        gender_rank: integer(pick(row, "Classement par Sexe")),
+        status: finalStatus,
+        official_time_text: hasValidTime ? officialTimeText : null,
+        official_time_seconds: hasValidTime ? officialTimeSeconds : null,
+        scratch_rank: hasValidTime ? integer(pick(row, "Classement")) : null,
+        category_rank: hasValidTime ? integer(pick(row, "Classement par Cat.", "Classement par Cat")) : null,
+        gender_rank: hasValidTime ? integer(pick(row, "Classement par Sexe")) : null,
         split_payload: extractSplits(row),
         imported_at: new Date().toISOString(),
       });
