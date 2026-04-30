@@ -76,11 +76,13 @@ export type Database = {
       gmcap_results: {
         Row: {
           bib_number: string
+          birth_date: string | null
           category: string | null
           category_rank: number | null
           club: string | null
           created_at: string
           first_name: string | null
+          gender: string | null
           gender_rank: number | null
           id: string
           imported_at: string
@@ -95,11 +97,13 @@ export type Database = {
         }
         Insert: {
           bib_number: string
+          birth_date?: string | null
           category?: string | null
           category_rank?: number | null
           club?: string | null
           created_at?: string
           first_name?: string | null
+          gender?: string | null
           gender_rank?: number | null
           id?: string
           imported_at?: string
@@ -114,11 +118,13 @@ export type Database = {
         }
         Update: {
           bib_number?: string
+          birth_date?: string | null
           category?: string | null
           category_rank?: number | null
           club?: string | null
           created_at?: string
           first_name?: string | null
+          gender?: string | null
           gender_rank?: number | null
           id?: string
           imported_at?: string
