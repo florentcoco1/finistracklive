@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 import { Smartphone, Trophy, ShieldCheck } from "lucide-react";
 import { StatusBadge } from "./Index";
 import { format } from "date-fns";
@@ -77,19 +76,6 @@ export default function Dashboard() {
     });
   }, [user, isOrganizer]);
 
-  const becomeOrganizer = async () => {
-    if (!user) return;
-    const { error } = await supabase
-      .from("user_roles")
-      .insert({ user_id: user.id, role: "organizer" });
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success("Tu es maintenant organisateur. Recharge la page.");
-    setTimeout(() => window.location.reload(), 1000);
-  };
-
   if (loading) return <main className="container py-12"><p className="text-muted-foreground">Chargement…</p></main>;
   if (!user) return <Navigate to="/auth" replace />;
 
@@ -120,8 +106,8 @@ export default function Dashboard() {
             </>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground mb-2">Tu veux organiser une course ?</p>
-              <Button variant="glass" size="sm" onClick={becomeOrganizer}>Devenir organisateur</Button>
+              <p className="text-sm text-muted-foreground mb-2">Accès organisateur réservé aux comptes autorisés.</p>
+              <Button asChild variant="glass" size="sm"><Link to="/races">Voir les courses</Link></Button>
             </>
           )}
         </Card>
