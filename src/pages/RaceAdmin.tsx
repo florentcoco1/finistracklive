@@ -542,6 +542,27 @@ export default function RaceAdmin() {
               <h2 className="font-display text-xl font-semibold">Inscrits coureurs</h2>
               <p className="text-sm text-muted-foreground mt-1">Associe les dossards, catégories et identifiants RFID utilisés par GMCAP.</p>
             </div>
+            <div className="space-y-3 rounded-lg border border-border/50 bg-secondary/20 p-4">
+              <div>
+                <h3 className="font-display text-lg font-semibold">Import massif depuis un fichier texte</h3>
+                <p className="text-sm text-muted-foreground mt-1">Importe un export TSV/CSV avec en-têtes Nom, Prénom, EMail, Numéro, Tel et Catégorie.</p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="runner-import-file">Fichier coureurs</Label>
+                  <Input
+                    id="runner-import-file"
+                    type="file"
+                    accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv"
+                    onChange={(e) => setRunnerImportFile(e.target.files?.[0] ?? null)}
+                  />
+                  {runnerImportFile && <p className="text-xs text-muted-foreground">{runnerImportFile.name} · {(runnerImportFile.size / 1024).toFixed(1)} Ko</p>}
+                </div>
+                <Button variant="hero" onClick={importRunnerFile} disabled={!runnerImportFile || runnerImporting}>
+                  <Upload className="h-4 w-4 mr-2" /> {runnerImporting ? "Import…" : "Importer les coureurs"}
+                </Button>
+              </div>
+            </div>
             <div className="grid gap-3 md:grid-cols-[1fr_120px_120px_160px_auto] md:items-end">
               <div className="space-y-2"><Label>Email utilisateur</Label><Input value={newRunner.email} onChange={(e) => setNewRunner((v) => ({ ...v, email: e.target.value }))} placeholder="coureur@email.fr" /></div>
               <div className="space-y-2"><Label>Dossard</Label><Input value={newRunner.bib_number} onChange={(e) => setNewRunner((v) => ({ ...v, bib_number: e.target.value }))} /></div>
