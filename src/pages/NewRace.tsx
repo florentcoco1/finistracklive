@@ -240,6 +240,7 @@ export default function NewRace() {
           </Button>
         </form>
       </Card>
+      )}
     </main>
   );
 }
