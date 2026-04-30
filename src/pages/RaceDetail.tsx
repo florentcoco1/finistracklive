@@ -433,6 +433,10 @@ export default function RaceDetail() {
       toast.error("Connecte-toi pour t'inscrire");
       return;
     }
+    if (race?.status === "finished") {
+      toast.error("Les inscriptions sont closes : la course est terminée");
+      return;
+    }
     if (!bibInput.trim()) {
       toast.error("N° de dossard requis");
       return;
@@ -529,6 +533,10 @@ export default function RaceDetail() {
               <Link to={`/race/${race.id}/track`}>
                 <Smartphone className="h-4 w-4 mr-2" /> Mode coureur (#{myRegistration.bib_number})
               </Link>
+            </Button>
+          ) : race.status === "finished" ? (
+            <Button variant="glass" disabled>
+              <Flag className="h-4 w-4 mr-2" /> Inscriptions closes
             </Button>
           ) : user ? (
             <Dialog open={signupOpen} onOpenChange={setSignupOpen}>
