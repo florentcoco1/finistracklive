@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type ParsedRow = Record<string, string>;
+type ParsedRow = Record<string, string> & { __norm?: Map<string, string> };
 
 const clean = (value: unknown) => String(value ?? "").trim();
 const decimal = (value: unknown) => {
@@ -17,6 +17,24 @@ const integer = (value: unknown) => {
   const n = Number.parseInt(clean(value), 10);
   return Number.isFinite(n) ? n : null;
 };
+
+// Normalize header keys: lowercase, strip diacritics + replacement char, collapse non-alphanumerics.
+// Resilient to encoding issues (é vs e vs �) and punctuation variants.
+const normKey = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\uFFFD/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+
+function pick(row: ParsedRow, ...candidates: string[]): string {
+  const map = row.__norm;
+  if (!map) return "";
+  for (const c of candidates) {
+    const v = map.get(normKey(c));
+    if (v != null && v !== "") return v;
+  }
+  return "";
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -47,7 +65,11 @@ function parseTsv(content: string): ParsedRow[] {
   const headers = lines[0].split("\t").map(clean);
   return lines.slice(1).map((line) => {
     const cells = line.split("\t");
-    return Object.fromEntries(headers.map((header, index) => [header, clean(cells[index])]));
+    const row: ParsedRow = Object.fromEntries(headers.map((header, index) => [header, clean(cells[index])])) as ParsedRow;
+    const norm = new Map<string, string>();
+    headers.forEach((h, i) => norm.set(normKey(h), clean(cells[i])));
+    Object.defineProperty(row, "__norm", { value: norm, enumerable: false });
+    return row;
   });
 }
 
@@ -112,33 +134,33 @@ Deno.serve(async (req) => {
     let matched = 0;
 
     for (const row of rows) {
-      const bib = clean(row["Numéro"] || row["Numero"]);
+      const bib = pick(row, "Numéro", "Numero", "Dossard", "N°", "Bib");
       if (!bib) continue;
 
       const registrationId = byBib.get(bib) ?? null;
       if (registrationId) matched += 1;
 
-      const abandoned = clean(row["Abandon"]).toUpperCase() === "O";
-      const disqualified = clean(row["Disqualifié"] || row["Disqualifie"]).toUpperCase() === "O";
-      const started = clean(row["Pris Départ"] || row["Pris Depart"]).toUpperCase() === "O";
+      const abandoned = pick(row, "Abandon").toUpperCase() === "O";
+      const disqualified = pick(row, "Disqualifié", "Disqualifie").toUpperCase() === "O";
+      const started = pick(row, "Pris Départ", "Pris Depart").toUpperCase() === "O";
       const status = disqualified ? "disqualified" : abandoned ? "dnf" : started ? "classified" : "not_started";
 
       results.push({
         race_id,
         registration_id: registrationId,
         bib_number: bib,
-        first_name: clean(row["Prénom"] || row["Prenom"]) || null,
-        last_name: clean(row["Nom"]) || null,
-        category: clean(row["Abbrev. Catégorie"] || row["Abbrev. Categorie"] || row["Catégorie"] || row["Categorie"]) || null,
-        club: clean(row["Club"]) || null,
+        first_name: pick(row, "Prénom", "Prenom") || null,
+        last_name: pick(row, "Nom") || null,
+        category: pick(row, "Abbrev. Catégorie", "Abbrev. Categorie", "Catégorie", "Categorie") || null,
+        club: pick(row, "Club") || null,
         status,
-        official_time: clean(row["Temps"]) || null,
-        official_seconds: decimal(row["Nb.Secondes"]),
-        rounded_time: clean(row["Temps Arrondi"]) || null,
-        rounded_seconds: decimal(row["Nb.Secondes Arrondi"]),
-        overall_rank: integer(row["Classement"]),
-        category_rank: integer(row["Classement par Cat."]),
-        gender_rank: integer(row["Classement par Sexe"]),
+        official_time: pick(row, "Temps") || null,
+        official_seconds: decimal(pick(row, "Nb.Secondes")),
+        rounded_time: pick(row, "Temps Arrondi") || null,
+        rounded_seconds: decimal(pick(row, "Nb.Secondes Arrondi")),
+        overall_rank: integer(pick(row, "Classement")),
+        category_rank: integer(pick(row, "Classement par Cat.", "Classement par Cat")),
+        gender_rank: integer(pick(row, "Classement par Sexe")),
         split_payload: extractSplits(row),
         raw_payload: row,
         imported_at: new Date().toISOString(),
