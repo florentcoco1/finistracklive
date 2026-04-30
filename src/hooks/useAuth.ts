@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 
-export type AppRole = "organizer" | "runner";
+export type AppRole = "organizer" | "runner" | "admin";
 
 export interface AuthState {
   user: User | null;
@@ -14,6 +14,7 @@ export interface AuthState {
 export function useAuth(): AuthState & {
   isOrganizer: boolean;
   isRunner: boolean;
+  isAdmin: boolean;
   signOut: () => Promise<void>;
 } {
   const [state, setState] = useState<AuthState>({
@@ -69,6 +70,7 @@ export function useAuth(): AuthState & {
     ...state,
     isOrganizer: state.roles.includes("organizer"),
     isRunner: state.roles.includes("runner"),
+    isAdmin: state.roles.includes("admin"),
     signOut: async () => {
       await supabase.auth.signOut();
     },

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.png";
 
 export function SiteHeader() {
-  const { user, isOrganizer, signOut, loading } = useAuth();
+  const { user, isOrganizer, isAdmin, signOut, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
@@ -18,6 +18,7 @@ export function SiteHeader() {
     ...(user && !isOrganizer ? [{ to: "/dashboard", label: "Mon espace" }] : []),
     ...(isOrganizer ? [{ to: "/dashboard", label: "Administration" }] : []),
     ...(isOrganizer ? [{ to: "/organizer/new-event", label: "Créer une épreuve" }] : []),
+    ...(isAdmin ? [{ to: "/admin", label: "Administration" }] : []),
   ];
 
   return (
