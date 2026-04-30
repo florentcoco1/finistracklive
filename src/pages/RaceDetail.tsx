@@ -345,9 +345,14 @@ export default function RaceDetail() {
   }, [rows]);
 
   const filtered = useMemo(() => {
-    if (genderFilter === "all") return sorted;
-    return sorted.filter((r) => r.gender === genderFilter);
-  }, [sorted, genderFilter]);
+    const q = searchQuery.trim().toLowerCase();
+    return sorted.filter((r) => {
+      if (genderFilter !== "all" && r.gender !== genderFilter) return false;
+      if (!q) return true;
+      const haystack = `${r.first_name ?? ""} ${r.last_name ?? ""} ${r.bib_number ?? ""}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [sorted, genderFilter, searchQuery]);
 
   const handleGmcapImport = async (file: File | null) => {
     if (!file || !raceId) return;
