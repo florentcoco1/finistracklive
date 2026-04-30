@@ -15,6 +15,7 @@ export interface LeaderboardRow {
   problem_description: string | null;
   first_name: string | null;
   last_name: string | null;
+  gender: string | null;
   latitude: number | null;
   longitude: number | null;
   distance_along_route_m: number | null;
