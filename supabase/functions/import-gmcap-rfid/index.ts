@@ -65,7 +65,11 @@ function parseTsv(content: string): ParsedRow[] {
   const headers = lines[0].split("\t").map(clean);
   return lines.slice(1).map((line) => {
     const cells = line.split("\t");
-    return Object.fromEntries(headers.map((header, index) => [header, clean(cells[index])]));
+    const row: ParsedRow = Object.fromEntries(headers.map((header, index) => [header, clean(cells[index])])) as ParsedRow;
+    const norm = new Map<string, string>();
+    headers.forEach((h, i) => norm.set(normKey(h), clean(cells[i])));
+    Object.defineProperty(row, "__norm", { value: norm, enumerable: false });
+    return row;
   });
 }
 
