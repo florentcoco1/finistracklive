@@ -132,11 +132,12 @@ async function requireRaceAdmin(admin: ReturnType<typeof createClient>, userId: 
 }
 
 async function loadRace(admin: ReturnType<typeof createClient>, raceId: string) {
-  const [{ data: source }, { data: registrations }, { data: organizers }, { data: race }] = await Promise.all([
+  const [{ data: source }, { data: registrations }, { data: organizers }, { data: race }, { data: gmcapResults }] = await Promise.all([
     admin.from("gmcap_import_sources").select("id, source_url, source_type, file_name, enabled, last_import_at, last_import_status, last_import_message").eq("race_id", raceId).maybeSingle(),
     admin.from("race_registrations").select("id, runner_id, bib_number, category, emergency_phone, runner_status, created_at").eq("race_id", raceId).order("bib_number"),
     admin.from("race_organizers").select("id, user_id, role, created_at").eq("race_id", raceId).order("created_at"),
     admin.from("races").select("id, name, organizer_id").eq("id", raceId).single(),
+    admin.from("gmcap_results").select("bib_number, first_name, last_name, gender, birth_date").eq("race_id", raceId),
   ]);
 
   const registrationRows = (registrations ?? []) as RegistrationRow[];
@@ -153,9 +154,23 @@ async function loadRace(admin: ReturnType<typeof createClient>, raceId: string) 
     : { data: [] as ProfileRow[] };
   const profileById = new Map(((profiles ?? []) as ProfileRow[]).map((p) => [p.user_id, p]));
 
+  const gmcapByBib = new Map(
+    ((gmcapResults ?? []) as Array<{ bib_number: string; first_name: string | null; last_name: string | null; gender: string | null; birth_date: string | null }>)
+      .map((g) => [String(g.bib_number).trim(), g]),
+  );
+
   return {
     source,
-    registrations: registrationRows.map((r) => ({ ...r, profile: profileById.get(r.runner_id) ?? null })),
+    registrations: registrationRows.map((r) => {
+      const profile = profileById.get(r.runner_id) ?? null;
+      const gmcap = gmcapByBib.get(String(r.bib_number).trim()) ?? null;
+      const merged = profile
+        ? { ...profile, first_name: profile.first_name ?? gmcap?.first_name ?? null, last_name: profile.last_name ?? gmcap?.last_name ?? null }
+        : gmcap
+          ? { email: null, phone: null, first_name: gmcap.first_name, last_name: gmcap.last_name }
+          : null;
+      return { ...r, profile: merged, gender: gmcap?.gender ?? null, birth_date: gmcap?.birth_date ?? null };
+    }),
     organizers: [
       race?.organizer_id && { id: "owner", user_id: race.organizer_id, role: "propriétaire", created_at: null, profile: profileById.get(race.organizer_id) ?? null },
       ...organizerRows.map((o) => ({ ...o, profile: profileById.get(o.user_id) ?? null })),
