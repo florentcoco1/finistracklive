@@ -129,7 +129,7 @@ export default function RaceDetail() {
         supabase.from("live_leaderboard").select("*").eq("race_id", raceId),
         supabase
           .from("gmcap_results" as any)
-          .select("bib_number, first_name, last_name, category, status, official_time_text, official_time_seconds, scratch_rank, category_rank, gender_rank, imported_at")
+          .select("bib_number, first_name, last_name, gender, category, status, official_time_text, official_time_seconds, scratch_rank, category_rank, gender_rank, imported_at")
           .eq("race_id", raceId),
       ]);
       if (lbError) console.warn("[leaderboard] reload error", lbError);
@@ -140,6 +140,7 @@ export default function RaceDetail() {
         bib_number: string | null;
         first_name: string | null;
         last_name: string | null;
+        gender: string | null;
         category: string | null;
         status: string | null;
         official_time_text: string | null;
@@ -180,6 +181,7 @@ export default function RaceDetail() {
             problem_description: base?.problem_description ?? null,
             first_name: r.first_name ?? base?.first_name ?? null,
             last_name: r.last_name ?? base?.last_name ?? null,
+            gender: r.gender ?? null,
             latitude: base?.latitude ?? null,
             longitude: base?.longitude ?? null,
             distance_along_route_m: base?.distance_along_route_m ?? null,
@@ -657,6 +659,7 @@ export default function RaceDetail() {
                     <div className="min-w-0 flex-1">
                       <p className={`text-sm truncate ${medal ? "font-bold" : "font-medium"}`}>
                         {r.first_name} {r.last_name}
+                        {r.gender ? <span className="ml-2 text-xs font-normal text-muted-foreground">({r.gender === "M" ? "H" : r.gender})</span> : null}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {(r.rounded_time ?? r.official_time)
