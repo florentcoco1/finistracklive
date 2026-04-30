@@ -94,6 +94,7 @@ export default function NewRace() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!gpxFile) { toast.error("Charge un fichier GPX"); return; }
+    if (!eventId) { toast.error("Sélectionne une épreuve"); return; }
 
     const fd = new FormData(e.currentTarget);
     const parsed = formSchema.safeParse({
@@ -120,6 +121,7 @@ export default function NewRace() {
 
       const racePayload = {
           organizer_id: user.id,
+          event_id: eventId,
           name: parsed.data.name,
           description: parsed.data.description ?? null,
           start_time: new Date(parsed.data.start_time).toISOString(),
