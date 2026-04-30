@@ -29,6 +29,13 @@ interface OrganizerRace {
   status: "upcoming" | "live" | "finished";
 }
 
+interface OrganizerEvent {
+  id: string;
+  name: string;
+  start_date: string | null;
+  poster_url: string | null;
+}
+
 interface DelegatedRaceRow {
   race: OrganizerRace | null;
 }
@@ -42,6 +49,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [registrations, setRegistrations] = useState<MyRegistration[]>([]);
   const [organizerRaces, setOrganizerRaces] = useState<OrganizerRace[]>([]);
+  const [organizerEvents, setOrganizerEvents] = useState<OrganizerEvent[]>([]);
 
   useEffect(() => {
     document.title = "Mon espace — FinisTrackLive";
