@@ -13,10 +13,11 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
 
   const links = [
+    { to: "/events", label: "Épreuves" },
     { to: "/races", label: "Courses" },
     ...(user && !isOrganizer ? [{ to: "/dashboard", label: "Mon espace" }] : []),
     ...(isOrganizer ? [{ to: "/dashboard", label: "Administration" }] : []),
-    ...(isOrganizer ? [{ to: "/organizer/new-race", label: "Créer une course" }] : []),
+    ...(isOrganizer ? [{ to: "/organizer/new-event", label: "Créer une épreuve" }] : []),
   ];
 
   return (
