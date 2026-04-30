@@ -287,11 +287,11 @@ export default function RaceAdmin() {
 
     setManualImporting(true);
     try {
-      const content = await gmcapFile.text();
+      const content = await readTextFile(gmcapFile);
       const { data, error } = await supabase.functions.invoke("import-gmcap-rfid", { body: { race_id: raceId, content, file_name: gmcapFile.name } });
       const payload = data as ManualImportResponse;
       if (error) throw new Error(error.message);
-      if (payload?.warning === "RFID_IMPORT_PENDING" || payload?.warning === "RFID_SCHEMA_MISSING") {
+      if (payload?.warning === "GMCAP_SCHEMA_MISSING" || payload?.warning === "RFID_IMPORT_PENDING" || payload?.warning === "RFID_SCHEMA_MISSING") {
         await saveLocalPendingImport(raceId, gmcapFile.name, content);
         setLocalPendingFile(gmcapFile.name);
         await syncGmcap();
@@ -331,7 +331,7 @@ export default function RaceAdmin() {
       const { data, error } = await supabase.functions.invoke("import-gmcap-rfid", { body: { race_id: raceId, content: pending.content, file_name: pending.fileName } });
       const payload = data as ManualImportResponse;
       if (error) throw new Error(error.message);
-      if (payload?.warning === "RFID_IMPORT_PENDING" || payload?.warning === "RFID_SCHEMA_MISSING") return;
+      if (payload?.warning === "GMCAP_SCHEMA_MISSING" || payload?.warning === "RFID_IMPORT_PENDING" || payload?.warning === "RFID_SCHEMA_MISSING") return;
       if (payload?.error) throw new Error(payload.error);
       await clearLocalPendingImport(raceId);
       setLocalPendingFile(null);

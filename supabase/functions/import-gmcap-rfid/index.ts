@@ -26,6 +26,8 @@ const normKey = (s: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
 
+const normLoose = (s: string) => normKey(s).replace(/[aeiouy]/g, "");
+
 function pick(row: ParsedRow, ...candidates: string[]): string {
   const map = row.__norm;
   if (!map) return "";
@@ -33,12 +35,19 @@ function pick(row: ParsedRow, ...candidates: string[]): string {
     const v = map.get(normKey(c));
     if (v != null && v !== "") return v;
   }
+  const looseCandidates = new Set(candidates.map(normLoose));
+  for (const [key, value] of map.entries()) {
+    if (value !== "" && looseCandidates.has(normLoose(key))) return value;
+  }
   return "";
 }
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
+
+const isMissingGmcapSchema = (message: string) =>
+  /gmcap_results|schema cache|does not exist|Could not find the table/i.test(message);
 
 async function markImportSuccess(admin: ReturnType<typeof createClient>, raceId: string, fileName: string | null, imported: number, matched: number) {
   const now = new Date().toISOString();
@@ -59,12 +68,22 @@ async function markImportSuccess(admin: ReturnType<typeof createClient>, raceId:
   }, { onConflict: "race_id" });
 }
 
-function parseTsv(content: string): ParsedRow[] {
+function detectDelimiter(line: string) {
+  const delimiters = ["\t", ";", ","];
+  return delimiters
+    .map((delimiter) => ({ delimiter, count: line.split(delimiter).length }))
+    .sort((a, b) => b.count - a.count)[0]?.delimiter ?? "\t";
+}
+
+function parseDelimited(content: string): ParsedRow[] {
   const lines = content.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length < 2) return [];
-  const headers = lines[0].split("\t").map(clean);
-  return lines.slice(1).map((line) => {
-    const cells = line.split("\t");
+  const headerIndex = lines.findIndex((line) => /num|dossard|bib|classement|temps/i.test(normKey(line)));
+  const firstDataLine = headerIndex >= 0 ? headerIndex : 0;
+  const delimiter = detectDelimiter(lines[firstDataLine]);
+  const headers = lines[firstDataLine].split(delimiter).map(clean);
+  return lines.slice(firstDataLine + 1).map((line) => {
+    const cells = line.split(delimiter);
     const row: ParsedRow = Object.fromEntries(headers.map((header, index) => [header, clean(cells[index])])) as ParsedRow;
     const norm = new Map<string, string>();
     headers.forEach((h, i) => norm.set(normKey(h), clean(cells[i])));
@@ -119,7 +138,7 @@ Deno.serve(async (req) => {
       return json({ error: "Import réservé aux organisateurs de cette course" }, 403);
     }
 
-    const rows = parseTsv(content);
+    const rows = parseDelimited(content);
     if (rows.length === 0) {
       return json({ error: "Aucune ligne exploitable dans l'export GMCAP" }, 400);
     }
@@ -134,7 +153,7 @@ Deno.serve(async (req) => {
     let matched = 0;
 
     for (const row of rows) {
-      const bib = pick(row, "Numéro", "Numero", "Dossard", "N°", "Bib");
+      const bib = pick(row, "Numéro", "Numero", "Numro", "No", "N°", "Dossard", "Doss.", "Doss", "Bib", "Bib Number");
       if (!bib) continue;
 
       const registrationId = byBib.get(bib) ?? null;
@@ -176,6 +195,16 @@ Deno.serve(async (req) => {
       .upsert(results, { onConflict: "race_id,bib_number" });
 
     if (upsertError) {
+      if (isMissingGmcapSchema(upsertError.message)) {
+        return json({
+          ok: false,
+          warning: "GMCAP_SCHEMA_MISSING",
+          imported: 0,
+          matched: 0,
+          unmatched: results.length,
+          error: "Import GMCAP en attente : la table des résultats est en cours de préparation.",
+        });
+      }
       return json({ error: upsertError.message }, 500);
     }
 
