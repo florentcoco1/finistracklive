@@ -170,11 +170,27 @@ export default function NewRace() {
       <h1 className="font-display text-3xl md:text-4xl font-bold mb-2">Créer une course</h1>
       <p className="text-muted-foreground mb-8">Charge le tracé GPX et publie ton événement</p>
 
+      {events.length === 0 ? (
+        <Card className="glass-card p-6">
+          <p className="mb-4">Tu dois d'abord créer une <strong>épreuve</strong> avant d'y rattacher des courses.</p>
+          <Button asChild variant="hero"><Link to="/organizer/new-event">Créer une épreuve</Link></Button>
+        </Card>
+      ) : (
       <Card className="glass-card p-6">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
+            <Label htmlFor="event_id">Épreuve de rattachement *</Label>
+            <select id="event_id" value={eventId} onChange={(e) => setEventId(e.target.value)} required className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+              <option value="">— Choisir une épreuve —</option>
+              {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              <Link to="/organizer/new-event" className="underline">+ Créer une nouvelle épreuve</Link>
+            </p>
+          </div>
+          <div>
             <Label htmlFor="name">Nom de la course</Label>
-            <Input id="name" name="name" required placeholder="Trail des collines 2026" maxLength={120} />
+            <Input id="name" name="name" required placeholder="Trail des collines 2026 — 25 km" maxLength={120} />
           </div>
           <div>
             <Label htmlFor="start_time">Date & heure de départ</Label>
