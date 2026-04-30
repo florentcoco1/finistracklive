@@ -164,11 +164,35 @@ Deno.serve(async (req) => {
       const started = pick(row, "Pris Départ", "Pris Depart").toUpperCase() === "O";
       const status = disqualified ? "disqualified" : abandoned ? "dnf" : started ? "classified" : "not_started";
 
+      // Date de naissance : accepte JJ/MM/AAAA, AAAA-MM-JJ ou année seule
+      const rawBirth = pick(row, "Date de Naissance", "Date Naissance", "Naissance", "Né(e) le", "Ne le", "Date de naissance");
+      let birthDate: string | null = null;
+      if (rawBirth) {
+        const m = rawBirth.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+        if (m) {
+          const [, d, mo, y] = m;
+          const year = y.length === 2 ? (Number(y) > 30 ? `19${y}` : `20${y}`) : y;
+          birthDate = `${year.padStart(4, "0")}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(rawBirth)) {
+          birthDate = rawBirth;
+        } else if (/^\d{4}$/.test(rawBirth)) {
+          birthDate = `${rawBirth}-01-01`;
+        }
+      }
+
+      // Sexe : normalisé en "M" / "F"
+      const rawGender = pick(row, "Sexe", "Genre", "Sex", "Gender", "S").toUpperCase().trim();
+      let gender: string | null = null;
+      if (rawGender.startsWith("M") || rawGender === "H") gender = "M";
+      else if (rawGender.startsWith("F") || rawGender === "W") gender = "F";
+
       results.push({
         race_id,
         bib_number: bib,
         first_name: pick(row, "Prénom", "Prenom") || null,
         last_name: pick(row, "Nom") || null,
+        birth_date: birthDate,
+        gender,
         category: pick(row, "Abbrev. Catégorie", "Abbrev. Categorie", "Catégorie", "Categorie") || null,
         club: pick(row, "Club") || null,
         status,
