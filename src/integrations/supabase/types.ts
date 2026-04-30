@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      gmcap_import_sources: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          file_name: string | null
+          id: string
+          last_import_at: string | null
+          last_import_message: string | null
+          last_import_status: string | null
+          pending_content: string | null
+          pending_import_at: string | null
+          race_id: string
+          schema_checked_at: string | null
+          source_type: string
+          source_url: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          file_name?: string | null
+          id?: string
+          last_import_at?: string | null
+          last_import_message?: string | null
+          last_import_status?: string | null
+          pending_content?: string | null
+          pending_import_at?: string | null
+          race_id: string
+          schema_checked_at?: string | null
+          source_type?: string
+          source_url?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          file_name?: string | null
+          id?: string
+          last_import_at?: string | null
+          last_import_message?: string | null
+          last_import_status?: string | null
+          pending_content?: string | null
+          pending_import_at?: string | null
+          race_id?: string
+          schema_checked_at?: string | null
+          source_type?: string
+          source_url?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmcap_import_sources_race_id_fkey"
+            columns: ["race_id"]
+            isOneToOne: true
+            referencedRelation: "races"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           birth_date: string | null
