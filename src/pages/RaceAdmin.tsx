@@ -308,6 +308,16 @@ export default function RaceAdmin() {
       await clearLocalPendingImport(raceId);
       setLocalPendingFile(null);
       setGmcapFile(null);
+      if (markFinishedOnImport) {
+        const { error: statusError } = await supabase.from("races").update({ status: "finished" }).eq("id", raceId);
+        if (statusError) {
+          toast.error(`Course non marquée terminée : ${statusError.message}`);
+        } else {
+          setRace((prev) => (prev ? { ...prev, status: "finished" } : prev));
+          toast.success("Course marquée comme terminée 🏁");
+        }
+        setMarkFinishedOnImport(false);
+      }
     } catch (error) {
       const message = (error as Error).message || "Import GMCAP impossible";
       toast.error(message.includes("RFID_SCHEMA_MISSING") ? "Import enregistré en attente : relance automatique dès que le schéma RFID sera prêt." : message);
