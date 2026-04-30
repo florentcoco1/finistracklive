@@ -30,6 +30,12 @@ const BodySchema = z.discriminatedUnion("action", [
     category: z.string().trim().max(80).nullable(),
     emergency_phone: z.string().trim().max(40).nullable(),
   }),
+  z.object({
+    action: z.literal("bulk_import_registrations"),
+    race_id: uuid,
+    file_name: z.string().trim().max(180).optional(),
+    content: z.string().min(1).max(8 * 1024 * 1024),
+  }),
   z.object({ action: z.literal("add_organizer"), race_id: uuid, email: z.string().trim().email().max(255) }),
   z.object({ action: z.literal("remove_organizer"), race_id: uuid, organizer_id: uuid }),
 ]);
@@ -40,6 +46,78 @@ type OrganizerRow = { id: string; user_id: string; role: string; created_at: str
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
+function normalizeHeader(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9#]+/g, "");
+}
+
+function splitDelimitedLine(line: string, delimiter: string) {
+  const cells: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      if (quoted && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (char === delimiter && !quoted) {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function getCell(row: Record<string, string>, names: string[]) {
+  for (const name of names) {
+    const value = row[normalizeHeader(name)];
+    if (value?.trim()) return value.trim();
+  }
+  return "";
+}
+
+function parseBirthDate(value: string) {
+  const clean = value.trim();
+  if (!clean) return null;
+  const fr = clean.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (fr) return `${fr[3]}-${fr[2].padStart(2, "0")}-${fr[1].padStart(2, "0")}`;
+  const iso = clean.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
+  return null;
+}
+
+function randomPassword() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(36).padStart(2, "0")).join("") + "Aa1!";
+}
+
+function parseRunnerImport(content: string) {
+  const lines = content.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) throw new Error("Le fichier doit contenir une ligne d’en-tête et au moins un coureur");
+  const delimiter = (lines[0].match(/\t/g)?.length ?? 0) >= (lines[0].match(/;/g)?.length ?? 0) ? "\t" : ";";
+  const headers = splitDelimitedLine(lines[0], delimiter).map(normalizeHeader);
+  return lines.slice(1).map((line) => {
+    const cells = splitDelimitedLine(line, delimiter);
+    const row = Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? ""]));
+    return {
+      email: getCell(row, ["EMail", "Email", "E-mail", "Mail"]).toLowerCase(),
+      bib_number: getCell(row, ["Numéro", "Numero", "Dossard", "N°", "No"]),
+      first_name: getCell(row, ["Prénom", "Prenom", "First name"]),
+      last_name: getCell(row, ["Nom", "Last name"]),
+      phone: getCell(row, ["Tel", "Téléphone", "Telephone", "Phone"]),
+      category: getCell(row, ["Abbrev. Catégorie", "Abbrev Categorie", "Nom Catégorie", "Nom Categorie", "Catégorie", "Categorie"]),
+      birth_date: parseBirthDate(getCell(row, ["DateNaissance", "Date naissance", "Naissance"])),
+    };
+  });
 }
 
 async function requireRaceAdmin(admin: ReturnType<typeof createClient>, userId: string, raceId: string) {
