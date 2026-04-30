@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
       return json({ error: "Import réservé aux organisateurs de cette course" }, 403);
     }
 
-    const rows = parseTsv(content);
+    const rows = parseDelimited(content);
     if (rows.length === 0) {
       return json({ error: "Aucune ligne exploitable dans l'export GMCAP" }, 400);
     }
@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
     let matched = 0;
 
     for (const row of rows) {
-      const bib = pick(row, "Numéro", "Numero", "Dossard", "N°", "Bib");
+      const bib = pick(row, "Numéro", "Numero", "Numro", "No", "N°", "Dossard", "Doss.", "Doss", "Bib", "Bib Number");
       if (!bib) continue;
 
       const registrationId = byBib.get(bib) ?? null;
