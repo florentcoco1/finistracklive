@@ -26,12 +26,18 @@ const normKey = (s: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
 
+const normLoose = (s: string) => normKey(s).replace(/[aeiouy]/g, "");
+
 function pick(row: ParsedRow, ...candidates: string[]): string {
   const map = row.__norm;
   if (!map) return "";
   for (const c of candidates) {
     const v = map.get(normKey(c));
     if (v != null && v !== "") return v;
+  }
+  const looseCandidates = new Set(candidates.map(normLoose));
+  for (const [key, value] of map.entries()) {
+    if (value !== "" && looseCandidates.has(normLoose(key))) return value;
   }
   return "";
 }
@@ -59,12 +65,22 @@ async function markImportSuccess(admin: ReturnType<typeof createClient>, raceId:
   }, { onConflict: "race_id" });
 }
 
-function parseTsv(content: string): ParsedRow[] {
+function detectDelimiter(line: string) {
+  const delimiters = ["\t", ";", ","];
+  return delimiters
+    .map((delimiter) => ({ delimiter, count: line.split(delimiter).length }))
+    .sort((a, b) => b.count - a.count)[0]?.delimiter ?? "\t";
+}
+
+function parseDelimited(content: string): ParsedRow[] {
   const lines = content.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length < 2) return [];
-  const headers = lines[0].split("\t").map(clean);
-  return lines.slice(1).map((line) => {
-    const cells = line.split("\t");
+  const headerIndex = lines.findIndex((line) => /num|dossard|bib|classement|temps/i.test(normKey(line)));
+  const firstDataLine = headerIndex >= 0 ? headerIndex : 0;
+  const delimiter = detectDelimiter(lines[firstDataLine]);
+  const headers = lines[firstDataLine].split(delimiter).map(clean);
+  return lines.slice(firstDataLine + 1).map((line) => {
+    const cells = line.split(delimiter);
     const row: ParsedRow = Object.fromEntries(headers.map((header, index) => [header, clean(cells[index])])) as ParsedRow;
     const norm = new Map<string, string>();
     headers.forEach((h, i) => norm.set(normKey(h), clean(cells[i])));
