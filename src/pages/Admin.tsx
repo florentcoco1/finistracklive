@@ -89,13 +89,10 @@ export default function AdminPage() {
   const deleteEvent = async (id: string) => {
     if (!confirm("Supprimer définitivement cette épreuve ?")) return;
     setBusy(true);
-    const { error } = await fromAny("events").select(`id`).then(async () => {
-      return await (supabase.from as unknown as (t: string) => { delete: () => { eq: (c: string, v: string) => Promise<{ error: unknown }> } })("events")
-        .delete()
-        .eq("id", id);
-    });
+    const del = (supabase.from as unknown as (t: string) => { delete: () => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } })("events").delete().eq("id", id);
+    const { error } = await del;
     setBusy(false);
-    if (error) toast({ title: "Erreur", description: String((error as Error).message ?? error), variant: "destructive" });
+    if (error) toast({ title: "Erreur", description: error.message, variant: "destructive" });
     else { toast({ title: "Épreuve supprimée" }); void refresh(); }
   };
 
@@ -118,7 +115,7 @@ export default function AdminPage() {
     else { toast({ title: "Inscription supprimée" }); void refresh(); }
   };
 
-  const updateRegistration = async (id: string, patch: Partial<AdminRegistration>) => {
+  const updateRegistration = async (id: string, patch: { bib_number?: string; category?: string | null }) => {
     setBusy(true);
     const { error } = await supabase.from("race_registrations").update(patch).eq("id", id);
     setBusy(false);
@@ -236,7 +233,7 @@ function RegistrationRow({
 }: {
   reg: AdminRegistration;
   busy: boolean;
-  onSave: (id: string, patch: Partial<AdminRegistration>) => void | Promise<void>;
+  onSave: (id: string, patch: { bib_number?: string; category?: string | null }) => void | Promise<void>;
   onDelete: (id: string) => void | Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
