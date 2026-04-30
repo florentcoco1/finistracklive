@@ -49,6 +49,7 @@ export default function RaceDetail() {
   const [race, setRace] = useState<Race | null>(null);
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
   const [genderFilter, setGenderFilter] = useState<"all" | "M" | "F">("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [focused, setFocused] = useState<string | null>(null);
   const [myRegistration, setMyRegistration] = useState<{ id: string; bib_number: string } | null>(null);
   const [signupOpen, setSignupOpen] = useState(false);
@@ -344,9 +345,14 @@ export default function RaceDetail() {
   }, [rows]);
 
   const filtered = useMemo(() => {
-    if (genderFilter === "all") return sorted;
-    return sorted.filter((r) => r.gender === genderFilter);
-  }, [sorted, genderFilter]);
+    const q = searchQuery.trim().toLowerCase();
+    return sorted.filter((r) => {
+      if (genderFilter !== "all" && r.gender !== genderFilter) return false;
+      if (!q) return true;
+      const haystack = `${r.first_name ?? ""} ${r.last_name ?? ""} ${r.bib_number ?? ""}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [sorted, genderFilter, searchQuery]);
 
   const handleGmcapImport = async (file: File | null) => {
     if (!file || !raceId) return;
@@ -635,12 +641,19 @@ export default function RaceDetail() {
               <Timer className="h-3 w-3" /> Classement GMCAP
             </span>
           </div>
-          <div className="flex items-center gap-1 mb-3">
+          <div className="flex items-center gap-1 mb-2">
             <Button size="sm" variant={genderFilter === "all" ? "hero" : "glass"} onClick={() => setGenderFilter("all")}>Tous</Button>
             <Button size="sm" variant={genderFilter === "M" ? "hero" : "glass"} onClick={() => setGenderFilter("M")}>Hommes</Button>
             <Button size="sm" variant={genderFilter === "F" ? "hero" : "glass"} onClick={() => setGenderFilter("F")}>Femmes</Button>
             <span className="ml-auto text-xs text-muted-foreground">{filtered.length} coureur{filtered.length > 1 ? "s" : ""}</span>
           </div>
+          <Input
+            type="search"
+            placeholder="Rechercher par nom ou dossard…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value.slice(0, 60))}
+            className="mb-3"
+          />
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">Aucun coureur {genderFilter === "M" ? "homme" : genderFilter === "F" ? "femme" : "inscrit"} pour le moment.</p>
           ) : (
