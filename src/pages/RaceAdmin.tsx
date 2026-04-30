@@ -154,6 +154,7 @@ export default function RaceAdmin() {
   const [syncing, setSyncing] = useState(false);
   const [manualImporting, setManualImporting] = useState(false);
   const [gmcapFile, setGmcapFile] = useState<File | null>(null);
+  const [markFinishedOnImport, setMarkFinishedOnImport] = useState(false);
   const [runnerImportFile, setRunnerImportFile] = useState<File | null>(null);
   const [runnerImporting, setRunnerImporting] = useState(false);
   const [localPendingFile, setLocalPendingFile] = useState<string | null>(null);
