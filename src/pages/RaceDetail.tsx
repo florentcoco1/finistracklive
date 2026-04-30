@@ -129,7 +129,7 @@ export default function RaceDetail() {
         supabase.from("live_leaderboard").select("*").eq("race_id", raceId),
         supabase
           .from("gmcap_results" as any)
-          .select("bib_number, first_name, last_name, category, status, official_time, official_seconds, rounded_time, rounded_seconds, overall_rank, category_rank, gender_rank, imported_at")
+          .select("bib_number, first_name, last_name, category, status, official_time_text, official_time_seconds, scratch_rank, category_rank, gender_rank, imported_at")
           .eq("race_id", raceId),
       ]);
       if (lbError) console.warn("[leaderboard] reload error", lbError);
@@ -142,11 +142,9 @@ export default function RaceDetail() {
         last_name: string | null;
         category: string | null;
         status: string | null;
-        official_time: string | null;
-        official_seconds: number | null;
-        rounded_time: string | null;
-        rounded_seconds: number | null;
-        overall_rank: number | null;
+        official_time_text: string | null;
+        official_time_seconds: number | null;
+        scratch_rank: number | null;
         category_rank: number | null;
         gender_rank: number | null;
         imported_at: string | null;
@@ -189,11 +187,11 @@ export default function RaceDetail() {
             rolling_speed_kmh: base?.rolling_speed_kmh ?? null,
             rolling_pace_sec_per_km: base?.rolling_pace_sec_per_km ?? null,
             last_position_at: base?.last_position_at ?? null,
-            official_time: r.official_time,
-            official_seconds: r.official_seconds,
-            rounded_time: r.rounded_time,
-            rounded_seconds: r.rounded_seconds,
-            overall_rank: r.overall_rank,
+            official_time: r.official_time_text,
+            official_seconds: r.official_time_seconds,
+            rounded_time: null,
+            rounded_seconds: null,
+            overall_rank: r.scratch_rank,
             category_rank: r.category_rank,
             gender_rank: r.gender_rank,
             gmcap_status: r.status,
