@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type ParsedRow = Record<string, string>;
+type ParsedRow = Record<string, string> & { __norm?: Map<string, string> };
 
 const clean = (value: unknown) => String(value ?? "").trim();
 const decimal = (value: unknown) => {
@@ -17,6 +17,24 @@ const integer = (value: unknown) => {
   const n = Number.parseInt(clean(value), 10);
   return Number.isFinite(n) ? n : null;
 };
+
+// Normalize header keys: lowercase, strip diacritics + replacement char, collapse non-alphanumerics.
+// Resilient to encoding issues (é vs e vs �) and punctuation variants.
+const normKey = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\uFFFD/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+
+function pick(row: ParsedRow, ...candidates: string[]): string {
+  const map = row.__norm;
+  if (!map) return "";
+  for (const c of candidates) {
+    const v = map.get(normKey(c));
+    if (v != null && v !== "") return v;
+  }
+  return "";
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
