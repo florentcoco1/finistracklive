@@ -46,18 +46,6 @@ function extractSplits(row: ParsedRow) {
   return splits;
 }
 
-function isMissingSchemaError(message: string) {
-  return message.includes("schema cache") || message.includes("rfid_timing_results") || message.includes("gmcap_import_sources") || message.includes("rfid_identifier");
-}
-
-async function rfidSchemaAvailable(admin: ReturnType<typeof createClient>) {
-  const [{ error: resultsError }, { error: registrationsError }] = await Promise.all([
-    admin.from("rfid_timing_results").select("id", { count: "exact", head: true }).limit(1),
-    admin.from("race_registrations").select("rfid_identifier", { count: "exact", head: true }).limit(1),
-  ]);
-  return ![resultsError, registrationsError].some((error) => error && isMissingSchemaError(error.message));
-}
-
 async function importContent(admin: ReturnType<typeof createClient>, raceId: string, content: string) {
   const rows = parseTsv(content);
   if (rows.length === 0) throw new Error("Aucune ligne exploitable dans l'export GMCAP");
@@ -68,25 +56,15 @@ async function importContent(admin: ReturnType<typeof createClient>, raceId: str
     .eq("race_id", raceId);
 
   const byBib = new Map(((registrations ?? []) as Registration[]).map((reg) => [clean(reg.bib_number), reg.id]));
-  const updates = [];
-  const results = [];
+  const results: any[] = [];
   let matched = 0;
 
   for (const row of rows) {
     const bib = clean(row["Numéro"] || row["Numero"]);
-    const rfid = clean(row.ID || row["Id"] || row["Identifiant"] || bib);
-    if (!rfid) continue;
+    if (!bib) continue;
 
     const registrationId = byBib.get(bib) ?? null;
-    if (registrationId) {
-      matched += 1;
-      updates.push(
-        admin
-          .from("race_registrations")
-          .update({ rfid_identifier: rfid, rfid_matched_at: new Date().toISOString(), rfid_source: "GMCAP" })
-          .eq("id", registrationId),
-      );
-    }
+    if (registrationId) matched += 1;
 
     const abandoned = clean(row["Abandon"]).toUpperCase() === "O";
     const disqualified = clean(row["Disqualifié"] || row["Disqualifie"]).toUpperCase() === "O";
@@ -95,8 +73,7 @@ async function importContent(admin: ReturnType<typeof createClient>, raceId: str
     results.push({
       race_id: raceId,
       registration_id: registrationId,
-      rfid_identifier: rfid,
-      bib_number: bib || null,
+      bib_number: bib,
       first_name: clean(row["Prénom"] || row["Prenom"]) || null,
       last_name: clean(row.Nom) || null,
       category: clean(row["Abbrev. Catégorie"] || row["Abbrev. Categorie"] || row["Catégorie"] || row["Categorie"]) || null,
@@ -115,10 +92,11 @@ async function importContent(admin: ReturnType<typeof createClient>, raceId: str
     });
   }
 
-  await Promise.all(updates);
+  if (results.length === 0) throw new Error("Aucun dossard exploitable dans l'export GMCAP");
+
   const { error } = await admin
-    .from("rfid_timing_results")
-    .upsert(results, { onConflict: "race_id,rfid_identifier" });
+    .from("gmcap_results")
+    .upsert(results, { onConflict: "race_id,bib_number" });
   if (error) throw new Error(error.message);
 
   return { imported: results.length, matched, unmatched: results.length - matched };
@@ -182,38 +160,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    const schemaReady = await rfidSchemaAvailable(admin);
-    if (!schemaReady) {
-      const now = new Date().toISOString();
-      const pendingQuery = admin.from("gmcap_import_sources").update({
-        schema_checked_at: now,
-        last_import_at: now,
-        last_import_status: "pending_schema",
-        last_import_message: "Import en attente : schéma RFID non disponible, nouvelle vérification automatique prévue.",
-        updated_at: now,
-      }).eq("last_import_status", "pending_schema");
-      const { error: pendingError } = raceId ? await pendingQuery.eq("race_id", raceId) : await pendingQuery;
-      if (pendingError && !isMissingSchemaError(pendingError.message)) throw new Error(pendingError.message);
-      return new Response(JSON.stringify({ ok: true, schema_ready: false, checked: 0, synced: [], message: "Import en attente, schéma RFID non disponible." }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const query = admin.from("gmcap_import_sources").select("id, race_id, source_url, source_type, pending_content, enabled, last_import_at, last_import_status").eq("enabled", true);
     const { data: sources, error } = raceId ? await query.eq("race_id", raceId) : await query;
-    if (error) {
-      if (isMissingSchemaError(error.message)) {
-        return new Response(JSON.stringify({ ok: true, schema_ready: false, checked: 0, synced: [], message: "Import en attente, table de suivi GMCAP non disponible." }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
 
     const due = (sources ?? []).filter((source: Source) => {
-      if ((source as Source & { last_import_status?: string | null }).last_import_status === "pending_schema") return true;
       if (raceId) return true;
       return !source.last_import_at || Date.now() - new Date(source.last_import_at).getTime() >= 55_000;
     });
@@ -233,7 +184,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, checked: sources?.length ?? 0, synced }), {
+    return new Response(JSON.stringify({ ok: true, schema_ready: true, checked: sources?.length ?? 0, synced }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
