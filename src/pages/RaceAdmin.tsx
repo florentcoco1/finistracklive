@@ -131,6 +131,15 @@ async function clearLocalPendingImport(raceId: string) {
   });
 }
 
+async function readTextFile(file: File) {
+  const buffer = await file.arrayBuffer();
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch {
+    return new TextDecoder("windows-1252").decode(buffer);
+  }
+}
+
 export default function RaceAdmin() {
   const { id: raceId } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -400,7 +409,7 @@ export default function RaceAdmin() {
     }
     setRunnerImporting(true);
     try {
-      const content = await runnerImportFile.text();
+      const content = await readTextFile(runnerImportFile);
       const data = await invokeAdmin({ action: "bulk_import_registrations", race_id: raceId, file_name: runnerImportFile.name, content });
       applyAdminData(data);
       const summary = data as AdminResponse & { created?: number; updated?: number; registered?: number; skipped?: number; errors?: string[] };
