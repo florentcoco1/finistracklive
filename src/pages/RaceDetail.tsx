@@ -343,6 +343,11 @@ export default function RaceDetail() {
     });
   }, [rows]);
 
+  const filtered = useMemo(() => {
+    if (genderFilter === "all") return sorted;
+    return sorted.filter((r) => r.gender === genderFilter);
+  }, [sorted, genderFilter]);
+
   const handleGmcapImport = async (file: File | null) => {
     if (!file || !raceId) return;
     setImportingRfid(true);
