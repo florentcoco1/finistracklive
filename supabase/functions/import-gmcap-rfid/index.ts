@@ -46,6 +46,9 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
 
+const isMissingGmcapSchema = (message: string) =>
+  /gmcap_results|schema cache|does not exist|Could not find the table/i.test(message);
+
 async function markImportSuccess(admin: ReturnType<typeof createClient>, raceId: string, fileName: string | null, imported: number, matched: number) {
   const now = new Date().toISOString();
   const safeName = clean(fileName) || `gmcap-import-${now}.txt`;
@@ -192,6 +195,16 @@ Deno.serve(async (req) => {
       .upsert(results, { onConflict: "race_id,bib_number" });
 
     if (upsertError) {
+      if (isMissingGmcapSchema(upsertError.message)) {
+        return json({
+          ok: false,
+          warning: "GMCAP_SCHEMA_MISSING",
+          imported: 0,
+          matched: 0,
+          unmatched: results.length,
+          error: "Import GMCAP en attente : la table des résultats est en cours de préparation.",
+        });
+      }
       return json({ error: upsertError.message }, 500);
     }
 
