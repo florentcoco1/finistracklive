@@ -48,6 +48,7 @@ export default function RaceDetail() {
   const { user } = useAuth();
   const [race, setRace] = useState<Race | null>(null);
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
+  const [genderFilter, setGenderFilter] = useState<"all" | "M" | "F">("all");
   const [focused, setFocused] = useState<string | null>(null);
   const [myRegistration, setMyRegistration] = useState<{ id: string; bib_number: string } | null>(null);
   const [signupOpen, setSignupOpen] = useState(false);
