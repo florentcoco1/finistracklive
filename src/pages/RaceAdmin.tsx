@@ -47,9 +47,6 @@ interface RegistrationRow {
   category: string | null;
   emergency_phone: string | null;
   runner_status: string;
-  rfid_identifier: string | null;
-  rfid_matched_at: string | null;
-  rfid_source: string | null;
   created_at: string;
   profile: AdminProfile | null;
 }
@@ -214,8 +211,7 @@ export default function RaceAdmin() {
   }, [raceId, user, loading, navigate, load]);
 
   const stats = useMemo(() => {
-    const linked = registrations.filter((r) => r.rfid_identifier).length;
-    return { total: registrations.length, linked, organizers: organizers.length };
+    return { total: registrations.length, organizers: organizers.length };
   }, [registrations, organizers]);
 
   const saveGmcap = async () => {
@@ -244,7 +240,7 @@ export default function RaceAdmin() {
       if (error || payload?.error) throw new Error(error?.message ?? payload.error);
       await load();
       const result = payload.synced?.[0];
-      if (payload.schema_ready === false) toast.warning(payload.message ?? "Import en attente, vérification RFID relancée automatiquement.");
+      if (payload.schema_ready === false) toast.warning(payload.message ?? "Import en attente, vérification GMCAP relancée automatiquement.");
       else if (result?.error) toast.error(result.error);
       else toast.success(`GMCAP synchronisé : ${result?.matched ?? 0} correspondance(s)`);
     } catch (error) {
@@ -299,7 +295,7 @@ export default function RaceAdmin() {
         await saveLocalPendingImport(raceId, gmcapFile.name, content);
         setLocalPendingFile(gmcapFile.name);
         await syncGmcap();
-        toast.warning("Import GMCAP enregistré en attente : FinisTrackLive le relancera automatiquement dès que le schéma RFID sera prêt.");
+        toast.warning("Import GMCAP enregistré en attente : FinisTrackLive le relancera automatiquement dès que le service sera prêt.");
         return;
       }
       if (payload?.error) throw new Error(payload.error);
@@ -320,7 +316,7 @@ export default function RaceAdmin() {
       }
     } catch (error) {
       const message = (error as Error).message || "Import GMCAP impossible";
-      toast.error(message.includes("RFID_SCHEMA_MISSING") ? "Import enregistré en attente : relance automatique dès que le schéma RFID sera prêt." : message);
+      toast.error(message.includes("GMCAP_SCHEMA_MISSING") ? "Import enregistré en attente : relance automatique dès que le service GMCAP sera prêt." : message);
     } finally {
       setManualImporting(false);
     }
@@ -359,7 +355,6 @@ export default function RaceAdmin() {
         bib_number: registration.bib_number,
         category: registration.category || null,
         emergency_phone: registration.emergency_phone || null,
-        rfid_identifier: registration.rfid_identifier || null,
       });
       applyAdminData(data);
       toast.success("Inscription mise à jour");
@@ -488,9 +483,8 @@ export default function RaceAdmin() {
             {format(new Date(race.start_time), "EEEE d MMMM yyyy, HH:mm", { locale: fr })}
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="grid grid-cols-2 gap-2 text-center">
           <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-muted-foreground">coureurs</p></Card>
-          <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.linked}</p><p className="text-xs text-muted-foreground">RFID liés</p></Card>
           <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.organizers}</p><p className="text-xs text-muted-foreground">organisateurs</p></Card>
         </div>
       </div>
@@ -506,7 +500,7 @@ export default function RaceAdmin() {
           <Card className="glass-card p-5 space-y-5">
             <div>
               <h2 className="font-display text-xl font-semibold">Lien avec le fichier GMCAP</h2>
-              <p className="text-sm text-muted-foreground mt-1">Le classement RFID reste la référence principale, synchronisé toutes les minutes lorsque la source est active.</p>
+              <p className="text-sm text-muted-foreground mt-1">Le classement officiel vient du fichier GMCAP, synchronisé toutes les minutes lorsque la source est active.</p>
             </div>
             <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
               <div className="space-y-2">
@@ -526,12 +520,12 @@ export default function RaceAdmin() {
                 {localPendingFile ? `Fichier gardé sur ce PC : ${localPendingFile}` : source?.last_import_status === "pending_schema" && source.file_name ? `Fichier en attente : ${source.file_name}` : source?.last_import_at ? `Dernier import le ${format(new Date(source.last_import_at), "dd/MM/yyyy à HH:mm:ss", { locale: fr })}` : "Aucun import lancé"}
                 {source?.last_import_message ? ` · ${source.last_import_message}` : ""}
               </p>
-              <Button variant="glass" onClick={localPendingFile ? retryLocalPendingImport : syncGmcap} disabled={(!source && !localPendingFile) || syncing || manualImporting}><RefreshCw className="h-4 w-4 mr-2" /> {syncing || manualImporting ? "Vérif…" : source?.last_import_status === "pending_schema" || localPendingFile ? "Vérifier RFID" : "Sync maintenant"}</Button>
+              <Button variant="glass" onClick={localPendingFile ? retryLocalPendingImport : syncGmcap} disabled={(!source && !localPendingFile) || syncing || manualImporting}><RefreshCw className="h-4 w-4 mr-2" /> {syncing || manualImporting ? "Vérif…" : source?.last_import_status === "pending_schema" || localPendingFile ? "Vérifier maintenant" : "Sync maintenant"}</Button>
             </div>
             <div className="space-y-3 rounded-lg border border-border/50 bg-secondary/20 p-4">
               <div>
                 <h3 className="font-display text-lg font-semibold">Import manuel depuis le PC GMCAP</h3>
-                <p className="text-sm text-muted-foreground mt-1">Sélectionne l’export texte/TSV généré par GMCAP sur cet ordinateur. Si le schéma RFID n’est pas prêt, le fichier est gardé en attente puis importé automatiquement.</p>
+                <p className="text-sm text-muted-foreground mt-1">Sélectionne l'export texte/TSV généré par GMCAP sur cet ordinateur. Si le service est temporairement indisponible, le fichier est gardé en attente puis importé automatiquement.</p>
               </div>
               <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
                 <div className="space-y-2">
@@ -570,7 +564,7 @@ export default function RaceAdmin() {
           <Card className="glass-card p-5 space-y-5">
             <div>
               <h2 className="font-display text-xl font-semibold">Inscrits coureurs</h2>
-              <p className="text-sm text-muted-foreground mt-1">Associe les dossards, catégories et identifiants RFID utilisés par GMCAP.</p>
+              <p className="text-sm text-muted-foreground mt-1">Associe les dossards et catégories. Le classement officiel est rapproché automatiquement par numéro de dossard avec les résultats GMCAP.</p>
             </div>
             <div className="space-y-3 rounded-lg border border-border/50 bg-secondary/20 p-4">
               <div>
@@ -607,7 +601,6 @@ export default function RaceAdmin() {
                     <TableHead>Coureur</TableHead>
                     <TableHead>Dossard</TableHead>
                     <TableHead>Catégorie</TableHead>
-                    <TableHead>RFID GMCAP</TableHead>
                     <TableHead>Téléphone</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -621,7 +614,6 @@ export default function RaceAdmin() {
                       </TableCell>
                       <TableCell><Input value={registration.bib_number} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, bib_number: e.target.value } : r))} className="min-w-20" /></TableCell>
                       <TableCell><Input value={registration.category ?? ""} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, category: e.target.value } : r))} className="min-w-24" /></TableCell>
-                      <TableCell><Input value={registration.rfid_identifier ?? ""} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, rfid_identifier: e.target.value } : r))} placeholder="ID RFID" className="min-w-28" /></TableCell>
                       <TableCell><Input value={registration.emergency_phone ?? ""} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, emergency_phone: e.target.value } : r))} className="min-w-32" /></TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">

@@ -22,22 +22,7 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
 
-function isMissingSchemaError(message: string) {
-  return message.includes("schema cache") || message.includes("rfid_timing_results") || message.includes("gmcap_import_sources") || message.includes("rfid_identifier");
-}
-
-function missingSchemaResponse(parsedRows: number, matched: number) {
-  return json({
-    ok: false,
-    warning: "RFID_IMPORT_PENDING",
-    error: "Import enregistré en attente. FinisTrackLive le relancera automatiquement dès que le schéma RFID sera disponible.",
-    parsed: parsedRows,
-    matched,
-    imported: 0,
-  });
-}
-
-async function markImportSuccess(admin: ReturnType<typeof createClient>, raceId: string, content: string, fileName: string | null, imported: number, matched: number) {
+async function markImportSuccess(admin: ReturnType<typeof createClient>, raceId: string, fileName: string | null, imported: number, matched: number) {
   const now = new Date().toISOString();
   const safeName = clean(fileName) || `gmcap-import-${now}.txt`;
   await admin.from("gmcap_import_sources").upsert({
@@ -54,26 +39,6 @@ async function markImportSuccess(admin: ReturnType<typeof createClient>, raceId:
     last_import_message: `${matched} correspondance(s), ${imported - matched} non associée(s) depuis ${safeName}`,
     updated_at: now,
   }, { onConflict: "race_id" });
-}
-
-async function savePendingImport(admin: ReturnType<typeof createClient>, raceId: string, content: string, fileName: string | null, parsedRows: number, matched: number) {
-  const now = new Date().toISOString();
-  const safeName = clean(fileName) || `gmcap-import-${now}.txt`;
-  const { error } = await admin.from("gmcap_import_sources").upsert({
-    race_id: raceId,
-    source_url: `manual://${encodeURIComponent(safeName)}`,
-    source_type: "manual_file",
-    file_name: safeName,
-    pending_content: content,
-    pending_import_at: now,
-    schema_checked_at: now,
-    enabled: true,
-    last_import_at: now,
-    last_import_status: "pending_schema",
-    last_import_message: `Import en attente : ${parsedRows} ligne(s) lue(s), ${matched} correspondance(s) pré-détectée(s).`,
-    updated_at: now,
-  }, { onConflict: "race_id" });
-  if (error && !isMissingSchemaError(error.message)) throw new Error(error.message);
 }
 
 function parseTsv(content: string): ParsedRow[] {
@@ -134,7 +99,7 @@ Deno.serve(async (req) => {
 
     const rows = parseTsv(content);
     if (rows.length === 0) {
-      return new Response(JSON.stringify({ error: "Aucune ligne exploitable dans l'export GMCAP" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return json({ error: "Aucune ligne exploitable dans l'export GMCAP" }, 400);
     }
 
     const { data: registrations } = await admin
@@ -143,25 +108,15 @@ Deno.serve(async (req) => {
       .eq("race_id", race_id);
 
     const byBib = new Map((registrations ?? []).map((reg: any) => [clean(reg.bib_number), reg.id]));
-    const updates = [];
-    const results = [];
+    const results: any[] = [];
     let matched = 0;
 
     for (const row of rows) {
       const bib = clean(row["Numéro"] || row["Numero"]);
-      const rfid = clean(row.ID || row["Id"] || row["Identifiant"] || bib);
-      if (!rfid) continue;
+      if (!bib) continue;
 
       const registrationId = byBib.get(bib) ?? null;
-      if (registrationId) {
-        matched += 1;
-        updates.push(
-          admin
-            .from("race_registrations")
-            .update({ rfid_identifier: rfid, rfid_matched_at: new Date().toISOString(), rfid_source: "GMCAP" })
-            .eq("id", registrationId),
-        );
-      }
+      if (registrationId) matched += 1;
 
       const abandoned = clean(row["Abandon"]).toUpperCase() === "O";
       const disqualified = clean(row["Disqualifié"] || row["Disqualifie"]).toUpperCase() === "O";
@@ -171,8 +126,7 @@ Deno.serve(async (req) => {
       results.push({
         race_id,
         registration_id: registrationId,
-        rfid_identifier: rfid,
-        bib_number: bib || null,
+        bib_number: bib,
         first_name: clean(row["Prénom"] || row["Prenom"]) || null,
         last_name: clean(row["Nom"]) || null,
         category: clean(row["Abbrev. Catégorie"] || row["Abbrev. Categorie"] || row["Catégorie"] || row["Categorie"]) || null,
@@ -191,28 +145,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    const updateResults = await Promise.all(updates);
-    const missingRegistrationSchema = updateResults.find((result) => result.error && isMissingSchemaError(result.error.message));
-    if (missingRegistrationSchema?.error) {
-      await savePendingImport(admin, race_id, content, typeof file_name === "string" ? file_name : null, results.length, matched);
-      return missingSchemaResponse(results.length, matched);
+    if (results.length === 0) {
+      return json({ error: "Aucun dossard exploitable dans l'export GMCAP" }, 400);
     }
-    const updateError = updateResults.find((result) => result.error)?.error;
-    if (updateError) return json({ error: updateError.message }, 500);
 
     const { error: upsertError } = await admin
-      .from("rfid_timing_results")
-      .upsert(results, { onConflict: "race_id,rfid_identifier" });
+      .from("gmcap_results")
+      .upsert(results, { onConflict: "race_id,bib_number" });
 
     if (upsertError) {
-      if (isMissingSchemaError(upsertError.message)) {
-        await savePendingImport(admin, race_id, content, typeof file_name === "string" ? file_name : null, results.length, matched);
-        return missingSchemaResponse(results.length, matched);
-      }
       return json({ error: upsertError.message }, 500);
     }
 
-    await markImportSuccess(admin, race_id, content, typeof file_name === "string" ? file_name : null, results.length, matched);
+    await markImportSuccess(admin, race_id, typeof file_name === "string" ? file_name : null, results.length, matched);
     return json({ ok: true, imported: results.length, matched, unmatched: results.length - matched });
   } catch (error) {
     return json({ error: (error as Error).message ?? "Erreur import GMCAP" }, 500);

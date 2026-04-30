@@ -19,7 +19,6 @@ const BodySchema = z.discriminatedUnion("action", [
     bib_number: z.string().trim().min(1).max(40),
     category: z.string().trim().max(80).nullable(),
     emergency_phone: z.string().trim().max(40).nullable(),
-    rfid_identifier: z.string().trim().max(120).nullable(),
   }),
   z.object({ action: z.literal("delete_registration"), race_id: uuid, registration_id: uuid }),
   z.object({
@@ -41,7 +40,7 @@ const BodySchema = z.discriminatedUnion("action", [
 ]);
 
 type ProfileRow = { user_id: string; email: string | null; first_name: string | null; last_name: string | null; phone: string | null };
-type RegistrationRow = { id: string; runner_id: string; bib_number: string; category: string | null; emergency_phone: string | null; runner_status: string; rfid_identifier: string | null; rfid_matched_at: string | null; rfid_source: string | null; created_at: string };
+type RegistrationRow = { id: string; runner_id: string; bib_number: string; category: string | null; emergency_phone: string | null; runner_status: string; created_at: string };
 type OrganizerRow = { id: string; user_id: string; role: string; created_at: string | null };
 
 function json(body: unknown, status = 200) {
@@ -135,7 +134,7 @@ async function requireRaceAdmin(admin: ReturnType<typeof createClient>, userId: 
 async function loadRace(admin: ReturnType<typeof createClient>, raceId: string) {
   const [{ data: source }, { data: registrations }, { data: organizers }, { data: race }] = await Promise.all([
     admin.from("gmcap_import_sources").select("id, source_url, source_type, file_name, enabled, last_import_at, last_import_status, last_import_message").eq("race_id", raceId).maybeSingle(),
-    admin.from("race_registrations").select("id, runner_id, bib_number, category, emergency_phone, runner_status, rfid_identifier, rfid_matched_at, rfid_source, created_at").eq("race_id", raceId).order("bib_number"),
+    admin.from("race_registrations").select("id, runner_id, bib_number, category, emergency_phone, runner_status, created_at").eq("race_id", raceId).order("bib_number"),
     admin.from("race_organizers").select("id, user_id, role, created_at").eq("race_id", raceId).order("created_at"),
     admin.from("races").select("id, name, organizer_id").eq("id", raceId).single(),
   ]);
@@ -204,9 +203,6 @@ Deno.serve(async (req) => {
         bib_number: body.bib_number,
         category: body.category || null,
         emergency_phone: body.emergency_phone || null,
-        rfid_identifier: body.rfid_identifier || null,
-        rfid_source: body.rfid_identifier ? "GMCAP" : null,
-        rfid_matched_at: body.rfid_identifier ? new Date().toISOString() : null,
         updated_at: new Date().toISOString(),
       }).eq("id", body.registration_id).eq("race_id", body.race_id);
       if (error) throw new Error(error.message);
