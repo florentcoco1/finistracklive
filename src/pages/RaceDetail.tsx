@@ -241,8 +241,8 @@ export default function RaceDetail() {
       if (ar != null && br != null) return ar - br;
       if (ar != null) return -1;
       if (br != null) return 1;
-      const at = a.rfid_official_seconds;
-      const bt = b.rfid_official_seconds;
+      const at = a.rfid_rounded_seconds ?? a.rfid_official_seconds;
+      const bt = b.rfid_rounded_seconds ?? b.rfid_official_seconds;
       if (at != null && bt != null) return at - bt;
       if (at != null) return -1;
       if (bt != null) return 1;
