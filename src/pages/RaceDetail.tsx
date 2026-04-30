@@ -659,6 +659,7 @@ export default function RaceDetail() {
                     <div className="min-w-0 flex-1">
                       <p className={`text-sm truncate ${medal ? "font-bold" : "font-medium"}`}>
                         {r.first_name} {r.last_name}
+                        {r.gender ? <span className="ml-2 text-xs font-normal text-muted-foreground">({r.gender === "M" ? "H" : r.gender})</span> : null}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {(r.rounded_time ?? r.official_time)
