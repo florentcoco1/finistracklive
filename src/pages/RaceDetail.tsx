@@ -136,7 +136,7 @@ export default function RaceDetail() {
       if (rfidError) console.warn("[leaderboard] rfid reload error", rfidError);
 
       const baseRows = (lbData ?? []) as LeaderboardRow[];
-      const rfidRows = (rfidData ?? []) as Array<{
+      const rfidRows = ((rfidData ?? []) as unknown) as Array<{
         registration_id: string | null;
         rfid_identifier: string | null;
         bib_number: string | null;
