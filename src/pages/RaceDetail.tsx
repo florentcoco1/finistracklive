@@ -664,8 +664,11 @@ export default function RaceDetail() {
                           : `${formatDistance(r.distance_along_route_m)}${r.progress_percent != null ? ` · ${r.progress_percent.toFixed(0)}%` : ""}`}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {r.category_rank
-                          ? `cat. ${r.category}${r.category_rank ? ` · ${r.category_rank}e` : ""}`
+                        {(r.category_rank || r.gender_rank)
+                          ? [
+                              r.category ? `cat. ${r.category}${r.category_rank ? ` · ${r.category_rank}e` : ""}` : null,
+                              r.gender_rank ? `sexe · ${r.gender_rank}e` : null,
+                            ].filter(Boolean).join(" · ")
                           : `${formatSpeed(r.rolling_speed_kmh)} · ${formatPace(r.rolling_pace_sec_per_km)}`}
                       </p>
                       {r.overall_rank == null && r.last_position_at && (
