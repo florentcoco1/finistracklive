@@ -357,9 +357,9 @@ export default function RaceDetail() {
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success(`RFID GMCAP importé : ${(data as any).matched} correspondance(s), ${(data as any).unmatched} non associée(s)`);
+      toast.success(`Import GMCAP : ${(data as any).matched} correspondance(s), ${(data as any).unmatched} non associée(s)`);
     } catch (error) {
-      toast.error((error as Error).message || "Import RFID impossible");
+      toast.error((error as Error).message || "Import GMCAP impossible");
     } finally {
       setImportingRfid(false);
     }

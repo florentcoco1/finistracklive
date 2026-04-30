@@ -240,7 +240,7 @@ export default function RaceAdmin() {
       if (error || payload?.error) throw new Error(error?.message ?? payload.error);
       await load();
       const result = payload.synced?.[0];
-      if (payload.schema_ready === false) toast.warning(payload.message ?? "Import en attente, vérification RFID relancée automatiquement.");
+      if (payload.schema_ready === false) toast.warning(payload.message ?? "Import en attente, vérification GMCAP relancée automatiquement.");
       else if (result?.error) toast.error(result.error);
       else toast.success(`GMCAP synchronisé : ${result?.matched ?? 0} correspondance(s)`);
     } catch (error) {
@@ -295,7 +295,7 @@ export default function RaceAdmin() {
         await saveLocalPendingImport(raceId, gmcapFile.name, content);
         setLocalPendingFile(gmcapFile.name);
         await syncGmcap();
-        toast.warning("Import GMCAP enregistré en attente : FinisTrackLive le relancera automatiquement dès que le schéma RFID sera prêt.");
+        toast.warning("Import GMCAP enregistré en attente : FinisTrackLive le relancera automatiquement dès que le service sera prêt.");
         return;
       }
       if (payload?.error) throw new Error(payload.error);
@@ -316,7 +316,7 @@ export default function RaceAdmin() {
       }
     } catch (error) {
       const message = (error as Error).message || "Import GMCAP impossible";
-      toast.error(message.includes("RFID_SCHEMA_MISSING") ? "Import enregistré en attente : relance automatique dès que le schéma RFID sera prêt." : message);
+      toast.error(message.includes("GMCAP_SCHEMA_MISSING") ? "Import enregistré en attente : relance automatique dès que le service GMCAP sera prêt." : message);
     } finally {
       setManualImporting(false);
     }
