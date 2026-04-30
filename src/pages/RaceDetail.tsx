@@ -635,11 +635,17 @@ export default function RaceDetail() {
               <Timer className="h-3 w-3" /> Classement GMCAP
             </span>
           </div>
-          {sorted.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Aucun coureur inscrit pour le moment.</p>
+          <div className="flex items-center gap-1 mb-3">
+            <Button size="sm" variant={genderFilter === "all" ? "hero" : "glass"} onClick={() => setGenderFilter("all")}>Tous</Button>
+            <Button size="sm" variant={genderFilter === "M" ? "hero" : "glass"} onClick={() => setGenderFilter("M")}>Hommes</Button>
+            <Button size="sm" variant={genderFilter === "F" ? "hero" : "glass"} onClick={() => setGenderFilter("F")}>Femmes</Button>
+            <span className="ml-auto text-xs text-muted-foreground">{filtered.length} coureur{filtered.length > 1 ? "s" : ""}</span>
+          </div>
+          {filtered.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Aucun coureur {genderFilter === "M" ? "homme" : genderFilter === "F" ? "femme" : "inscrit"} pour le moment.</p>
           ) : (
             <ol className="space-y-2 overflow-y-auto pr-1">
-              {sorted.map((r, i) => {
+              {filtered.map((r, i) => {
                 const stale = r.last_position_at
                   ? Date.now() - new Date(r.last_position_at).getTime() > 30000
                   : true;
