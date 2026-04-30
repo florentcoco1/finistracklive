@@ -198,7 +198,17 @@ Deno.serve(async (req) => {
 
     const query = admin.from("gmcap_import_sources").select("id, race_id, source_url, source_type, pending_content, enabled, last_import_at, last_import_status").eq("enabled", true);
     const { data: sources, error } = raceId ? await query.eq("race_id", raceId) : await query;
-    if (error) throw new Error(error.message);
+    if (error) {
+      const msg = error.message ?? "";
+      // Table not yet created: respond gracefully so the client doesn't crash
+      if (/gmcap_import_sources/i.test(msg) && /(not find|does not exist|schema cache)/i.test(msg)) {
+        return new Response(JSON.stringify({ ok: true, schema_ready: false, warning: "GMCAP_SCHEMA_MISSING", checked: 0, synced: [] }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(msg);
+    }
 
     const due = (sources ?? []).filter((source: Source) => {
       if (raceId) return true;
