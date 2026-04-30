@@ -149,6 +149,10 @@ export default function NewRace() {
         race = retry.data;
         insErr = retry.error;
       }
+      if (isMissingColumnError(insErr, "event_id")) {
+        toast.error("Le schéma événements n'est pas encore appliqué. Réessaie dans quelques secondes.");
+        return;
+      }
 
       if (insErr) throw insErr;
 
