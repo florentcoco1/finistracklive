@@ -641,12 +641,19 @@ export default function RaceDetail() {
               <Timer className="h-3 w-3" /> Classement GMCAP
             </span>
           </div>
-          <div className="flex items-center gap-1 mb-3">
+          <div className="flex items-center gap-1 mb-2">
             <Button size="sm" variant={genderFilter === "all" ? "hero" : "glass"} onClick={() => setGenderFilter("all")}>Tous</Button>
             <Button size="sm" variant={genderFilter === "M" ? "hero" : "glass"} onClick={() => setGenderFilter("M")}>Hommes</Button>
             <Button size="sm" variant={genderFilter === "F" ? "hero" : "glass"} onClick={() => setGenderFilter("F")}>Femmes</Button>
             <span className="ml-auto text-xs text-muted-foreground">{filtered.length} coureur{filtered.length > 1 ? "s" : ""}</span>
           </div>
+          <Input
+            type="search"
+            placeholder="Rechercher par nom ou dossard…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value.slice(0, 60))}
+            className="mb-3"
+          />
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">Aucun coureur {genderFilter === "M" ? "homme" : genderFilter === "F" ? "femme" : "inscrit"} pour le moment.</p>
           ) : (
