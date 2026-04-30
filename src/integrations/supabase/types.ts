@@ -73,6 +73,74 @@ export type Database = {
           },
         ]
       }
+      gmcap_results: {
+        Row: {
+          bib_number: string
+          category: string | null
+          category_rank: number | null
+          club: string | null
+          created_at: string
+          first_name: string | null
+          gender_rank: number | null
+          id: string
+          imported_at: string
+          last_name: string | null
+          official_time_seconds: number | null
+          official_time_text: string | null
+          race_id: string
+          scratch_rank: number | null
+          split_payload: Json | null
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          bib_number: string
+          category?: string | null
+          category_rank?: number | null
+          club?: string | null
+          created_at?: string
+          first_name?: string | null
+          gender_rank?: number | null
+          id?: string
+          imported_at?: string
+          last_name?: string | null
+          official_time_seconds?: number | null
+          official_time_text?: string | null
+          race_id: string
+          scratch_rank?: number | null
+          split_payload?: Json | null
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bib_number?: string
+          category?: string | null
+          category_rank?: number | null
+          club?: string | null
+          created_at?: string
+          first_name?: string | null
+          gender_rank?: number | null
+          id?: string
+          imported_at?: string
+          last_name?: string | null
+          official_time_seconds?: number | null
+          official_time_text?: string | null
+          race_id?: string
+          scratch_rank?: number | null
+          split_payload?: Json | null
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmcap_results_race_id_fkey"
+            columns: ["race_id"]
+            isOneToOne: false
+            referencedRelation: "races"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           birth_date: string | null
@@ -338,7 +406,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "organizer" | "runner"
+      app_role: "organizer" | "runner" | "admin"
       race_status: "upcoming" | "live" | "finished"
       runner_status: "running" | "dnf" | "problem"
     }
@@ -468,7 +536,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["organizer", "runner"],
+      app_role: ["organizer", "runner", "admin"],
       race_status: ["upcoming", "live", "finished"],
       runner_status: ["running", "dnf", "problem"],
     },
