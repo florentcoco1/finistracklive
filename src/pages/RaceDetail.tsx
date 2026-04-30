@@ -579,7 +579,7 @@ export default function RaceDetail() {
                         {r.first_name} {r.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {r.rfid_official_time
+                        {(r.rfid_rounded_time ?? r.rfid_official_time)
                           ? `Temps officiel ${r.rfid_rounded_time ?? r.rfid_official_time}`
                           : `${formatDistance(r.distance_along_route_m)}${r.progress_percent != null ? ` · ${r.progress_percent.toFixed(0)}%` : ""}`}
                       </p>
