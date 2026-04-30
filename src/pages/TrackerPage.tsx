@@ -144,9 +144,11 @@ export default function TrackerPage() {
       if (a.rfid_overall_rank != null && b.rfid_overall_rank != null) return a.rfid_overall_rank - b.rfid_overall_rank;
       if (a.rfid_overall_rank != null) return -1;
       if (b.rfid_overall_rank != null) return 1;
-      if (a.rfid_official_seconds != null && b.rfid_official_seconds != null) return a.rfid_official_seconds - b.rfid_official_seconds;
-      if (a.rfid_official_seconds != null) return -1;
-      if (b.rfid_official_seconds != null) return 1;
+      const aTime = a.rfid_rounded_seconds ?? a.rfid_official_seconds;
+      const bTime = b.rfid_rounded_seconds ?? b.rfid_official_seconds;
+      if (aTime != null && bTime != null) return aTime - bTime;
+      if (aTime != null) return -1;
+      if (bTime != null) return 1;
       const statusDelta = rankStatus(a.runner_status) - rankStatus(b.runner_status);
       if (statusDelta !== 0) return statusDelta;
       if (a.finished_at && b.finished_at) return new Date(a.finished_at).getTime() - new Date(b.finished_at).getTime();
