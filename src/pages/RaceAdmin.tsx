@@ -615,7 +615,12 @@ export default function RaceAdmin() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {registrations.map((registration) => (
+                  {[...registrations].sort((a, b) => {
+                    const na = parseInt(String(a.bib_number ?? "").replace(/\D/g, ""), 10);
+                    const nb = parseInt(String(b.bib_number ?? "").replace(/\D/g, ""), 10);
+                    if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+                    return String(a.bib_number ?? "").localeCompare(String(b.bib_number ?? ""));
+                  }).map((registration) => (
                     <TableRow key={registration.id}>
                       <TableCell>
                         <p className="font-medium">{displayName(registration.profile)}</p>
