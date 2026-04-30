@@ -287,7 +287,7 @@ export default function RaceAdmin() {
 
     setManualImporting(true);
     try {
-      const content = await gmcapFile.text();
+      const content = await readTextFile(gmcapFile);
       const { data, error } = await supabase.functions.invoke("import-gmcap-rfid", { body: { race_id: raceId, content, file_name: gmcapFile.name } });
       const payload = data as ManualImportResponse;
       if (error) throw new Error(error.message);
