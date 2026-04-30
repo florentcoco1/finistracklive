@@ -125,12 +125,109 @@ export default function RaceDetail() {
     };
 
     const reload = async () => {
-      const { data, error } = await supabase
-        .from("live_leaderboard")
-        .select("*")
-        .eq("race_id", raceId);
-      if (error) console.warn("[leaderboard] reload error", error);
-      if (active) setRows((data ?? []) as LeaderboardRow[]);
+      const [{ data: lbData, error: lbError }, { data: rfidData, error: rfidError }] = await Promise.all([
+        supabase.from("live_leaderboard").select("*").eq("race_id", raceId),
+        supabase
+          .from("rfid_timing_results" as any)
+          .select("registration_id, rfid_identifier, bib_number, first_name, last_name, category, status, official_time, official_seconds, rounded_time, rounded_seconds, overall_rank, category_rank, gender_rank, imported_at")
+          .eq("race_id", raceId),
+      ]);
+      if (lbError) console.warn("[leaderboard] reload error", lbError);
+      if (rfidError) console.warn("[leaderboard] rfid reload error", rfidError);
+
+      const baseRows = (lbData ?? []) as LeaderboardRow[];
+      const rfidRows = ((rfidData ?? []) as unknown) as Array<{
+        registration_id: string | null;
+        rfid_identifier: string | null;
+        bib_number: string | null;
+        first_name: string | null;
+        last_name: string | null;
+        category: string | null;
+        status: string | null;
+        official_time: string | null;
+        official_seconds: number | null;
+        rounded_time: string | null;
+        rounded_seconds: number | null;
+        overall_rank: number | null;
+        category_rank: number | null;
+        gender_rank: number | null;
+        imported_at: string | null;
+      }>;
+
+      // Index GMCAP results by registration_id and by bib_number for robust matching
+      const byRegId = new Map<string, typeof rfidRows[number]>();
+      const byBib = new Map<string, typeof rfidRows[number]>();
+      for (const r of rfidRows) {
+        if (r.registration_id) byRegId.set(r.registration_id, r);
+        if (r.bib_number) byBib.set(String(r.bib_number).trim(), r);
+      }
+
+      // Patch base rows with the freshest GMCAP info (covers cases where the view JOIN missed it)
+      const matchedRfidIds = new Set<string>();
+      const patched = baseRows.map((row) => {
+        const rfid = byRegId.get(row.registration_id) ?? (row.bib_number ? byBib.get(String(row.bib_number).trim()) : undefined);
+        if (!rfid) return row;
+        if (rfid.registration_id) matchedRfidIds.add(rfid.registration_id);
+        if (rfid.bib_number) matchedRfidIds.add(`bib:${String(rfid.bib_number).trim()}`);
+        return {
+          ...row,
+          rfid_identifier: row.rfid_identifier ?? rfid.rfid_identifier,
+          rfid_official_time: rfid.official_time ?? row.rfid_official_time,
+          rfid_official_seconds: rfid.official_seconds ?? row.rfid_official_seconds,
+          rfid_rounded_time: rfid.rounded_time ?? row.rfid_rounded_time,
+          rfid_rounded_seconds: rfid.rounded_seconds ?? row.rfid_rounded_seconds,
+          rfid_overall_rank: rfid.overall_rank ?? row.rfid_overall_rank,
+          rfid_category_rank: rfid.category_rank ?? row.rfid_category_rank,
+          rfid_gender_rank: rfid.gender_rank ?? row.rfid_gender_rank,
+          rfid_imported_at: rfid.imported_at ?? row.rfid_imported_at,
+        };
+      });
+
+      // Add GMCAP-only entries (runners present in the timing file but not registered in the app)
+      const extras: LeaderboardRow[] = [];
+      for (const r of rfidRows) {
+        const regKey = r.registration_id ?? "";
+        const bibKey = r.bib_number ? `bib:${String(r.bib_number).trim()}` : "";
+        if (regKey && matchedRfidIds.has(regKey)) continue;
+        if (bibKey && matchedRfidIds.has(bibKey)) continue;
+        const isDnf = r.status === "dnf" || r.status === "disqualified";
+        extras.push({
+          registration_id: `gmcap:${r.rfid_identifier ?? r.bib_number ?? Math.random().toString(36).slice(2)}`,
+          race_id: raceId,
+          runner_id: "",
+          bib_number: r.bib_number ?? "",
+          category: r.category,
+          tracking_active: false,
+          started_at: null,
+          finished_at: null,
+          runner_status: isDnf ? "dnf" : "running",
+          emergency_phone: null,
+          dnf_reason: null,
+          problem_description: null,
+          first_name: r.first_name,
+          last_name: r.last_name,
+          latitude: null,
+          longitude: null,
+          distance_along_route_m: null,
+          progress_percent: null,
+          rolling_speed_kmh: null,
+          rolling_pace_sec_per_km: null,
+          last_position_at: null,
+          rfid_identifier: r.rfid_identifier,
+          rfid_matched_at: null,
+          rfid_source: "GMCAP",
+          rfid_official_time: r.official_time,
+          rfid_official_seconds: r.official_seconds,
+          rfid_rounded_time: r.rounded_time,
+          rfid_rounded_seconds: r.rounded_seconds,
+          rfid_overall_rank: r.overall_rank,
+          rfid_category_rank: r.category_rank,
+          rfid_gender_rank: r.gender_rank,
+          rfid_imported_at: r.imported_at,
+        });
+      }
+
+      if (active) setRows([...patched, ...extras]);
     };
     reload();
 
