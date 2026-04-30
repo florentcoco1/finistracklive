@@ -30,6 +30,12 @@ const BodySchema = z.discriminatedUnion("action", [
     category: z.string().trim().max(80).nullable(),
     emergency_phone: z.string().trim().max(40).nullable(),
   }),
+  z.object({
+    action: z.literal("bulk_import_registrations"),
+    race_id: uuid,
+    file_name: z.string().trim().max(180).optional(),
+    content: z.string().min(1).max(8 * 1024 * 1024),
+  }),
   z.object({ action: z.literal("add_organizer"), race_id: uuid, email: z.string().trim().email().max(255) }),
   z.object({ action: z.literal("remove_organizer"), race_id: uuid, organizer_id: uuid }),
 ]);
@@ -40,6 +46,78 @@ type OrganizerRow = { id: string; user_id: string; role: string; created_at: str
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
+function normalizeHeader(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9#]+/g, "");
+}
+
+function splitDelimitedLine(line: string, delimiter: string) {
+  const cells: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      if (quoted && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (char === delimiter && !quoted) {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function getCell(row: Record<string, string>, names: string[]) {
+  for (const name of names) {
+    const value = row[normalizeHeader(name)];
+    if (value?.trim()) return value.trim();
+  }
+  return "";
+}
+
+function parseBirthDate(value: string) {
+  const clean = value.trim();
+  if (!clean) return null;
+  const fr = clean.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (fr) return `${fr[3]}-${fr[2].padStart(2, "0")}-${fr[1].padStart(2, "0")}`;
+  const iso = clean.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
+  return null;
+}
+
+function randomPassword() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(36).padStart(2, "0")).join("") + "Aa1!";
+}
+
+function parseRunnerImport(content: string) {
+  const lines = content.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) throw new Error("Le fichier doit contenir une ligne d’en-tête et au moins un coureur");
+  const delimiter = (lines[0].match(/\t/g)?.length ?? 0) >= (lines[0].match(/;/g)?.length ?? 0) ? "\t" : ";";
+  const headers = splitDelimitedLine(lines[0], delimiter).map(normalizeHeader);
+  return lines.slice(1).map((line) => {
+    const cells = splitDelimitedLine(line, delimiter);
+    const row = Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? ""]));
+    return {
+      email: getCell(row, ["EMail", "Email", "E-mail", "Mail"]).toLowerCase(),
+      bib_number: getCell(row, ["Numéro", "Numero", "Dossard", "N°", "No"]),
+      first_name: getCell(row, ["Prénom", "Prenom", "First name"]),
+      last_name: getCell(row, ["Nom", "Last name"]),
+      phone: getCell(row, ["Tel", "Téléphone", "Telephone", "Phone"]),
+      category: getCell(row, ["Abbrev. Catégorie", "Abbrev Categorie", "Nom Catégorie", "Nom Categorie", "Catégorie", "Categorie"]),
+      birth_date: parseBirthDate(getCell(row, ["DateNaissance", "Date naissance", "Naissance"])),
+    };
+  });
 }
 
 async function requireRaceAdmin(admin: ReturnType<typeof createClient>, userId: string, raceId: string) {
@@ -153,6 +231,62 @@ Deno.serve(async (req) => {
       }, { onConflict: "race_id,runner_id" });
       if (error) throw new Error(error.message);
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
+    }
+
+    if (body.action === "bulk_import_registrations") {
+      const parsedRunners = parseRunnerImport(body.content);
+      const runners = parsedRunners.filter((runner) => runner.email && runner.bib_number && runner.first_name && runner.last_name);
+      if (!runners.length) return json({ error: "Aucun coureur valide trouvé : email, nom, prénom et dossard sont requis." }, 400);
+      if (runners.length > 1000) return json({ error: "Import limité à 1000 coureurs par fichier." }, 400);
+
+      let created = 0;
+      let updated = 0;
+      let registered = 0;
+      const errors: string[] = [];
+      for (const runner of runners) {
+        try {
+          let { data: profile } = await admin.from("profiles").select("user_id").ilike("email", runner.email).maybeSingle();
+          if (!profile?.user_id) {
+            const { data: createdUser, error: userError } = await admin.auth.admin.createUser({
+              email: runner.email,
+              password: randomPassword(),
+              email_confirm: true,
+              user_metadata: { first_name: runner.first_name, last_name: runner.last_name, birth_date: runner.birth_date, phone: runner.phone },
+            });
+            if (userError || !createdUser.user) throw new Error(userError?.message ?? "Création utilisateur impossible");
+            profile = { user_id: createdUser.user.id };
+            created += 1;
+          } else {
+            updated += 1;
+          }
+
+          const { error: profileError } = await admin.from("profiles").upsert({
+            user_id: profile.user_id,
+            email: runner.email,
+            first_name: runner.first_name,
+            last_name: runner.last_name,
+            birth_date: runner.birth_date,
+            phone: runner.phone || null,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "user_id" });
+          if (profileError) throw new Error(profileError.message);
+
+          await admin.from("user_roles").upsert({ user_id: profile.user_id, role: "runner" }, { onConflict: "user_id,role" });
+          const { error: registrationError } = await admin.from("race_registrations").upsert({
+            race_id: body.race_id,
+            runner_id: profile.user_id,
+            bib_number: runner.bib_number,
+            category: runner.category || null,
+            emergency_phone: runner.phone || null,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "race_id,runner_id" });
+          if (registrationError) throw new Error(registrationError.message);
+          registered += 1;
+        } catch (error) {
+          errors.push(`${runner.bib_number || "?"} ${runner.email || runner.last_name}: ${(error as Error).message}`);
+        }
+      }
+      return json({ ok: true, created, updated, registered, skipped: parsedRunners.length - runners.length, errors: errors.slice(0, 12), ...(await loadRace(admin, body.race_id)) });
     }
 
     if (body.action === "add_organizer") {

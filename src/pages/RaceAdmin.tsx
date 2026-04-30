@@ -131,6 +131,15 @@ async function clearLocalPendingImport(raceId: string) {
   });
 }
 
+async function readTextFile(file: File) {
+  const buffer = await file.arrayBuffer();
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch {
+    return new TextDecoder("windows-1252").decode(buffer);
+  }
+}
+
 export default function RaceAdmin() {
   const { id: raceId } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -145,6 +154,8 @@ export default function RaceAdmin() {
   const [syncing, setSyncing] = useState(false);
   const [manualImporting, setManualImporting] = useState(false);
   const [gmcapFile, setGmcapFile] = useState<File | null>(null);
+  const [runnerImportFile, setRunnerImportFile] = useState<File | null>(null);
+  const [runnerImporting, setRunnerImporting] = useState(false);
   const [localPendingFile, setLocalPendingFile] = useState<string | null>(null);
   const [newRunner, setNewRunner] = useState(emptyRegistration);
   const [newOrganizerEmail, setNewOrganizerEmail] = useState("");
@@ -387,6 +398,31 @@ export default function RaceAdmin() {
     }
   };
 
+  const importRunnerFile = async () => {
+    if (!raceId || !runnerImportFile) {
+      toast.error("Sélectionne un fichier texte de coureurs");
+      return;
+    }
+    if (runnerImportFile.size > 8 * 1024 * 1024) {
+      toast.error("Fichier trop volumineux : limite 8 Mo");
+      return;
+    }
+    setRunnerImporting(true);
+    try {
+      const content = await readTextFile(runnerImportFile);
+      const data = await invokeAdmin({ action: "bulk_import_registrations", race_id: raceId, file_name: runnerImportFile.name, content });
+      applyAdminData(data);
+      const summary = data as AdminResponse & { created?: number; updated?: number; registered?: number; skipped?: number; errors?: string[] };
+      if (summary.errors?.length) toast.warning(`${summary.registered ?? 0} coureur(s) importé(s), ${summary.errors.length} erreur(s) à vérifier.`);
+      else toast.success(`${summary.registered ?? 0} coureur(s) importé(s) · ${summary.created ?? 0} compte(s) créé(s)`);
+      setRunnerImportFile(null);
+    } catch (error) {
+      toast.error((error as Error).message || "Import coureurs impossible");
+    } finally {
+      setRunnerImporting(false);
+    }
+  };
+
   const addOrganizer = async () => {
     if (!raceId || !newOrganizerEmail.trim()) {
       toast.error("Email organisateur requis");
@@ -514,6 +550,27 @@ export default function RaceAdmin() {
             <div>
               <h2 className="font-display text-xl font-semibold">Inscrits coureurs</h2>
               <p className="text-sm text-muted-foreground mt-1">Associe les dossards, catégories et identifiants RFID utilisés par GMCAP.</p>
+            </div>
+            <div className="space-y-3 rounded-lg border border-border/50 bg-secondary/20 p-4">
+              <div>
+                <h3 className="font-display text-lg font-semibold">Import massif depuis un fichier texte</h3>
+                <p className="text-sm text-muted-foreground mt-1">Importe un export TSV/CSV avec en-têtes Nom, Prénom, EMail, Numéro, Tel et Catégorie.</p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="runner-import-file">Fichier coureurs</Label>
+                  <Input
+                    id="runner-import-file"
+                    type="file"
+                    accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv"
+                    onChange={(e) => setRunnerImportFile(e.target.files?.[0] ?? null)}
+                  />
+                  {runnerImportFile && <p className="text-xs text-muted-foreground">{runnerImportFile.name} · {(runnerImportFile.size / 1024).toFixed(1)} Ko</p>}
+                </div>
+                <Button variant="hero" onClick={importRunnerFile} disabled={!runnerImportFile || runnerImporting}>
+                  <Upload className="h-4 w-4 mr-2" /> {runnerImporting ? "Import…" : "Importer les coureurs"}
+                </Button>
+              </div>
             </div>
             <div className="grid gap-3 md:grid-cols-[1fr_120px_120px_160px_auto] md:items-end">
               <div className="space-y-2"><Label>Email utilisateur</Label><Input value={newRunner.email} onChange={(e) => setNewRunner((v) => ({ ...v, email: e.target.value }))} placeholder="coureur@email.fr" /></div>
