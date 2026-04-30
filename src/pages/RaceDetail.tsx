@@ -125,20 +125,18 @@ export default function RaceDetail() {
     };
 
     const reload = async () => {
-      const [{ data: lbData, error: lbError }, { data: rfidData, error: rfidError }] = await Promise.all([
+      const [{ data: lbData, error: lbError }, { data: gmcapData, error: gmcapError }] = await Promise.all([
         supabase.from("live_leaderboard").select("*").eq("race_id", raceId),
         supabase
-          .from("rfid_timing_results" as any)
-          .select("registration_id, rfid_identifier, bib_number, first_name, last_name, category, status, official_time, official_seconds, rounded_time, rounded_seconds, overall_rank, category_rank, gender_rank, imported_at")
+          .from("gmcap_results" as any)
+          .select("bib_number, first_name, last_name, category, status, official_time, official_seconds, rounded_time, rounded_seconds, overall_rank, category_rank, gender_rank, imported_at")
           .eq("race_id", raceId),
       ]);
       if (lbError) console.warn("[leaderboard] reload error", lbError);
-      if (rfidError) console.warn("[leaderboard] rfid reload error", rfidError);
+      if (gmcapError) console.warn("[leaderboard] gmcap reload error", gmcapError);
 
       const baseRows = (lbData ?? []) as LeaderboardRow[];
-      const rfidRows = ((rfidData ?? []) as unknown) as Array<{
-        registration_id: string | null;
-        rfid_identifier: string | null;
+      const gmcapRows = ((gmcapData ?? []) as unknown) as Array<{
         bib_number: string | null;
         first_name: string | null;
         last_name: string | null;
@@ -154,48 +152,42 @@ export default function RaceDetail() {
         imported_at: string | null;
       }>;
 
-      // Index GMCAP results by registration_id and by bib_number for robust matching
-      const byRegId = new Map<string, typeof rfidRows[number]>();
-      const byBib = new Map<string, typeof rfidRows[number]>();
-      for (const r of rfidRows) {
-        if (r.registration_id) byRegId.set(r.registration_id, r);
+      const byBib = new Map<string, typeof gmcapRows[number]>();
+      for (const r of gmcapRows) {
         if (r.bib_number) byBib.set(String(r.bib_number).trim(), r);
       }
 
-      // Patch base rows with the freshest GMCAP info (covers cases where the view JOIN missed it)
-      const matchedRfidIds = new Set<string>();
+      const matchedBibs = new Set<string>();
       const patched = baseRows.map((row) => {
-        const rfid = byRegId.get(row.registration_id) ?? (row.bib_number ? byBib.get(String(row.bib_number).trim()) : undefined);
-        if (!rfid) return row;
-        if (rfid.registration_id) matchedRfidIds.add(rfid.registration_id);
-        if (rfid.bib_number) matchedRfidIds.add(`bib:${String(rfid.bib_number).trim()}`);
+        const key = row.bib_number ? String(row.bib_number).trim() : "";
+        const g = key ? byBib.get(key) : undefined;
+        if (!g) return row;
+        matchedBibs.add(key);
         return {
           ...row,
-          rfid_identifier: row.rfid_identifier ?? rfid.rfid_identifier,
-          rfid_official_time: rfid.official_time ?? row.rfid_official_time,
-          rfid_official_seconds: rfid.official_seconds ?? row.rfid_official_seconds,
-          rfid_rounded_time: rfid.rounded_time ?? row.rfid_rounded_time,
-          rfid_rounded_seconds: rfid.rounded_seconds ?? row.rfid_rounded_seconds,
-          rfid_overall_rank: rfid.overall_rank ?? row.rfid_overall_rank,
-          rfid_category_rank: rfid.category_rank ?? row.rfid_category_rank,
-          rfid_gender_rank: rfid.gender_rank ?? row.rfid_gender_rank,
-          rfid_imported_at: rfid.imported_at ?? row.rfid_imported_at,
+          official_time: g.official_time ?? row.official_time,
+          official_seconds: g.official_seconds ?? row.official_seconds,
+          rounded_time: g.rounded_time ?? row.rounded_time,
+          rounded_seconds: g.rounded_seconds ?? row.rounded_seconds,
+          overall_rank: g.overall_rank ?? row.overall_rank,
+          category_rank: g.category_rank ?? row.category_rank,
+          gender_rank: g.gender_rank ?? row.gender_rank,
+          gmcap_status: g.status ?? row.gmcap_status,
+          gmcap_imported_at: g.imported_at ?? row.gmcap_imported_at,
         };
       });
 
-      // Add GMCAP-only entries (runners present in the timing file but not registered in the app)
+      // GMCAP-only entries (timed runners not registered in the app)
       const extras: LeaderboardRow[] = [];
-      for (const r of rfidRows) {
-        const regKey = r.registration_id ?? "";
-        const bibKey = r.bib_number ? `bib:${String(r.bib_number).trim()}` : "";
-        if (regKey && matchedRfidIds.has(regKey)) continue;
-        if (bibKey && matchedRfidIds.has(bibKey)) continue;
+      for (const r of gmcapRows) {
+        const key = r.bib_number ? String(r.bib_number).trim() : "";
+        if (!key || matchedBibs.has(key)) continue;
         const isDnf = r.status === "dnf" || r.status === "disqualified";
         extras.push({
-          registration_id: `gmcap:${r.rfid_identifier ?? r.bib_number ?? Math.random().toString(36).slice(2)}`,
+          registration_id: `gmcap:${key}`,
           race_id: raceId,
           runner_id: "",
-          bib_number: r.bib_number ?? "",
+          bib_number: key,
           category: r.category,
           tracking_active: false,
           started_at: null,
@@ -213,17 +205,15 @@ export default function RaceDetail() {
           rolling_speed_kmh: null,
           rolling_pace_sec_per_km: null,
           last_position_at: null,
-          rfid_identifier: r.rfid_identifier,
-          rfid_matched_at: null,
-          rfid_source: "GMCAP",
-          rfid_official_time: r.official_time,
-          rfid_official_seconds: r.official_seconds,
-          rfid_rounded_time: r.rounded_time,
-          rfid_rounded_seconds: r.rounded_seconds,
-          rfid_overall_rank: r.overall_rank,
-          rfid_category_rank: r.category_rank,
-          rfid_gender_rank: r.gender_rank,
-          rfid_imported_at: r.imported_at,
+          official_time: r.official_time,
+          official_seconds: r.official_seconds,
+          rounded_time: r.rounded_time,
+          rounded_seconds: r.rounded_seconds,
+          overall_rank: r.overall_rank,
+          category_rank: r.category_rank,
+          gender_rank: r.gender_rank,
+          gmcap_status: r.status,
+          gmcap_imported_at: r.imported_at,
         });
       }
 
@@ -267,7 +257,7 @@ export default function RaceDetail() {
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "rfid_timing_results", filter: `race_id=eq.${raceId}` },
+        { event: "*", schema: "public", table: "gmcap_results", filter: `race_id=eq.${raceId}` },
         () => reload(),
       )
       .subscribe((status) => {
@@ -333,13 +323,13 @@ export default function RaceDetail() {
   const sorted = useMemo(() => {
     const rank = (s: string | null) => (s === "dnf" ? 2 : s === "problem" ? 1 : 0);
     return [...rows].sort((a, b) => {
-      const ar = a.rfid_overall_rank;
-      const br = b.rfid_overall_rank;
+      const ar = a.overall_rank;
+      const br = b.overall_rank;
       if (ar != null && br != null) return ar - br;
       if (ar != null) return -1;
       if (br != null) return 1;
-      const at = a.rfid_rounded_seconds ?? a.rfid_official_seconds;
-      const bt = b.rfid_rounded_seconds ?? b.rfid_official_seconds;
+      const at = a.rounded_seconds ?? a.official_seconds;
+      const bt = b.rounded_seconds ?? b.official_seconds;
       if (at != null && bt != null) return at - bt;
       if (at != null) return -1;
       if (bt != null) return 1;
@@ -641,7 +631,7 @@ export default function RaceDetail() {
             <Trophy className="h-5 w-5 text-primary-glow" />
             <h2 className="font-display font-semibold text-lg">Classement live</h2>
             <span className="ml-auto inline-flex items-center gap-1 text-xs text-success">
-              <Timer className="h-3 w-3" /> RFID prioritaire
+              <Timer className="h-3 w-3" /> Classement GMCAP
             </span>
           </div>
           {sorted.length === 0 ? (
@@ -676,16 +666,16 @@ export default function RaceDetail() {
                         {r.first_name} {r.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {(r.rfid_rounded_time ?? r.rfid_official_time)
-                          ? `Temps officiel ${r.rfid_rounded_time ?? r.rfid_official_time}`
+                        {(r.rounded_time ?? r.official_time)
+                          ? `Temps officiel ${r.rounded_time ?? r.official_time}`
                           : `${formatDistance(r.distance_along_route_m)}${r.progress_percent != null ? ` · ${r.progress_percent.toFixed(0)}%` : ""}`}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {r.rfid_identifier
-                          ? `RFID ${r.rfid_identifier}${r.rfid_category_rank ? ` · cat. ${r.rfid_category_rank}` : ""}`
+                        {r.category_rank
+                          ? `cat. ${r.category}${r.category_rank ? ` · ${r.category_rank}e` : ""}`
                           : `${formatSpeed(r.rolling_speed_kmh)} · ${formatPace(r.rolling_pace_sec_per_km)}`}
                       </p>
-                      {r.rfid_overall_rank == null && r.last_position_at && (
+                      {r.overall_rank == null && r.last_position_at && (
                         <p className="text-[10px] text-muted-foreground mt-0.5">GPS support · {formatSpeed(r.rolling_speed_kmh)}</p>
                       )}
                       {r.finished_at && (
