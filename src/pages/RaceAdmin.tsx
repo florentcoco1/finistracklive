@@ -49,6 +49,8 @@ interface RegistrationRow {
   runner_status: string;
   created_at: string;
   profile: AdminProfile | null;
+  gender?: string | null;
+  birth_date?: string | null;
 }
 
 interface OrganizerRow {
@@ -88,7 +90,13 @@ const pendingStoreName = "pending-imports";
 
 function displayName(profile: AdminProfile | null) {
   const name = `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim();
-  return name || profile?.email || "Utilisateur";
+  return name || profile?.email || "—";
+}
+
+function genderLabel(g: string | null | undefined) {
+  if (g === "M") return "H";
+  if (g === "F") return "F";
+  return "—";
 }
 
 async function pendingStore(mode: IDBTransactionMode) {
@@ -599,6 +607,7 @@ export default function RaceAdmin() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Coureur</TableHead>
+                    <TableHead>Sexe</TableHead>
                     <TableHead>Dossard</TableHead>
                     <TableHead>Catégorie</TableHead>
                     <TableHead>Téléphone</TableHead>
@@ -612,6 +621,7 @@ export default function RaceAdmin() {
                         <p className="font-medium">{displayName(registration.profile)}</p>
                         <p className="text-xs text-muted-foreground">{registration.profile?.email}</p>
                       </TableCell>
+                      <TableCell>{genderLabel(registration.gender)}</TableCell>
                       <TableCell><Input value={registration.bib_number} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, bib_number: e.target.value } : r))} className="min-w-20" /></TableCell>
                       <TableCell><Input value={registration.category ?? ""} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, category: e.target.value } : r))} className="min-w-24" /></TableCell>
                       <TableCell><Input value={registration.emergency_phone ?? ""} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, emergency_phone: e.target.value } : r))} className="min-w-32" /></TableCell>
