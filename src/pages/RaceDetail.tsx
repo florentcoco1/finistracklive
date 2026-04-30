@@ -140,6 +140,7 @@ export default function RaceDetail() {
         bib_number: string | null;
         first_name: string | null;
         last_name: string | null;
+        gender: string | null;
         category: string | null;
         status: string | null;
         official_time_text: string | null;
