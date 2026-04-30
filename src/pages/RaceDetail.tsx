@@ -152,72 +152,67 @@ export default function RaceDetail() {
         imported_at: string | null;
       }>;
 
-      const byBib = new Map<string, typeof gmcapRows[number]>();
-      for (const r of gmcapRows) {
-        if (r.bib_number) byBib.set(String(r.bib_number).trim(), r);
-      }
-
-      const matchedBibs = new Set<string>();
-      const patched = baseRows.map((row) => {
+      const baseByBib = new Map<string, LeaderboardRow>();
+      for (const row of baseRows) {
         const key = row.bib_number ? String(row.bib_number).trim() : "";
-        const g = key ? byBib.get(key) : undefined;
-        if (!g) return row;
-        matchedBibs.add(key);
-        return {
-          ...row,
-          official_time: g.official_time ?? row.official_time,
-          official_seconds: g.official_seconds ?? row.official_seconds,
-          rounded_time: g.rounded_time ?? row.rounded_time,
-          rounded_seconds: g.rounded_seconds ?? row.rounded_seconds,
-          overall_rank: g.overall_rank ?? row.overall_rank,
-          category_rank: g.category_rank ?? row.category_rank,
-          gender_rank: g.gender_rank ?? row.gender_rank,
-          gmcap_status: g.status ?? row.gmcap_status,
-          gmcap_imported_at: g.imported_at ?? row.gmcap_imported_at,
-        };
-      });
-
-      // GMCAP-only entries (timed runners not registered in the app)
-      const extras: LeaderboardRow[] = [];
-      for (const r of gmcapRows) {
-        const key = r.bib_number ? String(r.bib_number).trim() : "";
-        if (!key || matchedBibs.has(key)) continue;
-        const isDnf = r.status === "dnf" || r.status === "disqualified";
-        extras.push({
-          registration_id: `gmcap:${key}`,
-          race_id: raceId,
-          runner_id: "",
-          bib_number: key,
-          category: r.category,
-          tracking_active: false,
-          started_at: null,
-          finished_at: null,
-          runner_status: isDnf ? "dnf" : "running",
-          emergency_phone: null,
-          dnf_reason: null,
-          problem_description: null,
-          first_name: r.first_name,
-          last_name: r.last_name,
-          latitude: null,
-          longitude: null,
-          distance_along_route_m: null,
-          progress_percent: null,
-          rolling_speed_kmh: null,
-          rolling_pace_sec_per_km: null,
-          last_position_at: null,
-          official_time: r.official_time,
-          official_seconds: r.official_seconds,
-          rounded_time: r.rounded_time,
-          rounded_seconds: r.rounded_seconds,
-          overall_rank: r.overall_rank,
-          category_rank: r.category_rank,
-          gender_rank: r.gender_rank,
-          gmcap_status: r.status,
-          gmcap_imported_at: r.imported_at,
-        });
+        if (key) baseByBib.set(key, row);
       }
 
-      if (active) setRows([...patched, ...extras]);
+      // If GMCAP data exists, the official ranking is built EXCLUSIVELY from GMCAP rows.
+      // We enrich each GMCAP row with live tracking data when a registration matches by bib.
+      if (gmcapRows.length > 0) {
+        const usedBibs = new Set<string>();
+        const fromGmcap: LeaderboardRow[] = gmcapRows.map((r) => {
+          const key = r.bib_number ? String(r.bib_number).trim() : "";
+          if (key) usedBibs.add(key);
+          const base = key ? baseByBib.get(key) : undefined;
+          const isDnf = r.status === "dnf" || r.status === "disqualified";
+          return {
+            registration_id: base?.registration_id ?? `gmcap:${key}`,
+            race_id: raceId,
+            runner_id: base?.runner_id ?? "",
+            bib_number: key,
+            category: r.category ?? base?.category ?? null,
+            tracking_active: base?.tracking_active ?? false,
+            started_at: base?.started_at ?? null,
+            finished_at: base?.finished_at ?? null,
+            runner_status: base?.runner_status ?? (isDnf ? "dnf" : "running"),
+            emergency_phone: base?.emergency_phone ?? null,
+            dnf_reason: base?.dnf_reason ?? null,
+            problem_description: base?.problem_description ?? null,
+            first_name: r.first_name ?? base?.first_name ?? null,
+            last_name: r.last_name ?? base?.last_name ?? null,
+            latitude: base?.latitude ?? null,
+            longitude: base?.longitude ?? null,
+            distance_along_route_m: base?.distance_along_route_m ?? null,
+            progress_percent: base?.progress_percent ?? null,
+            rolling_speed_kmh: base?.rolling_speed_kmh ?? null,
+            rolling_pace_sec_per_km: base?.rolling_pace_sec_per_km ?? null,
+            last_position_at: base?.last_position_at ?? null,
+            official_time: r.official_time,
+            official_seconds: r.official_seconds,
+            rounded_time: r.rounded_time,
+            rounded_seconds: r.rounded_seconds,
+            overall_rank: r.overall_rank,
+            category_rank: r.category_rank,
+            gender_rank: r.gender_rank,
+            gmcap_status: r.status,
+            gmcap_imported_at: r.imported_at,
+          } as LeaderboardRow;
+        });
+
+        // Keep registered runners not present in GMCAP at the bottom (still tracked / not yet timed)
+        const remaining = baseRows.filter((row) => {
+          const key = row.bib_number ? String(row.bib_number).trim() : "";
+          return !key || !usedBibs.has(key);
+        });
+
+        if (active) setRows([...fromGmcap, ...remaining]);
+        return;
+      }
+
+      // No GMCAP data yet — fall back to live leaderboard only
+      if (active) setRows(baseRows);
     };
     reload();
 
