@@ -534,6 +534,10 @@ export default function RaceDetail() {
                 <Smartphone className="h-4 w-4 mr-2" /> Mode coureur (#{myRegistration.bib_number})
               </Link>
             </Button>
+          ) : race.status === "finished" ? (
+            <Button variant="glass" disabled>
+              <Flag className="h-4 w-4 mr-2" /> Inscriptions closes
+            </Button>
           ) : user ? (
             <Dialog open={signupOpen} onOpenChange={setSignupOpen}>
               <DialogTrigger asChild>
