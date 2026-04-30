@@ -932,7 +932,7 @@ export default function TrackerPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">#{row.bib_number}{isMe ? " · Moi" : row.first_name || row.last_name ? ` · ${row.first_name ?? ""} ${row.last_name ?? ""}` : ""}</p>
                       <p className="text-xs text-muted-foreground">
-                        {row.rfid_rounded_time ?? row.rfid_official_time ?? `${formatDistance(row.distance_along_route_m)}${row.progress_percent != null ? ` · ${row.progress_percent.toFixed(0)}%` : ""}`}
+                        {row.rounded_time ?? row.official_time ?? `${formatDistance(row.distance_along_route_m)}${row.progress_percent != null ? ` · ${row.progress_percent.toFixed(0)}%` : ""}`}
                       </p>
                     </div>
                     <span className="text-xs text-muted-foreground">{formatSpeed(row.rolling_speed_kmh)}</span>
