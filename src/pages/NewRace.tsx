@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { z } from "zod";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +12,11 @@ import { toast } from "sonner";
 import { parseGpx } from "@/lib/gpx";
 import { Upload, MapPin } from "lucide-react";
 import { DifficultyStars } from "@/components/DifficultyStars";
+
+interface EventOption { id: string; name: string }
+interface UntypedEventsQuery {
+  select: (c: string) => { eq: (col: string, val: string) => { order: (col: string, opts: { ascending: boolean }) => Promise<{ data: unknown[] | null }> } };
+}
 
 type JsonValue = string | number | boolean | null | { [key: string]: JsonValue } | JsonValue[];
 
@@ -35,12 +40,25 @@ function isMissingColumnError(error: unknown, columnName: string) {
 export default function NewRace() {
   const { user, isOrganizer, loading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const presetEvent = searchParams.get("event") ?? "";
   const [gpxFile, setGpxFile] = useState<File | null>(null);
   const [gpxPreview, setGpxPreview] = useState<{ distanceKm: number; points: number } | null>(null);
   const [difficultyLevel, setDifficultyLevel] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+  const [events, setEvents] = useState<EventOption[]>([]);
+  const [eventId, setEventId] = useState<string>(presetEvent);
 
   useEffect(() => { document.title = "Créer une course — FinisTrackLive"; }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    (supabase.from as unknown as (t: string) => UntypedEventsQuery)("events")
+      .select("id, name")
+      .eq("organizer_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setEvents(((data ?? []) as EventOption[])));
+  }, [user]);
 
   if (loading) return <main className="container py-12"><p className="text-muted-foreground">Chargement…</p></main>;
   if (!user) return <Navigate to="/auth" replace />;
@@ -76,6 +94,7 @@ export default function NewRace() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!gpxFile) { toast.error("Charge un fichier GPX"); return; }
+    if (!eventId) { toast.error("Sélectionne une épreuve"); return; }
 
     const fd = new FormData(e.currentTarget);
     const parsed = formSchema.safeParse({
@@ -102,6 +121,7 @@ export default function NewRace() {
 
       const racePayload = {
           organizer_id: user.id,
+          event_id: eventId,
           name: parsed.data.name,
           description: parsed.data.description ?? null,
           start_time: new Date(parsed.data.start_time).toISOString(),
@@ -129,6 +149,10 @@ export default function NewRace() {
         race = retry.data;
         insErr = retry.error;
       }
+      if (isMissingColumnError(insErr, "event_id")) {
+        toast.error("Le schéma événements n'est pas encore appliqué. Réessaie dans quelques secondes.");
+        return;
+      }
 
       if (insErr) throw insErr;
 
@@ -146,11 +170,27 @@ export default function NewRace() {
       <h1 className="font-display text-3xl md:text-4xl font-bold mb-2">Créer une course</h1>
       <p className="text-muted-foreground mb-8">Charge le tracé GPX et publie ton événement</p>
 
+      {events.length === 0 ? (
+        <Card className="glass-card p-6">
+          <p className="mb-4">Tu dois d'abord créer une <strong>épreuve</strong> avant d'y rattacher des courses.</p>
+          <Button asChild variant="hero"><Link to="/organizer/new-event">Créer une épreuve</Link></Button>
+        </Card>
+      ) : (
       <Card className="glass-card p-6">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
+            <Label htmlFor="event_id">Épreuve de rattachement *</Label>
+            <select id="event_id" value={eventId} onChange={(e) => setEventId(e.target.value)} required className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+              <option value="">— Choisir une épreuve —</option>
+              {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              <Link to="/organizer/new-event" className="underline">+ Créer une nouvelle épreuve</Link>
+            </p>
+          </div>
+          <div>
             <Label htmlFor="name">Nom de la course</Label>
-            <Input id="name" name="name" required placeholder="Trail des collines 2026" maxLength={120} />
+            <Input id="name" name="name" required placeholder="Trail des collines 2026 — 25 km" maxLength={120} />
           </div>
           <div>
             <Label htmlFor="start_time">Date & heure de départ</Label>
@@ -200,6 +240,7 @@ export default function NewRace() {
           </Button>
         </form>
       </Card>
+      )}
     </main>
   );
 }
