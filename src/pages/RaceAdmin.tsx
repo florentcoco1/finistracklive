@@ -90,7 +90,13 @@ const pendingStoreName = "pending-imports";
 
 function displayName(profile: AdminProfile | null) {
   const name = `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim();
-  return name || profile?.email || "Utilisateur";
+  return name || profile?.email || "—";
+}
+
+function genderLabel(g: string | null | undefined) {
+  if (g === "M") return "H";
+  if (g === "F") return "F";
+  return "—";
 }
 
 async function pendingStore(mode: IDBTransactionMode) {
