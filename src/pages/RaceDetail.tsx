@@ -181,6 +181,7 @@ export default function RaceDetail() {
             problem_description: base?.problem_description ?? null,
             first_name: r.first_name ?? base?.first_name ?? null,
             last_name: r.last_name ?? base?.last_name ?? null,
+            gender: r.gender ?? null,
             latitude: base?.latitude ?? null,
             longitude: base?.longitude ?? null,
             distance_along_route_m: base?.distance_along_route_m ?? null,
