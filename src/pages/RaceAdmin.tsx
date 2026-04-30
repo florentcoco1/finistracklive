@@ -49,6 +49,8 @@ interface RegistrationRow {
   runner_status: string;
   created_at: string;
   profile: AdminProfile | null;
+  gender?: string | null;
+  birth_date?: string | null;
 }
 
 interface OrganizerRow {
