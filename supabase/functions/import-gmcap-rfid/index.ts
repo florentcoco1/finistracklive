@@ -134,33 +134,33 @@ Deno.serve(async (req) => {
     let matched = 0;
 
     for (const row of rows) {
-      const bib = clean(row["Numéro"] || row["Numero"]);
+      const bib = pick(row, "Numéro", "Numero", "Dossard", "N°", "Bib");
       if (!bib) continue;
 
       const registrationId = byBib.get(bib) ?? null;
       if (registrationId) matched += 1;
 
-      const abandoned = clean(row["Abandon"]).toUpperCase() === "O";
-      const disqualified = clean(row["Disqualifié"] || row["Disqualifie"]).toUpperCase() === "O";
-      const started = clean(row["Pris Départ"] || row["Pris Depart"]).toUpperCase() === "O";
+      const abandoned = pick(row, "Abandon").toUpperCase() === "O";
+      const disqualified = pick(row, "Disqualifié", "Disqualifie").toUpperCase() === "O";
+      const started = pick(row, "Pris Départ", "Pris Depart").toUpperCase() === "O";
       const status = disqualified ? "disqualified" : abandoned ? "dnf" : started ? "classified" : "not_started";
 
       results.push({
         race_id,
         registration_id: registrationId,
         bib_number: bib,
-        first_name: clean(row["Prénom"] || row["Prenom"]) || null,
-        last_name: clean(row["Nom"]) || null,
-        category: clean(row["Abbrev. Catégorie"] || row["Abbrev. Categorie"] || row["Catégorie"] || row["Categorie"]) || null,
-        club: clean(row["Club"]) || null,
+        first_name: pick(row, "Prénom", "Prenom") || null,
+        last_name: pick(row, "Nom") || null,
+        category: pick(row, "Abbrev. Catégorie", "Abbrev. Categorie", "Catégorie", "Categorie") || null,
+        club: pick(row, "Club") || null,
         status,
-        official_time: clean(row["Temps"]) || null,
-        official_seconds: decimal(row["Nb.Secondes"]),
-        rounded_time: clean(row["Temps Arrondi"]) || null,
-        rounded_seconds: decimal(row["Nb.Secondes Arrondi"]),
-        overall_rank: integer(row["Classement"]),
-        category_rank: integer(row["Classement par Cat."]),
-        gender_rank: integer(row["Classement par Sexe"]),
+        official_time: pick(row, "Temps") || null,
+        official_seconds: decimal(pick(row, "Nb.Secondes")),
+        rounded_time: pick(row, "Temps Arrondi") || null,
+        rounded_seconds: decimal(pick(row, "Nb.Secondes Arrondi")),
+        overall_rank: integer(pick(row, "Classement")),
+        category_rank: integer(pick(row, "Classement par Cat.", "Classement par Cat")),
+        gender_rank: integer(pick(row, "Classement par Sexe")),
         split_payload: extractSplits(row),
         raw_payload: row,
         imported_at: new Date().toISOString(),
