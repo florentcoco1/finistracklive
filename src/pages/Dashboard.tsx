@@ -84,6 +84,14 @@ export default function Dashboard() {
     });
   }, [user, isOrganizer]);
 
+  useEffect(() => {
+    if (!user || !isOrganizer) return;
+    (supabase.from as unknown as (t: string) => UntypedQuery)("events")
+      .select("id, name, start_date, poster_url")
+      .eq("organizer_id", user.id)
+      .then(({ data }) => setOrganizerEvents(((data ?? []) as OrganizerEvent[]).sort((a, b) => (b.start_date ?? "").localeCompare(a.start_date ?? ""))));
+  }, [user, isOrganizer]);
+
   if (loading) return <main className="container py-12"><p className="text-muted-foreground">Chargement…</p></main>;
   if (!user) return <Navigate to="/auth" replace />;
 
