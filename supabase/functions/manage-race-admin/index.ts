@@ -233,6 +233,62 @@ Deno.serve(async (req) => {
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
     }
 
+    if (body.action === "bulk_import_registrations") {
+      const parsedRunners = parseRunnerImport(body.content);
+      const runners = parsedRunners.filter((runner) => runner.email && runner.bib_number && runner.first_name && runner.last_name);
+      if (!runners.length) return json({ error: "Aucun coureur valide trouvé : email, nom, prénom et dossard sont requis." }, 400);
+      if (runners.length > 1000) return json({ error: "Import limité à 1000 coureurs par fichier." }, 400);
+
+      let created = 0;
+      let updated = 0;
+      let registered = 0;
+      const errors: string[] = [];
+      for (const runner of runners) {
+        try {
+          let { data: profile } = await admin.from("profiles").select("user_id").ilike("email", runner.email).maybeSingle();
+          if (!profile?.user_id) {
+            const { data: createdUser, error: userError } = await admin.auth.admin.createUser({
+              email: runner.email,
+              password: randomPassword(),
+              email_confirm: true,
+              user_metadata: { first_name: runner.first_name, last_name: runner.last_name, birth_date: runner.birth_date, phone: runner.phone },
+            });
+            if (userError || !createdUser.user) throw new Error(userError?.message ?? "Création utilisateur impossible");
+            profile = { user_id: createdUser.user.id };
+            created += 1;
+          } else {
+            updated += 1;
+          }
+
+          const { error: profileError } = await admin.from("profiles").upsert({
+            user_id: profile.user_id,
+            email: runner.email,
+            first_name: runner.first_name,
+            last_name: runner.last_name,
+            birth_date: runner.birth_date,
+            phone: runner.phone || null,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "user_id" });
+          if (profileError) throw new Error(profileError.message);
+
+          await admin.from("user_roles").upsert({ user_id: profile.user_id, role: "runner" }, { onConflict: "user_id,role" });
+          const { error: registrationError } = await admin.from("race_registrations").upsert({
+            race_id: body.race_id,
+            runner_id: profile.user_id,
+            bib_number: runner.bib_number,
+            category: runner.category || null,
+            emergency_phone: runner.phone || null,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "race_id,runner_id" });
+          if (registrationError) throw new Error(registrationError.message);
+          registered += 1;
+        } catch (error) {
+          errors.push(`${runner.bib_number || "?"} ${runner.email || runner.last_name}: ${(error as Error).message}`);
+        }
+      }
+      return json({ ok: true, created, updated, registered, skipped: parsedRunners.length - runners.length, errors: errors.slice(0, 12), ...(await loadRace(admin, body.race_id)) });
+    }
+
     if (body.action === "add_organizer") {
       const { data: profile } = await admin.from("profiles").select("user_id").ilike("email", body.email).maybeSingle();
       if (!profile?.user_id) return json({ error: "Aucun utilisateur trouvé avec cet email" }, 404);
