@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Navigate, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { z } from "zod";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +12,11 @@ import { toast } from "sonner";
 import { parseGpx } from "@/lib/gpx";
 import { Upload, MapPin } from "lucide-react";
 import { DifficultyStars } from "@/components/DifficultyStars";
+
+interface EventOption { id: string; name: string }
+interface UntypedEventsQuery {
+  select: (c: string) => { eq: (col: string, val: string) => { order: (col: string, opts: { ascending: boolean }) => Promise<{ data: unknown[] | null }> } };
+}
 
 type JsonValue = string | number | boolean | null | { [key: string]: JsonValue } | JsonValue[];
 
@@ -35,12 +40,25 @@ function isMissingColumnError(error: unknown, columnName: string) {
 export default function NewRace() {
   const { user, isOrganizer, loading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const presetEvent = searchParams.get("event") ?? "";
   const [gpxFile, setGpxFile] = useState<File | null>(null);
   const [gpxPreview, setGpxPreview] = useState<{ distanceKm: number; points: number } | null>(null);
   const [difficultyLevel, setDifficultyLevel] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+  const [events, setEvents] = useState<EventOption[]>([]);
+  const [eventId, setEventId] = useState<string>(presetEvent);
 
   useEffect(() => { document.title = "Créer une course — FinisTrackLive"; }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    (supabase.from as unknown as (t: string) => UntypedEventsQuery)("events")
+      .select("id, name")
+      .eq("organizer_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setEvents(((data ?? []) as EventOption[])));
+  }, [user]);
 
   if (loading) return <main className="container py-12"><p className="text-muted-foreground">Chargement…</p></main>;
   if (!user) return <Navigate to="/auth" replace />;
