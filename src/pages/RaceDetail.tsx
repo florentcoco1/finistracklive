@@ -476,6 +476,10 @@ export default function RaceDetail() {
       toast.error("Les inscriptions sont closes : la course est terminée");
       return;
     }
+    if (!gmcapEligible) {
+      toast.error("Inscription réservée aux coureurs déjà importés depuis GmCAP");
+      return;
+    }
     if (!bibInput.trim()) {
       toast.error("N° de dossard requis");
       return;
