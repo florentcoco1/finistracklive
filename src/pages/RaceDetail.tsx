@@ -52,6 +52,8 @@ export default function RaceDetail() {
   const [searchQuery, setSearchQuery] = useState("");
   const [focused, setFocused] = useState<string | null>(null);
   const [myRegistration, setMyRegistration] = useState<{ id: string; bib_number: string } | null>(null);
+  const [gmcapEligible, setGmcapEligible] = useState<boolean | null>(null);
+  const [profileMissing, setProfileMissing] = useState(false);
   const [signupOpen, setSignupOpen] = useState(false);
   const [bibInput, setBibInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
