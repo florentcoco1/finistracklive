@@ -288,9 +288,10 @@ export default function RaceDetail() {
       .then(({ data }) => setMyRegistration(data));
   }, [raceId, user]);
 
-  // Check GmCAP eligibility (must be present in any gmcap_results matching name + birth date)
+  // Check GmCAP eligibility: the runner must be in this race's GmCAP roster
+  // (imported before the race starts), matched by name + birth date.
   useEffect(() => {
-    if (!user) {
+    if (!user || !raceId) {
       setGmcapEligible(null);
       setProfileMissing(false);
       return;
@@ -315,6 +316,7 @@ export default function RaceDetail() {
       const { data: matches } = await supabase
         .from("gmcap_results" as any)
         .select("id")
+        .eq("race_id", raceId)
         .ilike("first_name", first)
         .ilike("last_name", last)
         .eq("birth_date", birth)
@@ -323,7 +325,7 @@ export default function RaceDetail() {
       setGmcapEligible((((matches as unknown) as any[]) ?? []).length > 0);
     })();
     return () => { active = false; };
-  }, [user]);
+  }, [user, raceId]);
 
   const routeCoords = useMemo<[number, number][]>(() => {
     if (race?.route_points && race.route_points.length > 0) {
