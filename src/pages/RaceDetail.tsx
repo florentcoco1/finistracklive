@@ -288,6 +288,43 @@ export default function RaceDetail() {
       .then(({ data }) => setMyRegistration(data));
   }, [raceId, user]);
 
+  // Check GmCAP eligibility (must be present in any gmcap_results matching name + birth date)
+  useEffect(() => {
+    if (!user) {
+      setGmcapEligible(null);
+      setProfileMissing(false);
+      return;
+    }
+    let active = true;
+    (async () => {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("first_name, last_name, birth_date")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!active) return;
+      const first = profile?.first_name?.trim();
+      const last = profile?.last_name?.trim();
+      const birth = profile?.birth_date;
+      if (!first || !last || !birth) {
+        setProfileMissing(true);
+        setGmcapEligible(false);
+        return;
+      }
+      setProfileMissing(false);
+      const { data: matches } = await supabase
+        .from("gmcap_results" as any)
+        .select("id")
+        .ilike("first_name", first)
+        .ilike("last_name", last)
+        .eq("birth_date", birth)
+        .limit(1);
+      if (!active) return;
+      setGmcapEligible((((matches as unknown) as any[]) ?? []).length > 0);
+    })();
+    return () => { active = false; };
+  }, [user]);
+
   const routeCoords = useMemo<[number, number][]>(() => {
     if (race?.route_points && race.route_points.length > 0) {
       return race.route_points.map((p) => [p.lat, p.lng]);
