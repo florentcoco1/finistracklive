@@ -582,29 +582,39 @@ export default function RaceDetail() {
               <Flag className="h-4 w-4 mr-2" /> Inscriptions closes
             </Button>
           ) : user ? (
-            <Dialog open={signupOpen} onOpenChange={setSignupOpen}>
-              <DialogTrigger asChild>
-                <Button variant="hero"><UserPlus className="h-4 w-4 mr-2" /> S'inscrire</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>S'inscrire à {race.name}</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3">
-                  <div>
-                    <Label htmlFor="bib">N° de dossard</Label>
-                    <Input id="bib" value={bibInput} onChange={(e) => setBibInput(e.target.value)} placeholder="ex: 142" />
+            gmcapEligible === null ? (
+              <Button variant="glass" disabled>
+                <UserPlus className="h-4 w-4 mr-2" /> Vérification GmCAP…
+              </Button>
+            ) : !gmcapEligible ? (
+              <Button variant="glass" disabled title={profileMissing ? "Complétez votre profil (nom, prénom, date de naissance) pour vous inscrire" : "Vous devez d'abord avoir été importé depuis GmCAP pour vous inscrire"}>
+                <UserPlus className="h-4 w-4 mr-2" /> {profileMissing ? "Profil incomplet" : "Inscription via GmCAP requise"}
+              </Button>
+            ) : (
+              <Dialog open={signupOpen} onOpenChange={setSignupOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="hero"><UserPlus className="h-4 w-4 mr-2" /> S'inscrire</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>S'inscrire à {race.name}</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <div>
+                      <Label htmlFor="bib">N° de dossard</Label>
+                      <Input id="bib" value={bibInput} onChange={(e) => setBibInput(e.target.value)} placeholder="ex: 142" />
+                    </div>
+                    <div>
+                      <Label htmlFor="phone">N° de téléphone</Label>
+                      <Input id="phone" type="tel" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} placeholder="ex: 06 12 34 56 78" />
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="phone">N° de téléphone</Label>
-                    <Input id="phone" type="tel" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} placeholder="ex: 06 12 34 56 78" />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="hero" onClick={handleRegister}>Confirmer</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                  <DialogFooter>
+                    <Button variant="hero" onClick={handleRegister}>Confirmer</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )
           ) : (
             <Button asChild variant="hero">
               <Link to="/auth?mode=signup"><UserPlus className="h-4 w-4 mr-2" /> Se connecter pour s'inscrire</Link>
