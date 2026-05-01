@@ -52,6 +52,8 @@ export default function RaceDetail() {
   const [searchQuery, setSearchQuery] = useState("");
   const [focused, setFocused] = useState<string | null>(null);
   const [myRegistration, setMyRegistration] = useState<{ id: string; bib_number: string } | null>(null);
+  const [gmcapEligible, setGmcapEligible] = useState<boolean | null>(null);
+  const [profileMissing, setProfileMissing] = useState(false);
   const [signupOpen, setSignupOpen] = useState(false);
   const [bibInput, setBibInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
@@ -286,6 +288,43 @@ export default function RaceDetail() {
       .then(({ data }) => setMyRegistration(data));
   }, [raceId, user]);
 
+  // Check GmCAP eligibility (must be present in any gmcap_results matching name + birth date)
+  useEffect(() => {
+    if (!user) {
+      setGmcapEligible(null);
+      setProfileMissing(false);
+      return;
+    }
+    let active = true;
+    (async () => {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("first_name, last_name, birth_date")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!active) return;
+      const first = profile?.first_name?.trim();
+      const last = profile?.last_name?.trim();
+      const birth = profile?.birth_date;
+      if (!first || !last || !birth) {
+        setProfileMissing(true);
+        setGmcapEligible(false);
+        return;
+      }
+      setProfileMissing(false);
+      const { data: matches } = await supabase
+        .from("gmcap_results" as any)
+        .select("id")
+        .ilike("first_name", first)
+        .ilike("last_name", last)
+        .eq("birth_date", birth)
+        .limit(1);
+      if (!active) return;
+      setGmcapEligible((((matches as unknown) as any[]) ?? []).length > 0);
+    })();
+    return () => { active = false; };
+  }, [user]);
+
   const routeCoords = useMemo<[number, number][]>(() => {
     if (race?.route_points && race.route_points.length > 0) {
       return race.route_points.map((p) => [p.lat, p.lng]);
@@ -437,6 +476,10 @@ export default function RaceDetail() {
       toast.error("Les inscriptions sont closes : la course est terminée");
       return;
     }
+    if (!gmcapEligible) {
+      toast.error("Inscription réservée aux coureurs déjà importés depuis GmCAP");
+      return;
+    }
     if (!bibInput.trim()) {
       toast.error("N° de dossard requis");
       return;
@@ -539,29 +582,39 @@ export default function RaceDetail() {
               <Flag className="h-4 w-4 mr-2" /> Inscriptions closes
             </Button>
           ) : user ? (
-            <Dialog open={signupOpen} onOpenChange={setSignupOpen}>
-              <DialogTrigger asChild>
-                <Button variant="hero"><UserPlus className="h-4 w-4 mr-2" /> S'inscrire</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>S'inscrire à {race.name}</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3">
-                  <div>
-                    <Label htmlFor="bib">N° de dossard</Label>
-                    <Input id="bib" value={bibInput} onChange={(e) => setBibInput(e.target.value)} placeholder="ex: 142" />
+            gmcapEligible === null ? (
+              <Button variant="glass" disabled>
+                <UserPlus className="h-4 w-4 mr-2" /> Vérification GmCAP…
+              </Button>
+            ) : !gmcapEligible ? (
+              <Button variant="glass" disabled title={profileMissing ? "Complétez votre profil (nom, prénom, date de naissance) pour vous inscrire" : "Vous devez d'abord avoir été importé depuis GmCAP pour vous inscrire"}>
+                <UserPlus className="h-4 w-4 mr-2" /> {profileMissing ? "Profil incomplet" : "Inscription via GmCAP requise"}
+              </Button>
+            ) : (
+              <Dialog open={signupOpen} onOpenChange={setSignupOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="hero"><UserPlus className="h-4 w-4 mr-2" /> S'inscrire</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>S'inscrire à {race.name}</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <div>
+                      <Label htmlFor="bib">N° de dossard</Label>
+                      <Input id="bib" value={bibInput} onChange={(e) => setBibInput(e.target.value)} placeholder="ex: 142" />
+                    </div>
+                    <div>
+                      <Label htmlFor="phone">N° de téléphone</Label>
+                      <Input id="phone" type="tel" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} placeholder="ex: 06 12 34 56 78" />
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="phone">N° de téléphone</Label>
-                    <Input id="phone" type="tel" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} placeholder="ex: 06 12 34 56 78" />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="hero" onClick={handleRegister}>Confirmer</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                  <DialogFooter>
+                    <Button variant="hero" onClick={handleRegister}>Confirmer</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )
           ) : (
             <Button asChild variant="hero">
               <Link to="/auth?mode=signup"><UserPlus className="h-4 w-4 mr-2" /> Se connecter pour s'inscrire</Link>
