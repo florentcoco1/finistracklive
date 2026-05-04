@@ -46,6 +46,15 @@ interface EventForm {
   poster_url: string | null;
 }
 
+function getSaveErrorMessage(err: unknown) {
+  if (!err || typeof err !== "object") return "Erreur lors de l'enregistrement";
+  const error = err as { code?: string; message?: string };
+  if (error.code === "PGRST205" && error.message?.includes("public.events")) {
+    return "La table des épreuves est en cours d'initialisation. Réessaie dans quelques secondes.";
+  }
+  return error.message || "Erreur lors de l'enregistrement";
+}
+
 const empty: EventForm = {
   name: "", description: "", location: "", start_date: "", end_date: "",
   website_url: "", contact_email: "", contact_phone: "",
@@ -154,7 +163,7 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
         navigate(`/events/${id}`);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
+      toast.error(getSaveErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
