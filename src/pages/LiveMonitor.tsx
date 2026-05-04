@@ -317,7 +317,7 @@ function AlertList({ rows, loading }: { rows: AlertRow[]; loading: boolean }) {
                       </div>
                     )}
                     <a
-                      href={`https://www.google.com/maps?q=${r.last_lat},${r.last_lng}`}
+                      href={`https://www.google.com/maps/search/?api=1&query=${r.last_lat}%2C${r.last_lng}`}
                       target="_blank"
                       rel="noreferrer"
                       className="text-xs text-primary hover:underline mt-1 inline-block"
