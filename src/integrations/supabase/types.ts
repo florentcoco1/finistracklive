@@ -14,6 +14,63 @@ export type Database = {
   }
   public: {
     Tables: {
+      events: {
+        Row: {
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          description: string | null
+          end_date: string | null
+          facebook_url: string | null
+          id: string
+          instagram_url: string | null
+          location: string | null
+          name: string
+          organizer_id: string
+          poster_url: string | null
+          start_date: string | null
+          twitter_url: string | null
+          updated_at: string
+          website_url: string | null
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          facebook_url?: string | null
+          id?: string
+          instagram_url?: string | null
+          location?: string | null
+          name: string
+          organizer_id: string
+          poster_url?: string | null
+          start_date?: string | null
+          twitter_url?: string | null
+          updated_at?: string
+          website_url?: string | null
+        }
+        Update: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          facebook_url?: string | null
+          id?: string
+          instagram_url?: string | null
+          location?: string | null
+          name?: string
+          organizer_id?: string
+          poster_url?: string | null
+          start_date?: string | null
+          twitter_url?: string | null
+          updated_at?: string
+          website_url?: string | null
+        }
+        Relationships: []
+      }
       gmcap_import_sources: {
         Row: {
           created_at: string
@@ -247,6 +304,7 @@ export type Database = {
           created_at: string
           description: string | null
           distance_km: number | null
+          event_id: string | null
           gpx_geojson: Json | null
           gpx_url: string | null
           id: string
@@ -261,6 +319,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           distance_km?: number | null
+          event_id?: string | null
           gpx_geojson?: Json | null
           gpx_url?: string | null
           id?: string
@@ -275,6 +334,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           distance_km?: number | null
+          event_id?: string | null
           gpx_geojson?: Json | null
           gpx_url?: string | null
           id?: string
@@ -285,7 +345,15 @@ export type Database = {
           status?: Database["public"]["Enums"]["race_status"]
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "races_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       runner_positions: {
         Row: {
