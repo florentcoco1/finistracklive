@@ -262,19 +262,27 @@ function AlertList({ rows, loading }: { rows: AlertRow[]; loading: boolean }) {
                     Dossard #{r.bib_number}
                   </span>
                 </div>
-                {r.runner_status === "problem" && r.problem_description && (
-                  <p className="text-sm text-foreground/90 mt-1">
-                    « {r.problem_description} »
-                  </p>
-                )}
-                {r.runner_status === "dnf" && r.dnf_reason && (
-                  <p className="text-sm text-foreground/90 mt-1">
-                    Motif : {r.dnf_reason}
-                  </p>
+                {(r.problem_description || r.dnf_reason) && (
+                  <div
+                    className={`mt-2 rounded-md border px-3 py-2 ${
+                      r.runner_status === "problem"
+                        ? "border-warning/40 bg-warning/10"
+                        : "border-destructive/40 bg-destructive/10"
+                    }`}
+                  >
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">
+                      Motif
+                    </div>
+                    <p className="text-sm text-foreground/90 mt-0.5">
+                      {r.runner_status === "problem"
+                        ? r.problem_description
+                        : r.dnf_reason}
+                    </p>
+                  </div>
                 )}
               </div>
 
-              <div className="flex flex-col gap-2 items-stretch sm:items-end">
+              <div className="flex flex-col gap-2 items-stretch sm:items-end sm:min-w-[220px]">
                 {r.emergency_phone && (
                   <Button asChild size="sm" variant="outline">
                     <a href={`tel:${r.emergency_phone}`}>
@@ -293,6 +301,34 @@ function AlertList({ rows, loading }: { rows: AlertRow[]; loading: boolean }) {
                 )}
                 {!r.emergency_phone && !r.profile_phone && (
                   <span className="text-xs text-muted-foreground">Aucun téléphone</span>
+                )}
+
+                {r.last_lat != null && r.last_lng != null ? (
+                  <div className="rounded-md border border-border/60 bg-secondary/40 px-3 py-2 text-left sm:text-right">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold flex items-center gap-1 sm:justify-end">
+                      <MapPin className="h-3 w-3" /> Dernière position
+                    </div>
+                    <div className="text-xs font-mono mt-0.5">
+                      {r.last_lat.toFixed(5)}, {r.last_lng.toFixed(5)}
+                    </div>
+                    {r.last_position_at && (
+                      <div className="text-[11px] text-muted-foreground">
+                        il y a {formatDistanceToNow(new Date(r.last_position_at), { locale: fr })}
+                      </div>
+                    )}
+                    <a
+                      href={`https://www.google.com/maps?q=${r.last_lat},${r.last_lng}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-primary hover:underline mt-1 inline-block"
+                    >
+                      Ouvrir dans Maps ↗
+                    </a>
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground sm:text-right">
+                    Aucune position GPS
+                  </span>
                 )}
               </div>
             </div>
