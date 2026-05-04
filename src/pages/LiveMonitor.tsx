@@ -42,16 +42,21 @@ export default function LiveMonitor() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [races, setRaces] = useState<RaceOption[]>([]);
+  const [selectedRaceId, setSelectedRaceId] = useState<string>("all");
+
   const load = async () => {
     if (!user) return;
     setRefreshing(true);
 
     // 1. Get organizer's races (admin sees all)
-    let raceQuery = supabase.from("races").select("id, name");
+    let raceQuery = supabase.from("races").select("id, name, start_time").order("start_time", { ascending: false });
     if (!isAdmin) raceQuery = raceQuery.eq("organizer_id", user.id);
-    const { data: races } = await raceQuery;
-    const raceIds = (races ?? []).map((r) => r.id);
-    const raceMap = new Map((races ?? []).map((r) => [r.id, r.name]));
+    const { data: racesData } = await raceQuery;
+    const raceList: RaceOption[] = (racesData ?? []) as RaceOption[];
+    setRaces(raceList);
+    const raceIds = raceList.map((r) => r.id);
+    const raceMap = new Map(raceList.map((r) => [r.id, r.name]));
 
     if (raceIds.length === 0) {
       setRows([]);
