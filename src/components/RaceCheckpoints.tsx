@@ -100,7 +100,7 @@ export function RaceCheckpoints({ raceId, registrations }: { raceId: string; reg
   const addCheckpoint = async () => {
     if (!newCp.name.trim()) return toast.error("Nom du point requis");
     setBusy(true);
-    const { error } = await supabase.from("race_checkpoints").insert({
+    const { error } = await (supabase as any).from("race_checkpoints").insert({
       race_id: raceId,
       name: newCp.name.trim(),
       distance_km: newCp.distance_km ? Number(newCp.distance_km) : null,
@@ -116,7 +116,7 @@ export function RaceCheckpoints({ raceId, registrations }: { raceId: string; reg
 
   const deleteCheckpoint = async (id: string) => {
     if (!window.confirm("Supprimer ce point de chrono et toutes ses saisies ?")) return;
-    const { error } = await supabase.from("race_checkpoints").delete().eq("id", id);
+    const { error } = await (supabase as any).from("race_checkpoints").delete().eq("id", id);
     if (error) return toast.error(error.message);
     if (activeCp === id) setActiveCp(null);
     void load();
@@ -137,16 +137,16 @@ export function RaceCheckpoints({ raceId, registrations }: { raceId: string; reg
     if (!activeCp) return;
     const raw = drafts[registrationId] ?? "";
     const { seconds, text } = parseTime(raw);
+    const sb = supabase as any;
     setBusy(true);
     if (!raw.trim()) {
-      // delete
       const existing = times.find((t) => t.checkpoint_id === activeCp && t.registration_id === registrationId);
       if (existing) {
-        const { error } = await supabase.from("runner_checkpoint_times").delete().eq("id", existing.id);
+        const { error } = await sb.from("runner_checkpoint_times").delete().eq("id", existing.id);
         if (error) toast.error(error.message);
       }
     } else {
-      const { error } = await supabase
+      const { error } = await sb
         .from("runner_checkpoint_times")
         .upsert(
           { checkpoint_id: activeCp, registration_id: registrationId, time_seconds: seconds, time_text: text, recorded_at: new Date().toISOString() },
