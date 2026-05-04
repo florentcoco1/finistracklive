@@ -65,9 +65,21 @@ export function RaceCheckpoints({ raceId, registrations }: { raceId: string; reg
   const [activeCp, setActiveCp] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({}); // key registrationId
 
+  const ensureSchema = useCallback(async () => {
+    await supabase.functions.invoke("ensure-checkpoints-schema");
+    await new Promise((r) => setTimeout(r, 1000));
+  }, []);
+
+  const isMissingSchema = (err: any) =>
+    err && (err.code === "PGRST205" || /race_checkpoints|runner_checkpoint_times/.test(String(err.message ?? "")));
+
   const load = useCallback(async () => {
     const sb = supabase as any;
-    const { data: cps } = await sb.from("race_checkpoints").select("*").eq("race_id", raceId).order("position");
+    let { data: cps, error: cpErr } = await sb.from("race_checkpoints").select("*").eq("race_id", raceId).order("position");
+    if (cpErr && isMissingSchema(cpErr)) {
+      await ensureSchema();
+      ({ data: cps } = await sb.from("race_checkpoints").select("*").eq("race_id", raceId).order("position"));
+    }
     setCheckpoints((cps ?? []) as Checkpoint[]);
     const ids = ((cps ?? []) as Checkpoint[]).map((c) => c.id);
     if (ids.length) {
@@ -100,13 +112,18 @@ export function RaceCheckpoints({ raceId, registrations }: { raceId: string; reg
   const addCheckpoint = async () => {
     if (!newCp.name.trim()) return toast.error("Nom du point requis");
     setBusy(true);
-    const { error } = await (supabase as any).from("race_checkpoints").insert({
+    const payload = {
       race_id: raceId,
       name: newCp.name.trim(),
       distance_km: newCp.distance_km ? Number(newCp.distance_km) : null,
       source: newCp.source,
       position: checkpoints.length,
-    });
+    };
+    let { error } = await (supabase as any).from("race_checkpoints").insert(payload);
+    if (error && isMissingSchema(error)) {
+      await ensureSchema();
+      ({ error } = await (supabase as any).from("race_checkpoints").insert(payload));
+    }
     setBusy(false);
     if (error) return toast.error(error.message);
     setNewCp(emptyNew);
