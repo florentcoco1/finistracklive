@@ -66,17 +66,12 @@ export function RaceCheckpoints({ raceId, registrations }: { raceId: string; reg
   const [drafts, setDrafts] = useState<Record<string, string>>({}); // key registrationId
 
   const load = useCallback(async () => {
-    const [{ data: cps }, { data: ts }] = await Promise.all([
-      supabase.from("race_checkpoints").select("*").eq("race_id", raceId).order("position"),
-      supabase
-        .from("runner_checkpoint_times")
-        .select("id, checkpoint_id, registration_id, time_seconds, time_text")
-        .in("checkpoint_id", []), // refined below
-    ]);
+    const sb = supabase as any;
+    const { data: cps } = await sb.from("race_checkpoints").select("*").eq("race_id", raceId).order("position");
     setCheckpoints((cps ?? []) as Checkpoint[]);
     const ids = ((cps ?? []) as Checkpoint[]).map((c) => c.id);
     if (ids.length) {
-      const { data: t2 } = await supabase
+      const { data: t2 } = await sb
         .from("runner_checkpoint_times")
         .select("id, checkpoint_id, registration_id, time_seconds, time_text")
         .in("checkpoint_id", ids);
