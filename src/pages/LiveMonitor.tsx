@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { AlertTriangle, Phone, RefreshCw, ShieldAlert, XOctagon } from "lucide-react";
+import { AlertTriangle, MapPin, Phone, RefreshCw, ShieldAlert, XOctagon } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,6 +24,9 @@ interface AlertRow {
   first_name: string | null;
   last_name: string | null;
   profile_phone: string | null;
+  last_lat: number | null;
+  last_lng: number | null;
+  last_position_at: string | null;
 }
 
 export default function LiveMonitor() {
@@ -71,8 +74,30 @@ export default function LiveMonitor() {
 
     const profileMap = new Map((profiles ?? []).map((p) => [p.user_id, p]));
 
+    // 4. Last GPS position per registration
+    const regIds = regList.map((r) => r.id);
+    const { data: positions } = regIds.length
+      ? await supabase
+          .from("runner_positions")
+          .select("registration_id, latitude, longitude, recorded_at")
+          .in("registration_id", regIds)
+          .order("recorded_at", { ascending: false })
+      : { data: [] as any[] };
+
+    const posMap = new Map<string, { lat: number; lng: number; at: string }>();
+    for (const p of positions ?? []) {
+      if (!posMap.has(p.registration_id)) {
+        posMap.set(p.registration_id, {
+          lat: p.latitude,
+          lng: p.longitude,
+          at: p.recorded_at,
+        });
+      }
+    }
+
     const merged: AlertRow[] = regList.map((r) => {
       const p = profileMap.get(r.runner_id);
+      const pos = posMap.get(r.id);
       return {
         registration_id: r.id,
         race_id: r.race_id,
@@ -86,6 +111,9 @@ export default function LiveMonitor() {
         first_name: p?.first_name ?? null,
         last_name: p?.last_name ?? null,
         profile_phone: p?.phone ?? null,
+        last_lat: pos?.lat ?? null,
+        last_lng: pos?.lng ?? null,
+        last_position_at: pos?.at ?? null,
       };
     });
 
