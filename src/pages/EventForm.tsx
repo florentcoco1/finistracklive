@@ -114,15 +114,13 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
     try {
       let posterUrl = form.poster_url;
       if (posterFile) {
-        // Ensure bucket exists (created on demand by edge function)
-        await supabase.functions.invoke("ensure-event-posters-bucket");
-        const path = `${user.id}/${Date.now()}-${posterFile.name.replace(/[^a-z0-9.-]/gi, "_")}`;
-        const { error: upErr } = await supabase.storage
-          .from("event-posters")
-          .upload(path, posterFile, { contentType: posterFile.type, upsert: false });
+        const fd = new FormData();
+        fd.append("file", posterFile);
+        const { data: up, error: upErr } = await supabase.functions.invoke("ensure-event-posters-bucket", { body: fd });
         if (upErr) throw upErr;
-        const { data: pub } = supabase.storage.from("event-posters").getPublicUrl(path);
-        posterUrl = pub.publicUrl;
+        const upRes = up as { public_url?: string; error?: string };
+        if (upRes?.error || !upRes?.public_url) throw new Error(upRes?.error || "Upload affiche impossible");
+        posterUrl = upRes.public_url;
       }
 
       const payload = {
