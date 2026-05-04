@@ -240,6 +240,47 @@ export type Database = {
         }
         Relationships: []
       }
+      race_checkpoints: {
+        Row: {
+          created_at: string
+          distance_km: number | null
+          id: string
+          name: string
+          position: number
+          race_id: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          distance_km?: number | null
+          id?: string
+          name: string
+          position?: number
+          race_id: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          distance_km?: number | null
+          id?: string
+          name?: string
+          position?: number
+          race_id?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "race_checkpoints_race_id_fkey"
+            columns: ["race_id"]
+            isOneToOne: false
+            referencedRelation: "races"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       race_registrations: {
         Row: {
           bib_number: string
@@ -351,6 +392,61 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      runner_checkpoint_times: {
+        Row: {
+          checkpoint_id: string
+          created_at: string
+          id: string
+          recorded_at: string
+          registration_id: string
+          time_seconds: number | null
+          time_text: string | null
+          updated_at: string
+        }
+        Insert: {
+          checkpoint_id: string
+          created_at?: string
+          id?: string
+          recorded_at?: string
+          registration_id: string
+          time_seconds?: number | null
+          time_text?: string | null
+          updated_at?: string
+        }
+        Update: {
+          checkpoint_id?: string
+          created_at?: string
+          id?: string
+          recorded_at?: string
+          registration_id?: string
+          time_seconds?: number | null
+          time_text?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "runner_checkpoint_times_checkpoint_id_fkey"
+            columns: ["checkpoint_id"]
+            isOneToOne: false
+            referencedRelation: "race_checkpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "runner_checkpoint_times_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: false
+            referencedRelation: "live_leaderboard"
+            referencedColumns: ["registration_id"]
+          },
+          {
+            foreignKeyName: "runner_checkpoint_times_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: false
+            referencedRelation: "race_registrations"
             referencedColumns: ["id"]
           },
         ]
