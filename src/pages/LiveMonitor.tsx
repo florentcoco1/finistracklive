@@ -10,6 +10,13 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+interface RaceOption {
+  id: string;
+  name: string;
+  start_time: string;
+}
 
 interface AlertRow {
   registration_id: string;
