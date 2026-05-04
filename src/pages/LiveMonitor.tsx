@@ -155,12 +155,28 @@ export default function LiveMonitor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isAdmin]);
 
-  const dnfRows = useMemo(() => rows.filter((r) => r.runner_status === "dnf"), [rows]);
-  const problemRows = useMemo(() => rows.filter((r) => r.runner_status === "problem"), [rows]);
+  const filteredRows = useMemo(
+    () => (selectedRaceId === "all" ? rows : rows.filter((r) => r.race_id === selectedRaceId)),
+    [rows, selectedRaceId],
+  );
+  const dnfRows = useMemo(() => filteredRows.filter((r) => r.runner_status === "dnf"), [filteredRows]);
+  const problemRows = useMemo(() => filteredRows.filter((r) => r.runner_status === "problem"), [filteredRows]);
+
+  // Count alerts per race for the selector
+  const alertsPerRace = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) m.set(r.race_id, (m.get(r.race_id) ?? 0) + 1);
+    return m;
+  }, [rows]);
 
   if (authLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
   if (!isOrganizer && !isAdmin) return <Navigate to="/" replace />;
+
+  const selectedRaceName =
+    selectedRaceId === "all"
+      ? "toutes vos courses"
+      : races.find((r) => r.id === selectedRaceId)?.name ?? "—";
 
   return (
     <main className="container py-8 space-y-6">
@@ -171,7 +187,7 @@ export default function LiveMonitor() {
             Suivi live — Abandons & Alertes
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Surveillance en temps réel de toutes vos courses.
+            Surveillance en temps réel de {selectedRaceName}.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={refreshing}>
@@ -180,20 +196,42 @@ export default function LiveMonitor() {
         </Button>
       </div>
 
+      <Card className="p-4">
+        <label className="text-xs uppercase tracking-wide text-muted-foreground font-semibold mb-2 block">
+          Épreuve
+        </label>
+        <Select value={selectedRaceId} onValueChange={setSelectedRaceId}>
+          <SelectTrigger className="w-full sm:w-[420px]">
+            <SelectValue placeholder="Choisir une épreuve" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toutes les épreuves ({rows.length})</SelectItem>
+            {races.map((r) => {
+              const count = alertsPerRace.get(r.id) ?? 0;
+              return (
+                <SelectItem key={r.id} value={r.id}>
+                  {r.name} {count > 0 ? `· ${count} alerte${count > 1 ? "s" : ""}` : ""}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+      </Card>
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard label="Total alertes" value={rows.length} accent="primary" />
+        <StatCard label="Total alertes" value={filteredRows.length} accent="primary" />
         <StatCard label="Abandons (DNF)" value={dnfRows.length} accent="destructive" />
         <StatCard label="Problèmes signalés" value={problemRows.length} accent="warning" />
       </div>
 
       <Tabs defaultValue="all">
         <TabsList>
-          <TabsTrigger value="all">Tous ({rows.length})</TabsTrigger>
+          <TabsTrigger value="all">Tous ({filteredRows.length})</TabsTrigger>
           <TabsTrigger value="problem">Problèmes ({problemRows.length})</TabsTrigger>
           <TabsTrigger value="dnf">Abandons ({dnfRows.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="all" className="mt-4">
-          <AlertList rows={rows} loading={loading} />
+          <AlertList rows={filteredRows} loading={loading} />
         </TabsContent>
         <TabsContent value="problem" className="mt-4">
           <AlertList rows={problemRows} loading={loading} />
