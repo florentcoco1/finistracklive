@@ -114,6 +114,8 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
     try {
       let posterUrl = form.poster_url;
       if (posterFile) {
+        // Ensure bucket exists (created on demand by edge function)
+        await supabase.functions.invoke("ensure-event-posters-bucket");
         const path = `${user.id}/${Date.now()}-${posterFile.name.replace(/[^a-z0-9.-]/gi, "_")}`;
         const { error: upErr } = await supabase.storage
           .from("event-posters")
