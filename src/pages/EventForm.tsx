@@ -50,9 +50,18 @@ function getSaveErrorMessage(err: unknown) {
   if (!err || typeof err !== "object") return "Erreur lors de l'enregistrement";
   const error = err as { code?: string; message?: string };
   if (error.code === "PGRST205" && error.message?.includes("public.events")) {
-    return "La table des épreuves est en cours d'initialisation. Réessaie dans quelques secondes.";
+    return "Le schéma des épreuves vient d'être initialisé. Relance l'enregistrement.";
   }
   return error.message || "Erreur lors de l'enregistrement";
+}
+
+function isMissingEventsTableError(err: unknown) {
+  return Boolean(
+    err &&
+      typeof err === "object" &&
+      (err as { code?: string; message?: string }).code === "PGRST205" &&
+      (err as { message?: string }).message?.includes("public.events"),
+  );
 }
 
 const empty: EventForm = {
@@ -147,17 +156,34 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
         poster_url: posterUrl,
       };
 
-      const table = (supabase.from as unknown as (t: string) => UntypedQuery)("events");
+      let table = (supabase.from as unknown as (t: string) => UntypedQuery)("events");
       if (mode === "create") {
-        const { data, error } = await table
+        let { data, error } = await table
           .insert({ ...payload, organizer_id: user.id })
           .select("id")
           .single();
+        if (isMissingEventsTableError(error)) {
+          const { error: schemaError } = await supabase.functions.invoke("ensure-events-schema");
+          if (schemaError) throw schemaError;
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          table = (supabase.from as unknown as (t: string) => UntypedQuery)("events");
+          const retry = await table.insert({ ...payload, organizer_id: user.id }).select("id").single();
+          data = retry.data;
+          error = retry.error;
+        }
         if (error) throw error;
         toast.success("Épreuve créée");
         navigate(`/events/${(data as { id: string }).id}`);
       } else if (id) {
-        const { error } = await table.update(payload).eq("id", id);
+        let { error } = await table.update(payload).eq("id", id);
+        if (isMissingEventsTableError(error)) {
+          const { error: schemaError } = await supabase.functions.invoke("ensure-events-schema");
+          if (schemaError) throw schemaError;
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          table = (supabase.from as unknown as (t: string) => UntypedQuery)("events");
+          const retry = await table.update(payload).eq("id", id);
+          error = retry.error;
+        }
         if (error) throw error;
         toast.success("Épreuve mise à jour");
         navigate(`/events/${id}`);
