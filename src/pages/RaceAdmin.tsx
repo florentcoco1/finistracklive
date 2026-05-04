@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { AlertTriangle, ChevronLeft, Link2, Plus, RefreshCw, Save, Shield, Trash2, Upload, UserPlus, Users } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Flag, Link2, Plus, RefreshCw, Save, Shield, Trash2, Upload, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { RaceCheckpoints } from "@/components/RaceCheckpoints";
 
 interface RaceSummary {
   id: string;
@@ -498,9 +499,10 @@ export default function RaceAdmin() {
       </div>
 
       <Tabs defaultValue="gmcap" className="space-y-4">
-        <TabsList className="grid w-full max-w-2xl grid-cols-3">
+        <TabsList className="grid w-full max-w-3xl grid-cols-4">
           <TabsTrigger value="gmcap"><Link2 className="h-4 w-4 mr-2" /> GMCAP</TabsTrigger>
           <TabsTrigger value="runners"><Users className="h-4 w-4 mr-2" /> Coureurs</TabsTrigger>
+          <TabsTrigger value="checkpoints"><Flag className="h-4 w-4 mr-2" /> Chronos</TabsTrigger>
           <TabsTrigger value="organizers"><Shield className="h-4 w-4 mr-2" /> Organisateurs</TabsTrigger>
         </TabsList>
 
@@ -641,6 +643,12 @@ export default function RaceAdmin() {
                 </TableBody>
               </Table>
             </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="checkpoints">
+          <Card className="glass-card p-5">
+            <RaceCheckpoints raceId={race.id} registrations={registrations.map((r) => ({ id: r.id, bib_number: r.bib_number, profile: r.profile }))} />
           </Card>
         </TabsContent>
 
