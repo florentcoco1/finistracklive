@@ -646,6 +646,12 @@ export default function RaceAdmin() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="checkpoints">
+          <Card className="glass-card p-5">
+            <RaceCheckpoints raceId={race.id} registrations={registrations.map((r) => ({ id: r.id, bib_number: r.bib_number, profile: r.profile }))} />
+          </Card>
+        </TabsContent>
+
         <TabsContent value="organizers">
           <Card className="glass-card p-5 space-y-5">
             <div>
