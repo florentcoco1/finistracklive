@@ -35,16 +35,45 @@ Le script :
 
 Ferme la fenêtre ou `Ctrl+C` pour arrêter.
 
-## Lancement automatique au démarrage (Windows)
+## Lancement automatique au démarrage (Windows — Planificateur de tâches)
 
-1. Crée un fichier `start-uploader.bat` à côté de `uploader.py` :
-   ```bat
-   @echo off
-   cd /d "%~dp0"
-   python uploader.py
-   pause
-   ```
-2. Mets un raccourci dans `shell:startup` (Win+R → `shell:startup`).
+Deux fichiers sont fournis :
+- `start-uploader.bat` : lance `uploader.py` et écrit la sortie dans `logs/uploader-AAAA-MM-JJ.log`
+- `install-task.ps1` : crée la tâche planifiée Windows qui exécute le `.bat` à chaque ouverture de session
+
+### Installation (une seule fois)
+
+1. Vérifie que `config.json` existe et est complété.
+2. Clic droit sur `install-task.ps1` → **Exécuter avec PowerShell**.
+   - Si Windows bloque le script, ouvre PowerShell dans le dossier et lance :
+     ```powershell
+     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+     .\install-task.ps1
+     ```
+3. Une tâche **« FinisTrackLive Uploader »** est créée. Elle :
+   - démarre automatiquement à chaque ouverture de session Windows
+   - redémarre toute seule si elle plante (3 essais à 1 min d'intervalle)
+   - tourne sans privilèges admin
+
+### Commandes utiles
+
+```powershell
+# Lancer maintenant sans redémarrer
+Start-ScheduledTask -TaskName "FinisTrackLive Uploader"
+
+# Arrêter
+Stop-ScheduledTask -TaskName "FinisTrackLive Uploader"
+
+# Voir les logs en direct
+Get-Content -Path .\logs\uploader-*.log -Tail 20 -Wait
+
+# Désinstaller
+.\install-task.ps1 -Uninstall
+```
+
+### Vérifier dans l'interface graphique
+
+`Win+R` → `taskschd.msc` → **Bibliothèque du Planificateur de tâches** → tu y vois « FinisTrackLive Uploader ».
 
 ## Sécurité
 
