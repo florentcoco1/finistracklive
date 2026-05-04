@@ -499,9 +499,10 @@ export default function RaceAdmin() {
       </div>
 
       <Tabs defaultValue="gmcap" className="space-y-4">
-        <TabsList className="grid w-full max-w-2xl grid-cols-3">
+        <TabsList className="grid w-full max-w-3xl grid-cols-4">
           <TabsTrigger value="gmcap"><Link2 className="h-4 w-4 mr-2" /> GMCAP</TabsTrigger>
           <TabsTrigger value="runners"><Users className="h-4 w-4 mr-2" /> Coureurs</TabsTrigger>
+          <TabsTrigger value="checkpoints"><Flag className="h-4 w-4 mr-2" /> Chronos</TabsTrigger>
           <TabsTrigger value="organizers"><Shield className="h-4 w-4 mr-2" /> Organisateurs</TabsTrigger>
         </TabsList>
 
