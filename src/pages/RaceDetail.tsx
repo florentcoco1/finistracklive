@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import type { LeaderboardRow } from "@/lib/types";
 import { DifficultyStars } from "@/components/DifficultyStars";
+import CheckpointRankings from "@/components/CheckpointRankings";
 
 interface Race {
   id: string;
@@ -790,6 +791,10 @@ export default function RaceDetail() {
             </ol>
           )}
         </Card>
+      </div>
+
+      <div className="mt-6">
+        <CheckpointRankings raceId={race.id} />
       </div>
     </main>
   );
