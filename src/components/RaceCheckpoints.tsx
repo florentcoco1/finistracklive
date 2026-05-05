@@ -292,9 +292,48 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="font-display text-lg font-semibold">Saisie manuelle — {active.name}</h3>
-              <p className="text-xs text-muted-foreground">Format accepté : <code>mm:ss</code> ou <code>h:mm:ss</code>. Laisser vide pour effacer.</p>
+              <p className="text-xs text-muted-foreground">
+                Saisis le N° de dossard puis valide : l'heure du PC est utilisée comme heure de passage. Le temps de course est calculé depuis l'heure de départ {raceStartTime ? `(${new Date(raceStartTime).toLocaleString("fr-FR")})` : ""}.
+              </p>
             </div>
           </div>
+
+          <div className="rounded-lg border border-border/50 bg-background/40 p-3 space-y-3">
+            <Label className="text-sm font-semibold flex items-center gap-2"><Zap className="h-4 w-4 text-primary" /> Chrono rapide par dossard</Label>
+            <div className="flex flex-wrap gap-2">
+              <Input
+                ref={bibRef}
+                autoFocus
+                value={bibInput}
+                onChange={(e) => setBibInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void submitBib(); } }}
+                placeholder="N° de dossard"
+                className="max-w-48 font-mono text-lg"
+                inputMode="numeric"
+              />
+              <Button variant="hero" onClick={() => void submitBib()} disabled={busy || !bibInput.trim() || !raceStartTime}>
+                Valider <span className="ml-2 text-xs opacity-70">(Entrée)</span>
+              </Button>
+            </div>
+            {!raceStartTime && (
+              <p className="text-xs text-destructive">Définis l'heure de départ de la course pour activer la saisie rapide.</p>
+            )}
+            {recentEntries.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Derniers passages enregistrés</p>
+                <div className="flex flex-wrap gap-2">
+                  {recentEntries.map((e, i) => (
+                    <Badge key={i} variant="secondary" className="font-mono">
+                      #{e.bib} · {e.text} · {e.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <p className="text-xs text-muted-foreground">Tu peux aussi corriger ou saisir un temps manuel ci-dessous (format <code>mm:ss</code> ou <code>h:mm:ss</code>, vide pour effacer).</p>
+
           <div className="rounded-lg border border-border/50 overflow-hidden max-h-[60vh] overflow-y-auto">
             <Table>
               <TableHeader>
