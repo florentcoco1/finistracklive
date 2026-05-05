@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import type { LeaderboardRow } from "@/lib/types";
 import { DifficultyStars } from "@/components/DifficultyStars";
+import CheckpointRankings from "@/components/CheckpointRankings";
 
 interface Race {
   id: string;
