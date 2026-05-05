@@ -178,6 +178,44 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
     void load();
   };
 
+  const submitBib = async () => {
+    if (!activeCp) return;
+    const bib = bibInput.trim();
+    if (!bib) return;
+    if (!raceStartTime) {
+      toast.error("Heure de départ de la course inconnue");
+      return;
+    }
+    const reg = registrations.find((r) => String(r.bib_number).trim() === bib);
+    if (!reg) {
+      toast.error(`Dossard ${bib} introuvable`);
+      return;
+    }
+    const startMs = new Date(raceStartTime).getTime();
+    const nowMs = Date.now();
+    const seconds = Math.max(0, Math.round((nowMs - startMs) / 1000));
+    const text = formatTime(seconds, null);
+    const sb = supabase as any;
+    setBusy(true);
+    const { error } = await sb
+      .from("runner_checkpoint_times")
+      .upsert(
+        { checkpoint_id: activeCp, registration_id: reg.id, time_seconds: seconds, time_text: text, recorded_at: new Date().toISOString() },
+        { onConflict: "checkpoint_id,registration_id" },
+      );
+    setBusy(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    const name = `${reg.profile?.first_name ?? ""} ${reg.profile?.last_name ?? ""}`.trim() || reg.profile?.email || "—";
+    setRecentEntries((prev) => [{ bib, name, text }, ...prev].slice(0, 8));
+    toast.success(`Dossard ${bib} — ${text}`);
+    setBibInput("");
+    bibRef.current?.focus();
+    void load();
+  };
+
   const active = checkpoints.find((c) => c.id === activeCp) ?? null;
 
   return (
