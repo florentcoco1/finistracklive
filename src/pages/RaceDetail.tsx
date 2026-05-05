@@ -792,6 +792,10 @@ export default function RaceDetail() {
           )}
         </Card>
       </div>
+
+      <div className="mt-6">
+        <CheckpointRankings raceId={race.id} />
+      </div>
     </main>
   );
 }
