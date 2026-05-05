@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Flag, Plus, Save, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Flag, Plus, Save, Trash2, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -57,13 +57,16 @@ function formatTime(seconds: number | null, fallback: string | null): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export function RaceCheckpoints({ raceId, registrations }: { raceId: string; registrations: RegistrationLite[] }) {
+export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { raceId: string; raceStartTime?: string | null; registrations: RegistrationLite[] }) {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [times, setTimes] = useState<CheckpointTime[]>([]);
   const [newCp, setNewCp] = useState(emptyNew);
   const [busy, setBusy] = useState(false);
   const [activeCp, setActiveCp] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({}); // key registrationId
+  const [bibInput, setBibInput] = useState("");
+  const [recentEntries, setRecentEntries] = useState<Array<{ bib: string; name: string; text: string }>>([]);
+  const bibRef = useRef<HTMLInputElement | null>(null);
 
   const ensureSchema = useCallback(async () => {
     await supabase.functions.invoke("ensure-checkpoints-schema");
@@ -175,6 +178,44 @@ export function RaceCheckpoints({ raceId, registrations }: { raceId: string; reg
     void load();
   };
 
+  const submitBib = async () => {
+    if (!activeCp) return;
+    const bib = bibInput.trim();
+    if (!bib) return;
+    if (!raceStartTime) {
+      toast.error("Heure de départ de la course inconnue");
+      return;
+    }
+    const reg = registrations.find((r) => String(r.bib_number).trim() === bib);
+    if (!reg) {
+      toast.error(`Dossard ${bib} introuvable`);
+      return;
+    }
+    const startMs = new Date(raceStartTime).getTime();
+    const nowMs = Date.now();
+    const seconds = Math.max(0, Math.round((nowMs - startMs) / 1000));
+    const text = formatTime(seconds, null);
+    const sb = supabase as any;
+    setBusy(true);
+    const { error } = await sb
+      .from("runner_checkpoint_times")
+      .upsert(
+        { checkpoint_id: activeCp, registration_id: reg.id, time_seconds: seconds, time_text: text, recorded_at: new Date().toISOString() },
+        { onConflict: "checkpoint_id,registration_id" },
+      );
+    setBusy(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    const name = `${reg.profile?.first_name ?? ""} ${reg.profile?.last_name ?? ""}`.trim() || reg.profile?.email || "—";
+    setRecentEntries((prev) => [{ bib, name, text }, ...prev].slice(0, 8));
+    toast.success(`Dossard ${bib} — ${text}`);
+    setBibInput("");
+    bibRef.current?.focus();
+    void load();
+  };
+
   const active = checkpoints.find((c) => c.id === activeCp) ?? null;
 
   return (
@@ -251,9 +292,48 @@ export function RaceCheckpoints({ raceId, registrations }: { raceId: string; reg
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="font-display text-lg font-semibold">Saisie manuelle — {active.name}</h3>
-              <p className="text-xs text-muted-foreground">Format accepté : <code>mm:ss</code> ou <code>h:mm:ss</code>. Laisser vide pour effacer.</p>
+              <p className="text-xs text-muted-foreground">
+                Saisis le N° de dossard puis valide : l'heure du PC est utilisée comme heure de passage. Le temps de course est calculé depuis l'heure de départ {raceStartTime ? `(${new Date(raceStartTime).toLocaleString("fr-FR")})` : ""}.
+              </p>
             </div>
           </div>
+
+          <div className="rounded-lg border border-border/50 bg-background/40 p-3 space-y-3">
+            <Label className="text-sm font-semibold flex items-center gap-2"><Zap className="h-4 w-4 text-primary" /> Chrono rapide par dossard</Label>
+            <div className="flex flex-wrap gap-2">
+              <Input
+                ref={bibRef}
+                autoFocus
+                value={bibInput}
+                onChange={(e) => setBibInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void submitBib(); } }}
+                placeholder="N° de dossard"
+                className="max-w-48 font-mono text-lg"
+                inputMode="numeric"
+              />
+              <Button variant="hero" onClick={() => void submitBib()} disabled={busy || !bibInput.trim() || !raceStartTime}>
+                Valider <span className="ml-2 text-xs opacity-70">(Entrée)</span>
+              </Button>
+            </div>
+            {!raceStartTime && (
+              <p className="text-xs text-destructive">Définis l'heure de départ de la course pour activer la saisie rapide.</p>
+            )}
+            {recentEntries.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Derniers passages enregistrés</p>
+                <div className="flex flex-wrap gap-2">
+                  {recentEntries.map((e, i) => (
+                    <Badge key={i} variant="secondary" className="font-mono">
+                      #{e.bib} · {e.text} · {e.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <p className="text-xs text-muted-foreground">Tu peux aussi corriger ou saisir un temps manuel ci-dessous (format <code>mm:ss</code> ou <code>h:mm:ss</code>, vide pour effacer).</p>
+
           <div className="rounded-lg border border-border/50 overflow-hidden max-h-[60vh] overflow-y-auto">
             <Table>
               <TableHeader>
