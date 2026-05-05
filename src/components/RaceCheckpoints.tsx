@@ -57,13 +57,16 @@ function formatTime(seconds: number | null, fallback: string | null): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export function RaceCheckpoints({ raceId, registrations }: { raceId: string; registrations: RegistrationLite[] }) {
+export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { raceId: string; raceStartTime?: string | null; registrations: RegistrationLite[] }) {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [times, setTimes] = useState<CheckpointTime[]>([]);
   const [newCp, setNewCp] = useState(emptyNew);
   const [busy, setBusy] = useState(false);
   const [activeCp, setActiveCp] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({}); // key registrationId
+  const [bibInput, setBibInput] = useState("");
+  const [recentEntries, setRecentEntries] = useState<Array<{ bib: string; name: string; text: string }>>([]);
+  const bibRef = useRef<HTMLInputElement | null>(null);
 
   const ensureSchema = useCallback(async () => {
     await supabase.functions.invoke("ensure-checkpoints-schema");
