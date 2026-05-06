@@ -337,6 +337,25 @@ export default function RaceDetail() {
 
   const isOrganizer = user && race && race.organizer_id === user.id;
 
+  // Live tick to update elapsed race time every second
+  const [nowTs, setNowTs] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNowTs(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  const startMs = race ? new Date(race.start_time).getTime() : null;
+  const hasStarted = startMs != null && nowTs >= startMs;
+  const effectiveStatus: "upcoming" | "live" | "finished" =
+    race?.status === "finished" ? "finished" : hasStarted ? "live" : "upcoming";
+  const elapsedSec = hasStarted && startMs != null ? Math.floor((nowTs - startMs) / 1000) : 0;
+  const formatElapsed = (s: number) => {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  };
+
   useEffect(() => {
     if (!raceId || !isOrganizer) return;
     supabase
@@ -526,10 +545,15 @@ export default function RaceDetail() {
 
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <StatusBadge status={race.status} />
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <StatusBadge status={effectiveStatus} />
             {race.distance_km && (
               <span className="text-sm text-muted-foreground">{race.distance_km} km</span>
+            )}
+            {effectiveStatus === "live" && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/15 border border-primary/30 text-primary-glow text-xs font-semibold tabular-nums">
+                <Timer className="h-3 w-3" /> {formatElapsed(elapsedSec)}
+              </span>
             )}
           </div>
           <h1 className="font-display text-3xl md:text-4xl font-bold">{race.name}</h1>
