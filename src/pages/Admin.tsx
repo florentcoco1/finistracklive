@@ -97,8 +97,13 @@ export default function AdminPage() {
   };
 
   const deleteRace = async (id: string) => {
-    if (!confirm("Supprimer définitivement cette course ? Les inscriptions associées seront aussi supprimées.")) return;
+    if (!confirm("Supprimer définitivement cette course ? Les inscriptions, points de chrono et temps associés seront aussi supprimés.")) return;
     setBusy(true);
+    const checkpointIds = ((await supabase.from("race_checkpoints" as any).select("id").eq("race_id", id)).data ?? []).map((c: any) => c.id);
+    if (checkpointIds.length > 0) {
+      await supabase.from("runner_checkpoint_times" as any).delete().in("checkpoint_id", checkpointIds);
+    }
+    await supabase.from("race_checkpoints" as any).delete().eq("race_id", id);
     await supabase.from("race_registrations").delete().eq("race_id", id);
     const { error } = await supabase.from("races").delete().eq("id", id);
     setBusy(false);
