@@ -545,10 +545,15 @@ export default function RaceDetail() {
 
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <StatusBadge status={race.status} />
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <StatusBadge status={effectiveStatus} />
             {race.distance_km && (
               <span className="text-sm text-muted-foreground">{race.distance_km} km</span>
+            )}
+            {effectiveStatus === "live" && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/15 border border-primary/30 text-primary-glow text-xs font-semibold tabular-nums">
+                <Timer className="h-3 w-3" /> {formatElapsed(elapsedSec)}
+              </span>
             )}
           </div>
           <h1 className="font-display text-3xl md:text-4xl font-bold">{race.name}</h1>
