@@ -337,6 +337,25 @@ export default function RaceDetail() {
 
   const isOrganizer = user && race && race.organizer_id === user.id;
 
+  // Live tick to update elapsed race time every second
+  const [nowTs, setNowTs] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNowTs(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  const startMs = race ? new Date(race.start_time).getTime() : null;
+  const hasStarted = startMs != null && nowTs >= startMs;
+  const effectiveStatus: "upcoming" | "live" | "finished" =
+    race?.status === "finished" ? "finished" : hasStarted ? "live" : "upcoming";
+  const elapsedSec = hasStarted && startMs != null ? Math.floor((nowTs - startMs) / 1000) : 0;
+  const formatElapsed = (s: number) => {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  };
+
   useEffect(() => {
     if (!raceId || !isOrganizer) return;
     supabase
