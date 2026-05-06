@@ -236,6 +236,7 @@ export default function Dashboard() {
                     <Button asChild variant="glass" size="sm">
                       <Link to={`/races/${race.id}`}>Voir</Link>
                     </Button>
+                    <Button variant="destructive" size="sm" disabled={busy} onClick={() => deleteRace(race.id, race.name)} aria-label="Supprimer la course"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </Card>
               ))}
