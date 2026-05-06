@@ -196,6 +196,7 @@ export default function Dashboard() {
                     <div className="flex gap-2">
                       <Button asChild variant="hero" size="sm" className="flex-1"><Link to={`/events/${ev.id}`}>Voir</Link></Button>
                       <Button asChild variant="glass" size="sm"><Link to={`/organizer/events/${ev.id}/edit`}>Modifier</Link></Button>
+                      <Button variant="destructive" size="sm" disabled={busy} onClick={() => deleteEvent(ev.id, ev.name)} aria-label="Supprimer l'épreuve"><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </div>
                 </Card>
