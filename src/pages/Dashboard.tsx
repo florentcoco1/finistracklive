@@ -4,10 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Smartphone, Trophy, ShieldCheck } from "lucide-react";
+import { Smartphone, Trophy, ShieldCheck, Trash2 } from "lucide-react";
 import { StatusBadge } from "./Index";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { toast } from "sonner";
 
 interface MyRegistration {
   id: string;
@@ -92,6 +93,42 @@ export default function Dashboard() {
       .then(({ data }) => setOrganizerEvents(((data ?? []) as OrganizerEvent[]).sort((a, b) => (b.start_date ?? "").localeCompare(a.start_date ?? ""))));
   }, [user, isOrganizer]);
 
+  const [busy, setBusy] = useState(false);
+
+  const reloadOrganizerData = async () => {
+    if (!user) return;
+    const [racesRes, eventsRes] = await Promise.all([
+      supabase.from("races").select("id, name, start_time, distance_km, status").eq("organizer_id", user.id).order("start_time", { ascending: false }),
+      (supabase.from as unknown as (t: string) => UntypedQuery)("events").select("id, name, start_date, poster_url").eq("organizer_id", user.id),
+    ]);
+    setOrganizerRaces(((racesRes.data ?? []) as OrganizerRace[]).sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()));
+    setOrganizerEvents(((eventsRes.data ?? []) as OrganizerEvent[]).sort((a, b) => (b.start_date ?? "").localeCompare(a.start_date ?? "")));
+  };
+
+  const deleteRace = async (id: string, name: string) => {
+    if (!confirm(`Supprimer définitivement la course « ${name} » ? Les inscriptions, points de chrono et temps associés seront aussi supprimés.`)) return;
+    setBusy(true);
+    await supabase.from("runner_checkpoint_times" as any).delete().in("checkpoint_id",
+      ((await supabase.from("race_checkpoints" as any).select("id").eq("race_id", id)).data ?? []).map((c: any) => c.id)
+    );
+    await supabase.from("race_checkpoints" as any).delete().eq("race_id", id);
+    await supabase.from("race_registrations").delete().eq("race_id", id);
+    const { error } = await supabase.from("races").delete().eq("id", id);
+    setBusy(false);
+    if (error) toast.error(error.message);
+    else { toast.success("Course supprimée"); void reloadOrganizerData(); }
+  };
+
+  const deleteEvent = async (id: string, name: string) => {
+    if (!confirm(`Supprimer définitivement l'épreuve « ${name} » ?`)) return;
+    setBusy(true);
+    const del = (supabase.from as unknown as (t: string) => { delete: () => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } })("events").delete().eq("id", id);
+    const { error } = await del;
+    setBusy(false);
+    if (error) toast.error(error.message);
+    else { toast.success("Épreuve supprimée"); void reloadOrganizerData(); }
+  };
+
   if (loading) return <main className="container py-12"><p className="text-muted-foreground">Chargement…</p></main>;
   if (!user) return <Navigate to="/auth" replace />;
 
@@ -159,6 +196,7 @@ export default function Dashboard() {
                     <div className="flex gap-2">
                       <Button asChild variant="hero" size="sm" className="flex-1"><Link to={`/events/${ev.id}`}>Voir</Link></Button>
                       <Button asChild variant="glass" size="sm"><Link to={`/organizer/events/${ev.id}/edit`}>Modifier</Link></Button>
+                      <Button variant="destructive" size="sm" disabled={busy} onClick={() => deleteEvent(ev.id, ev.name)} aria-label="Supprimer l'épreuve"><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </div>
                 </Card>
@@ -198,6 +236,7 @@ export default function Dashboard() {
                     <Button asChild variant="glass" size="sm">
                       <Link to={`/races/${race.id}`}>Voir</Link>
                     </Button>
+                    <Button variant="destructive" size="sm" disabled={busy} onClick={() => deleteRace(race.id, race.name)} aria-label="Supprimer la course"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </Card>
               ))}
