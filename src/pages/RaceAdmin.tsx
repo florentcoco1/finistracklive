@@ -522,6 +522,26 @@ export default function RaceAdmin() {
         </div>
       </div>
 
+      <Card className="glass-card p-4 mb-6">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="space-y-2">
+            <Label htmlFor="race-start-time">Heure de départ officielle (chrono)</Label>
+            <Input
+              id="race-start-time"
+              type="datetime-local"
+              value={startTimeInput}
+              onChange={(e) => setStartTimeInput(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Sert de référence pour calculer les temps de course (même rôle que l’heure de départ GMCAP).
+            </p>
+          </div>
+          <Button variant="hero" onClick={saveStartTime} disabled={savingStart}>
+            <Save className="h-4 w-4 mr-2" /> Enregistrer
+          </Button>
+        </div>
+      </Card>
+
       <Tabs defaultValue="gmcap" className="space-y-4">
         <TabsList className="grid w-full max-w-3xl grid-cols-4">
           <TabsTrigger value="gmcap"><Link2 className="h-4 w-4 mr-2" /> GMCAP</TabsTrigger>
