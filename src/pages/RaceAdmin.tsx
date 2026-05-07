@@ -210,6 +210,9 @@ export default function RaceAdmin() {
           return;
         }
         setRace(data as RaceSummary);
+        const d = new Date((data as RaceSummary).start_time);
+        const pad = (n: number) => String(n).padStart(2, "0");
+        setStartTimeInput(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
         document.title = `Administration ${data.name} — FinisTrackLive`;
       });
 
