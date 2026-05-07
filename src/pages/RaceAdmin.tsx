@@ -245,6 +245,25 @@ export default function RaceAdmin() {
     }
   };
 
+  const saveStartTime = async () => {
+    if (!raceId || !startTimeInput) {
+      toast.error("Heure de départ requise");
+      return;
+    }
+    setSavingStart(true);
+    try {
+      const iso = new Date(startTimeInput).toISOString();
+      const { error } = await supabase.from("races").update({ start_time: iso }).eq("id", raceId);
+      if (error) throw error;
+      setRace((prev) => (prev ? { ...prev, start_time: iso } : prev));
+      toast.success("Heure de départ mise à jour");
+    } catch (error) {
+      toast.error((error as Error).message || "Mise à jour impossible");
+    } finally {
+      setSavingStart(false);
+    }
+  };
+
   const syncGmcap = async () => {
     if (!raceId) return;
     setSyncing(true);
