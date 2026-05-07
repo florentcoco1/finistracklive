@@ -166,6 +166,8 @@ export default function RaceAdmin() {
   const [localPendingFile, setLocalPendingFile] = useState<string | null>(null);
   const [newRunner, setNewRunner] = useState(emptyRegistration);
   const [newOrganizerEmail, setNewOrganizerEmail] = useState("");
+  const [startTimeInput, setStartTimeInput] = useState("");
+  const [savingStart, setSavingStart] = useState(false);
 
   const invokeAdmin = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("manage-race-admin", { body });
@@ -208,6 +210,9 @@ export default function RaceAdmin() {
           return;
         }
         setRace(data as RaceSummary);
+        const d = new Date((data as RaceSummary).start_time);
+        const pad = (n: number) => String(n).padStart(2, "0");
+        setStartTimeInput(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
         document.title = `Administration ${data.name} — FinisTrackLive`;
       });
 
@@ -237,6 +242,25 @@ export default function RaceAdmin() {
       toast.error((error as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const saveStartTime = async () => {
+    if (!raceId || !startTimeInput) {
+      toast.error("Heure de départ requise");
+      return;
+    }
+    setSavingStart(true);
+    try {
+      const iso = new Date(startTimeInput).toISOString();
+      const { error } = await supabase.from("races").update({ start_time: iso }).eq("id", raceId);
+      if (error) throw error;
+      setRace((prev) => (prev ? { ...prev, start_time: iso } : prev));
+      toast.success("Heure de départ mise à jour");
+    } catch (error) {
+      toast.error((error as Error).message || "Mise à jour impossible");
+    } finally {
+      setSavingStart(false);
     }
   };
 
@@ -497,6 +521,26 @@ export default function RaceAdmin() {
           <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.organizers}</p><p className="text-xs text-muted-foreground">organisateurs</p></Card>
         </div>
       </div>
+
+      <Card className="glass-card p-4 mb-6">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="space-y-2">
+            <Label htmlFor="race-start-time">Heure de départ officielle (chrono)</Label>
+            <Input
+              id="race-start-time"
+              type="datetime-local"
+              value={startTimeInput}
+              onChange={(e) => setStartTimeInput(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Sert de référence pour calculer les temps de course (même rôle que l’heure de départ GMCAP).
+            </p>
+          </div>
+          <Button variant="hero" onClick={saveStartTime} disabled={savingStart}>
+            <Save className="h-4 w-4 mr-2" /> Enregistrer
+          </Button>
+        </div>
+      </Card>
 
       <Tabs defaultValue="gmcap" className="space-y-4">
         <TabsList className="grid w-full max-w-3xl grid-cols-4">
