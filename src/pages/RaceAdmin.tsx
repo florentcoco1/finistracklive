@@ -543,6 +543,8 @@ export default function RaceAdmin() {
         </div>
       </Card>
 
+      {race && <RaceInviteCard raceId={race.id} raceName={race.name} />}
+
       <Tabs defaultValue="gmcap" className="space-y-4">
         <TabsList className="grid w-full max-w-3xl grid-cols-4">
           <TabsTrigger value="gmcap"><Link2 className="h-4 w-4 mr-2" /> GMCAP</TabsTrigger>
