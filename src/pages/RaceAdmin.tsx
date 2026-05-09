@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { RaceCheckpoints } from "@/components/RaceCheckpoints";
+import { RaceInviteCard } from "@/components/RaceInviteCard";
 
 interface RaceSummary {
   id: string;
@@ -541,6 +542,8 @@ export default function RaceAdmin() {
           </Button>
         </div>
       </Card>
+
+      {race && <RaceInviteCard raceId={race.id} raceName={race.name} />}
 
       <Tabs defaultValue="gmcap" className="space-y-4">
         <TabsList className="grid w-full max-w-3xl grid-cols-4">
