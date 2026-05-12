@@ -194,7 +194,7 @@ export default function LiveMonitor() {
             Suivi live — Abandons & Alertes
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Surveillance en temps réel de {selectedRaceName}.
+            Surveillance en temps réel de {selectedRaceName}. Actif uniquement sur les courses en cours — les alertes des courses terminées sont archivées sur la fiche course.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={refreshing}>
