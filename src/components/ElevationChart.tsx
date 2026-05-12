@@ -254,6 +254,23 @@ export default function ElevationChart({
               />
             )}
 
+            {/* Checkpoints (chronométrage intermédiaire) */}
+            {checkpoints?.filter((c) => c.distance_km != null).map((c) => (
+              <ReferenceLine
+                key={`cp-${c.id}`}
+                x={c.distance_km!}
+                stroke="hsl(var(--accent))"
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+                label={{
+                  value: `🚩 ${c.name}`,
+                  position: "insideTopRight",
+                  fontSize: 10,
+                  fill: "hsl(var(--accent))",
+                }}
+              />
+            ))}
+
             <Area
               type="monotone"
               dataKey="elevation"
