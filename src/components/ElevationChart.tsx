@@ -11,6 +11,12 @@ import {
 } from "recharts";
 import type { LeaderboardRow } from "@/lib/types";
 
+interface CheckpointMarker {
+  id: string;
+  name: string;
+  distance_km: number | null;
+}
+
 interface ElevationChartProps {
   /** Stored gpx_geojson from the race row */
   gpxGeojson: any;
@@ -18,6 +24,8 @@ interface ElevationChartProps {
   totalDistanceKm: number | null;
   /** Active runners — used to draw the peloton progress band */
   runners: LeaderboardRow[];
+  /** Optional intermediate timing checkpoints */
+  checkpoints?: CheckpointMarker[];
 }
 
 interface ProfilePoint {
