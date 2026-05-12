@@ -65,6 +65,7 @@ export default function RaceDetail() {
   const [gmcapEnabled, setGmcapEnabled] = useState(true);
   const [gmcapStatus, setGmcapStatus] = useState<string | null>(null);
   const [savingSource, setSavingSource] = useState(false);
+  const [checkpoints, setCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
 
   useEffect(() => {
     if (!raceId) return;
