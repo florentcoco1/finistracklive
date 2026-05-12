@@ -87,6 +87,7 @@ export default function ElevationChart({
   gpxGeojson,
   totalDistanceKm,
   runners,
+  checkpoints,
 }: ElevationChartProps) {
   const { profile, totalKm, hasElevation, totalGain } = useMemo(() => {
     const coords = extractCoords(gpxGeojson);
