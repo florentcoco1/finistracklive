@@ -49,8 +49,15 @@ export default function LiveMonitor() {
     if (!user) return;
     setRefreshing(true);
 
-    // 1. Get organizer's races (admin sees all)
-    let raceQuery = supabase.from("races").select("id, name, start_time").order("start_time", { ascending: false });
+    // 1. Get organizer's LIVE races only (admin sees all live races)
+    // Le suivi live n'est actif que sur les courses en cours.
+    // Une fois la course terminée, les alertes restent archivées sur la course
+    // (lisibles via la page course) mais n'apparaissent plus ici.
+    let raceQuery = supabase
+      .from("races")
+      .select("id, name, start_time")
+      .eq("status", "live")
+      .order("start_time", { ascending: false });
     if (!isAdmin) raceQuery = raceQuery.eq("organizer_id", user.id);
     const { data: racesData } = await raceQuery;
     const raceList: RaceOption[] = (racesData ?? []) as RaceOption[];
@@ -187,7 +194,7 @@ export default function LiveMonitor() {
             Suivi live — Abandons & Alertes
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Surveillance en temps réel de {selectedRaceName}.
+            Surveillance en temps réel de {selectedRaceName}. Actif uniquement sur les courses en cours — les alertes des courses terminées sont archivées sur la fiche course.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={refreshing}>
