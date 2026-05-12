@@ -728,7 +728,7 @@ export default function RaceDetail() {
       <div className="grid lg:grid-cols-[1fr_360px] gap-6">
         <div className="space-y-4">
           <Card className="glass-card p-2 h-[420px] md:h-[600px] overflow-hidden">
-            <RaceMap routeCoords={routeCoords} routePoints={race.route_points} runners={rows} focusedRunnerId={focused} />
+            <RaceMap routeCoords={routeCoords} routePoints={race.route_points} runners={rows} focusedRunnerId={focused} checkpoints={checkpoints} />
           </Card>
 
           <Card className="glass-card p-4 h-[220px]">
