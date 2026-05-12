@@ -196,14 +196,6 @@ export default function RaceMap({ routeCoords, routePoints, runners, focusedRunn
             icon={makeRunnerIcon(r.bib_number, colorForRegistration(r.registration_id))}
           />
         ))}
-        .filter((r) => r.latitude != null && r.longitude != null)
-        .map((r) => (
-          <Marker
-            key={`${r.registration_id}:${r.last_position_at ?? `${r.latitude}:${r.longitude}`}`}
-            position={[r.latitude!, r.longitude!]}
-            icon={makeRunnerIcon(r.bib_number, colorForRegistration(r.registration_id))}
-          />
-        ))}
       <FitBounds coords={routeCoords} />
       <FlyTo target={focused} />
     </MapContainer>
