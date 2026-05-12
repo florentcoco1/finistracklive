@@ -336,6 +336,30 @@ export default function RaceDetail() {
     return [];
   }, [race]);
 
+  // Load + subscribe to race checkpoints (used for map + elevation markers)
+  useEffect(() => {
+    if (!raceId) return;
+    let active = true;
+    const reload = async () => {
+      const { data } = await supabase
+        .from("race_checkpoints" as any)
+        .select("id, name, distance_km, position")
+        .eq("race_id", raceId)
+        .order("position", { ascending: true });
+      if (!active) return;
+      setCheckpoints(((data as unknown) as Array<{ id: string; name: string; distance_km: number | null }>) ?? []);
+    };
+    reload();
+    const channel = supabase
+      .channel(`race-checkpoints:${raceId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "race_checkpoints", filter: `race_id=eq.${raceId}` }, () => reload())
+      .subscribe();
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+    };
+  }, [raceId]);
+
   const isOrganizer = user && race && race.organizer_id === user.id;
 
   // Live tick to update elapsed race time every second
