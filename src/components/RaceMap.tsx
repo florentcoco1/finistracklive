@@ -122,7 +122,7 @@ function computeKmMarkers(points: RouteCoord[]): { km: number; lat: number; lng:
   return markers;
 }
 
-export default function RaceMap({ routeCoords, routePoints, runners, focusedRunnerId }: Props) {
+export default function RaceMap({ routeCoords, routePoints, runners, focusedRunnerId, checkpoints }: Props) {
   const center: [number, number] = routeCoords[0] ?? [46.5, 2.3];
   const focused = useMemo(() => {
     if (!focusedRunnerId) return null;
@@ -132,6 +132,17 @@ export default function RaceMap({ routeCoords, routePoints, runners, focusedRunn
   }, [focusedRunnerId, runners]);
 
   const kmMarkers = useMemo(() => computeKmMarkers(routePoints ?? []), [routePoints]);
+
+  const checkpointMarkers = useMemo(() => {
+    if (!checkpoints || !routePoints || routePoints.length < 2) return [];
+    return checkpoints
+      .filter((c) => c.distance_km != null)
+      .map((c) => {
+        const pt = pointAtKm(routePoints, c.distance_km!);
+        return pt ? { ...c, lat: pt.lat, lng: pt.lng } : null;
+      })
+      .filter((m): m is { id: string; name: string; distance_km: number | null; lat: number; lng: number } => m !== null);
+  }, [checkpoints, routePoints]);
 
   return (
     <MapContainer
