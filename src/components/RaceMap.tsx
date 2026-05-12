@@ -178,7 +178,24 @@ export default function RaceMap({ routeCoords, routePoints, runners, focusedRunn
           keyboard={false}
         />
       ))}
+      {checkpointMarkers.map((m) => (
+        <Marker
+          key={`cp-${m.id}`}
+          position={[m.lat, m.lng]}
+          icon={makeCheckpointIcon(m.name, m.distance_km)}
+          interactive={false}
+          keyboard={false}
+        />
+      ))}
       {runners
+        .filter((r) => r.latitude != null && r.longitude != null)
+        .map((r) => (
+          <Marker
+            key={`${r.registration_id}:${r.last_position_at ?? `${r.latitude}:${r.longitude}`}`}
+            position={[r.latitude!, r.longitude!]}
+            icon={makeRunnerIcon(r.bib_number, colorForRegistration(r.registration_id))}
+          />
+        ))}
         .filter((r) => r.latitude != null && r.longitude != null)
         .map((r) => (
           <Marker
