@@ -189,3 +189,31 @@
   font-weight: 700;
   line-height: 1;
 }
+.cp-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: hsl(var(--accent));
+  border: 2px solid hsl(var(--background));
+  color: hsl(var(--accent-foreground));
+  box-shadow: 0 2px 8px hsl(145 55% 30% / 0.4);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.cp-marker .cp-marker-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cp-marker .cp-marker-km {
+  font-size: 9px;
+  opacity: 0.85;
+  font-weight: 600;
+}
