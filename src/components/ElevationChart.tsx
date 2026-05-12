@@ -11,6 +11,12 @@ import {
 } from "recharts";
 import type { LeaderboardRow } from "@/lib/types";
 
+interface CheckpointMarker {
+  id: string;
+  name: string;
+  distance_km: number | null;
+}
+
 interface ElevationChartProps {
   /** Stored gpx_geojson from the race row */
   gpxGeojson: any;
@@ -18,6 +24,8 @@ interface ElevationChartProps {
   totalDistanceKm: number | null;
   /** Active runners — used to draw the peloton progress band */
   runners: LeaderboardRow[];
+  /** Optional intermediate timing checkpoints */
+  checkpoints?: CheckpointMarker[];
 }
 
 interface ProfilePoint {
@@ -79,6 +87,7 @@ export default function ElevationChart({
   gpxGeojson,
   totalDistanceKm,
   runners,
+  checkpoints,
 }: ElevationChartProps) {
   const { profile, totalKm, hasElevation, totalGain } = useMemo(() => {
     const coords = extractCoords(gpxGeojson);
@@ -244,6 +253,23 @@ export default function ElevationChart({
                 }}
               />
             )}
+
+            {/* Checkpoints (chronométrage intermédiaire) */}
+            {checkpoints?.filter((c) => c.distance_km != null).map((c) => (
+              <ReferenceLine
+                key={`cp-${c.id}`}
+                x={c.distance_km!}
+                stroke="hsl(var(--accent))"
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+                label={{
+                  value: `🚩 ${c.name}`,
+                  position: "insideTopRight",
+                  fontSize: 10,
+                  fill: "hsl(var(--accent))",
+                }}
+              />
+            ))}
 
             <Area
               type="monotone"

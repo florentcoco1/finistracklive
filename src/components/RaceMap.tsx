@@ -4,11 +4,18 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { LeaderboardRow, RouteCoord } from "@/lib/types";
 
+interface CheckpointMarker {
+  id: string;
+  name: string;
+  distance_km: number | null;
+}
+
 interface Props {
   routeCoords: [number, number][];
   routePoints?: RouteCoord[] | null;
   runners: LeaderboardRow[];
   focusedRunnerId?: string | null;
+  checkpoints?: CheckpointMarker[];
 }
 
 function FitBounds({ coords }: { coords: [number, number][] }) {
@@ -55,6 +62,39 @@ function makeKmIcon(km: number) {
   });
 }
 
+function makeCheckpointIcon(name: string, km: number | null) {
+  const safe = name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const kmHtml = km != null ? `<div class="cp-marker-km">${km} km</div>` : "";
+  return L.divIcon({
+    className: "",
+    html: `<div class="cp-marker"><div class="cp-marker-name">🚩 ${safe}</div>${kmHtml}</div>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+}
+
+/** Pour un km cible, renvoie la position interpolée le long de la trace. */
+function pointAtKm(points: RouteCoord[], targetKm: number): { lat: number; lng: number } | null {
+  if (!points || points.length < 2) return null;
+  const targetM = targetKm * 1000;
+  if (targetM <= 0) return { lat: points[0].lat, lng: points[0].lng };
+  const last = points[points.length - 1];
+  if (targetM >= last.cumulativeDistanceM) return { lat: last.lat, lng: last.lng };
+  for (let i = 1; i < points.length; i++) {
+    const cur = points[i];
+    if (cur.cumulativeDistanceM >= targetM) {
+      const prev = points[i - 1];
+      const seg = cur.cumulativeDistanceM - prev.cumulativeDistanceM;
+      const t = seg > 0 ? (targetM - prev.cumulativeDistanceM) / seg : 0;
+      return {
+        lat: prev.lat + (cur.lat - prev.lat) * t,
+        lng: prev.lng + (cur.lng - prev.lng) * t,
+      };
+    }
+  }
+  return null;
+}
+
 /** Renvoie un marqueur tous les N km le long de la trace, en utilisant la distance cumulée. */
 function computeKmMarkers(points: RouteCoord[]): { km: number; lat: number; lng: number }[] {
   if (!points || points.length < 2) return [];
@@ -82,7 +122,7 @@ function computeKmMarkers(points: RouteCoord[]): { km: number; lat: number; lng:
   return markers;
 }
 
-export default function RaceMap({ routeCoords, routePoints, runners, focusedRunnerId }: Props) {
+export default function RaceMap({ routeCoords, routePoints, runners, focusedRunnerId, checkpoints }: Props) {
   const center: [number, number] = routeCoords[0] ?? [46.5, 2.3];
   const focused = useMemo(() => {
     if (!focusedRunnerId) return null;
@@ -92,6 +132,17 @@ export default function RaceMap({ routeCoords, routePoints, runners, focusedRunn
   }, [focusedRunnerId, runners]);
 
   const kmMarkers = useMemo(() => computeKmMarkers(routePoints ?? []), [routePoints]);
+
+  const checkpointMarkers = useMemo(() => {
+    if (!checkpoints || !routePoints || routePoints.length < 2) return [];
+    return checkpoints
+      .filter((c) => c.distance_km != null)
+      .map((c) => {
+        const pt = pointAtKm(routePoints, c.distance_km!);
+        return pt ? { ...c, lat: pt.lat, lng: pt.lng } : null;
+      })
+      .filter((m): m is { id: string; name: string; distance_km: number | null; lat: number; lng: number } => m !== null);
+  }, [checkpoints, routePoints]);
 
   return (
     <MapContainer
@@ -123,6 +174,15 @@ export default function RaceMap({ routeCoords, routePoints, runners, focusedRunn
           key={`km-${m.km}`}
           position={[m.lat, m.lng]}
           icon={makeKmIcon(m.km)}
+          interactive={false}
+          keyboard={false}
+        />
+      ))}
+      {checkpointMarkers.map((m) => (
+        <Marker
+          key={`cp-${m.id}`}
+          position={[m.lat, m.lng]}
+          icon={makeCheckpointIcon(m.name, m.distance_km)}
           interactive={false}
           keyboard={false}
         />
