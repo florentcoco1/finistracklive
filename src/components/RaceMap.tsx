@@ -4,11 +4,18 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { LeaderboardRow, RouteCoord } from "@/lib/types";
 
+interface CheckpointMarker {
+  id: string;
+  name: string;
+  distance_km: number | null;
+}
+
 interface Props {
   routeCoords: [number, number][];
   routePoints?: RouteCoord[] | null;
   runners: LeaderboardRow[];
   focusedRunnerId?: string | null;
+  checkpoints?: CheckpointMarker[];
 }
 
 function FitBounds({ coords }: { coords: [number, number][] }) {
