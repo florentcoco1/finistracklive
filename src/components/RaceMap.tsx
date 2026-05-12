@@ -62,6 +62,39 @@ function makeKmIcon(km: number) {
   });
 }
 
+function makeCheckpointIcon(name: string, km: number | null) {
+  const safe = name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const kmHtml = km != null ? `<div class="cp-marker-km">${km} km</div>` : "";
+  return L.divIcon({
+    className: "",
+    html: `<div class="cp-marker"><div class="cp-marker-name">🚩 ${safe}</div>${kmHtml}</div>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+}
+
+/** Pour un km cible, renvoie la position interpolée le long de la trace. */
+function pointAtKm(points: RouteCoord[], targetKm: number): { lat: number; lng: number } | null {
+  if (!points || points.length < 2) return null;
+  const targetM = targetKm * 1000;
+  if (targetM <= 0) return { lat: points[0].lat, lng: points[0].lng };
+  const last = points[points.length - 1];
+  if (targetM >= last.cumulativeDistanceM) return { lat: last.lat, lng: last.lng };
+  for (let i = 1; i < points.length; i++) {
+    const cur = points[i];
+    if (cur.cumulativeDistanceM >= targetM) {
+      const prev = points[i - 1];
+      const seg = cur.cumulativeDistanceM - prev.cumulativeDistanceM;
+      const t = seg > 0 ? (targetM - prev.cumulativeDistanceM) / seg : 0;
+      return {
+        lat: prev.lat + (cur.lat - prev.lat) * t,
+        lng: prev.lng + (cur.lng - prev.lng) * t,
+      };
+    }
+  }
+  return null;
+}
+
 /** Renvoie un marqueur tous les N km le long de la trace, en utilisant la distance cumulée. */
 function computeKmMarkers(points: RouteCoord[]): { km: number; lat: number; lng: number }[] {
   if (!points || points.length < 2) return [];
