@@ -741,6 +741,7 @@ export default function RaceDetail() {
                 gpxGeojson={race.gpx_geojson}
                 totalDistanceKm={race.distance_km}
                 runners={rows}
+                checkpoints={checkpoints}
               />
             </div>
           </Card>
