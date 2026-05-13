@@ -61,6 +61,7 @@ export default function RaceDetail() {
   const [importingRfid, setImportingRfid] = useState(false);
   const [sourceOpen, setSourceOpen] = useState(false);
   const [gmcapSourceId, setGmcapSourceId] = useState<string | null>(null);
+  const [gmcapSourceType, setGmcapSourceType] = useState<string | null>(null);
   const [gmcapSourceUrl, setGmcapSourceUrl] = useState("");
   const [gmcapEnabled, setGmcapEnabled] = useState(true);
   const [gmcapStatus, setGmcapStatus] = useState<string | null>(null);
@@ -385,13 +386,14 @@ export default function RaceDetail() {
     if (!raceId || !isOrganizer) return;
     supabase
       .from("gmcap_import_sources" as any)
-      .select("id, source_url, enabled, last_import_at, last_import_status, last_import_message")
+      .select("id, source_url, source_type, enabled, last_import_at, last_import_status, last_import_message")
       .eq("race_id", raceId)
       .maybeSingle()
       .then(({ data }) => {
         const source = data as any;
         if (!source) return;
         setGmcapSourceId(source.id);
+        setGmcapSourceType(source.source_type ?? null);
         setGmcapSourceUrl(source.source_url ?? "");
         setGmcapEnabled(source.enabled ?? true);
         setGmcapStatus(source.last_import_status ? `${source.last_import_status} · ${source.last_import_message ?? ""}` : null);
@@ -450,6 +452,7 @@ export default function RaceDetail() {
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
+      setGmcapSourceType("manual_upload");
       toast.success(`Import GMCAP : ${(data as any).matched} correspondance(s), ${(data as any).unmatched} non associée(s)`);
     } catch (error) {
       toast.error((error as Error).message || "Import GMCAP impossible");
@@ -467,6 +470,7 @@ export default function RaceDetail() {
     const payload = {
       race_id: raceId,
       source_url: gmcapSourceUrl.trim(),
+      source_type: "url",
       enabled: gmcapEnabled,
       updated_at: new Date().toISOString(),
     };
@@ -480,12 +484,17 @@ export default function RaceDetail() {
       return;
     }
     setGmcapSourceId((data as any).id);
+    setGmcapSourceType("url");
     setSourceOpen(false);
     toast.success("Synchronisation GMCAP configurée");
   };
 
   const syncGmcapNow = async () => {
     if (!raceId) return;
+    if (gmcapSourceType === "manual_upload" || gmcapSourceType === "manual_file") {
+      toast.error("Le dernier import GMCAP était manuel : passe par Administration pour importer à nouveau le fichier.");
+      return;
+    }
     setImportingRfid(true);
     const { data, error } = await supabase.functions.invoke("sync-gmcap-rfid", { body: { race_id: raceId } });
     setImportingRfid(false);
@@ -499,12 +508,12 @@ export default function RaceDetail() {
   };
 
   useEffect(() => {
-    if (!isOrganizer || !gmcapSourceId || !gmcapEnabled || !raceId) return;
+    if (!isOrganizer || !gmcapSourceId || !gmcapEnabled || !raceId || gmcapSourceType === "manual_upload" || gmcapSourceType === "manual_file") return;
     const timer = window.setInterval(() => {
       void supabase.functions.invoke("sync-gmcap-rfid", { body: { race_id: raceId } });
     }, 60_000);
     return () => window.clearInterval(timer);
-  }, [isOrganizer, gmcapSourceId, gmcapEnabled, raceId]);
+  }, [isOrganizer, gmcapSourceId, gmcapSourceType, gmcapEnabled, raceId]);
 
   const medalFor = (rank: number, status: string | null) => {
     if (status === "dnf" || status === "problem") return null;
@@ -617,7 +626,7 @@ export default function RaceDetail() {
                 </DialogContent>
               </Dialog>
               {gmcapSourceId && (
-                <Button variant="glass" onClick={syncGmcapNow} disabled={importingRfid}>
+                <Button variant="glass" onClick={syncGmcapNow} disabled={importingRfid || gmcapSourceType === "manual_upload" || gmcapSourceType === "manual_file"}>
                   <RefreshCw className="h-4 w-4 mr-2" /> {importingRfid ? "Sync…" : "Sync maintenant"}
                 </Button>
               )}

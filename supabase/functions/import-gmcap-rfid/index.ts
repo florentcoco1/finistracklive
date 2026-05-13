@@ -52,15 +52,39 @@ const isMissingGmcapSchema = (message: string) =>
 async function markImportSuccess(admin: ReturnType<typeof createClient>, raceId: string, fileName: string | null, imported: number, matched: number) {
   const now = new Date().toISOString();
   const safeName = clean(fileName) || `gmcap-import-${now}.txt`;
+  const { data: existing } = await admin
+    .from("gmcap_import_sources")
+    .select("id, source_url, source_type, enabled")
+    .eq("race_id", raceId)
+    .maybeSingle();
+
+  if (existing?.id) {
+    const isWebSource = /^https?:\/\//i.test(clean(existing.source_url));
+    await admin.from("gmcap_import_sources").update({
+      source_url: isWebSource ? existing.source_url : `manual://${encodeURIComponent(safeName)}`,
+      source_type: isWebSource ? "url" : "manual_upload",
+      file_name: safeName,
+      pending_content: null,
+      pending_import_at: null,
+      schema_checked_at: now,
+      enabled: isWebSource ? existing.enabled : false,
+      last_import_at: now,
+      last_import_status: "success",
+      last_import_message: `${matched} correspondance(s), ${imported - matched} non associée(s) depuis ${safeName}`,
+      updated_at: now,
+    }).eq("id", existing.id);
+    return;
+  }
+
   await admin.from("gmcap_import_sources").upsert({
     race_id: raceId,
     source_url: `manual://${encodeURIComponent(safeName)}`,
-    source_type: "manual_file",
+    source_type: "manual_upload",
     file_name: safeName,
     pending_content: null,
     pending_import_at: null,
     schema_checked_at: now,
-    enabled: true,
+    enabled: false,
     last_import_at: now,
     last_import_status: "success",
     last_import_message: `${matched} correspondance(s), ${imported - matched} non associée(s) depuis ${safeName}`,

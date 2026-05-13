@@ -140,8 +140,11 @@ async function importContent(admin: ReturnType<typeof createClient>, raceId: str
 
 async function readSource(source: Source) {
   if (source.source_type === "manual_file") {
-    if (!source.pending_content) throw new Error("Aucun contenu manuel GMCAP en attente");
+    if (!source.pending_content) throw new Error("Aucun fichier GMCAP en attente : sélectionne un fichier puis clique sur Importer maintenant.");
     return source.pending_content;
+  }
+  if (source.source_type === "manual_upload") {
+    throw new Error("Le dernier import GMCAP a été fait manuellement. Pour relancer, sélectionne à nouveau le fichier puis clique sur Importer maintenant.");
   }
   const url = source.source_url;
   const parsed = new URL(url);
@@ -211,6 +214,8 @@ Deno.serve(async (req) => {
     }
 
     const due = (sources ?? []).filter((source: Source) => {
+      if (source.source_type === "manual_upload") return false;
+      if (source.source_type === "manual_file" && !source.pending_content) return false;
       if (raceId) return true;
       return !source.last_import_at || Date.now() - new Date(source.last_import_at).getTime() >= 55_000;
     });
