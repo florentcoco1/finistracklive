@@ -470,6 +470,7 @@ export default function RaceDetail() {
     const payload = {
       race_id: raceId,
       source_url: gmcapSourceUrl.trim(),
+      source_type: "url",
       enabled: gmcapEnabled,
       updated_at: new Date().toISOString(),
     };
