@@ -214,6 +214,8 @@ Deno.serve(async (req) => {
     }
 
     const due = (sources ?? []).filter((source: Source) => {
+      if (source.source_type === "manual_upload") return false;
+      if (source.source_type === "manual_file" && !source.pending_content) return false;
       if (raceId) return true;
       return !source.last_import_at || Date.now() - new Date(source.last_import_at).getTime() >= 55_000;
     });
