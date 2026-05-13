@@ -62,7 +62,7 @@ async function markImportSuccess(admin: ReturnType<typeof createClient>, raceId:
     const isWebSource = /^https?:\/\//i.test(clean(existing.source_url));
     await admin.from("gmcap_import_sources").update({
       source_url: isWebSource ? existing.source_url : `manual://${encodeURIComponent(safeName)}`,
-      source_type: isWebSource ? existing.source_type || "url" : "manual_upload",
+      source_type: isWebSource ? "url" : "manual_upload",
       file_name: safeName,
       pending_content: null,
       pending_import_at: null,
