@@ -625,7 +625,7 @@ export default function RaceDetail() {
                 </DialogContent>
               </Dialog>
               {gmcapSourceId && (
-                <Button variant="glass" onClick={syncGmcapNow} disabled={importingRfid}>
+                <Button variant="glass" onClick={syncGmcapNow} disabled={importingRfid || gmcapSourceType === "manual_upload" || gmcapSourceType === "manual_file"}>
                   <RefreshCw className="h-4 w-4 mr-2" /> {importingRfid ? "Sync…" : "Sync maintenant"}
                 </Button>
               )}
