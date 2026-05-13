@@ -201,7 +201,7 @@ Deno.serve(async (req) => {
 
     if (body.action === "save_gmcap") {
       const { data: existing } = await admin.from("gmcap_import_sources").select("id").eq("race_id", body.race_id).maybeSingle();
-      const payload = { race_id: body.race_id, source_url: body.source_url, enabled: body.enabled, updated_at: new Date().toISOString() };
+      const payload = { race_id: body.race_id, source_url: body.source_url, source_type: "url", enabled: body.enabled, pending_content: null, pending_import_at: null, updated_at: new Date().toISOString() };
       const result = existing
         ? await admin.from("gmcap_import_sources").update(payload).eq("id", existing.id)
         : await admin.from("gmcap_import_sources").insert(payload);
