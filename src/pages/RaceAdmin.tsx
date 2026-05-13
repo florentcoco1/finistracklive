@@ -267,6 +267,10 @@ export default function RaceAdmin() {
 
   const syncGmcap = async () => {
     if (!raceId) return;
+    if (source?.source_type === "manual_upload" && !localPendingFile) {
+      toast.error("Le dernier import GMCAP était manuel : sélectionne à nouveau le fichier puis clique sur Importer maintenant.");
+      return;
+    }
     setSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke("sync-gmcap-rfid", { body: { race_id: raceId } });
@@ -577,7 +581,7 @@ export default function RaceAdmin() {
                 {localPendingFile ? `Fichier gardé sur ce PC : ${localPendingFile}` : source?.last_import_status === "pending_schema" && source.file_name ? `Fichier en attente : ${source.file_name}` : source?.last_import_at ? `Dernier import le ${format(new Date(source.last_import_at), "dd/MM/yyyy à HH:mm:ss", { locale: fr })}` : "Aucun import lancé"}
                 {source?.last_import_message ? ` · ${source.last_import_message}` : ""}
               </p>
-              <Button variant="glass" onClick={localPendingFile ? retryLocalPendingImport : syncGmcap} disabled={(!source && !localPendingFile) || syncing || manualImporting}><RefreshCw className="h-4 w-4 mr-2" /> {syncing || manualImporting ? "Vérif…" : source?.last_import_status === "pending_schema" || localPendingFile ? "Vérifier maintenant" : "Sync maintenant"}</Button>
+              <Button variant="glass" onClick={localPendingFile ? retryLocalPendingImport : syncGmcap} disabled={(!source && !localPendingFile) || source?.source_type === "manual_upload" || syncing || manualImporting}><RefreshCw className="h-4 w-4 mr-2" /> {syncing || manualImporting ? "Vérif…" : source?.last_import_status === "pending_schema" || localPendingFile ? "Vérifier maintenant" : "Sync maintenant"}</Button>
             </div>
             <div className="space-y-3 rounded-lg border border-border/50 bg-secondary/20 p-4">
               <div>
