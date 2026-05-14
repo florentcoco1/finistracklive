@@ -210,7 +210,7 @@ export default function RaceAdmin() {
 
     supabase
       .from("races")
-      .select("id, name, start_time, status")
+      .select("id, name, start_time, status, event_id")
       .eq("id", raceId)
       .single()
       .then(({ data, error }) => {
@@ -220,10 +220,19 @@ export default function RaceAdmin() {
           return;
         }
         setRace(data as RaceSummary);
+        setEventId((data as RaceSummary).event_id ?? "");
         const d = new Date((data as RaceSummary).start_time);
         const pad = (n: number) => String(n).padStart(2, "0");
         setStartTimeInput(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
         document.title = `Administration ${data.name} — FinisTrackLive`;
+      });
+
+    supabase
+      .from("events")
+      .select("id, name")
+      .order("start_date", { ascending: false })
+      .then(({ data }) => {
+        setEvents((data ?? []) as EventOption[]);
       });
 
     load().catch((error) => {
