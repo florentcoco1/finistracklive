@@ -40,9 +40,16 @@ interface UntypedQuery {
   select: (c: string) => {
     eq: (col: string, val: string) => {
       single: () => Promise<{ data: unknown | null; error: unknown }>;
-      order: (col: string, opts: { ascending: boolean }) => Promise<{ data: unknown[] | null; error: unknown }>;
+      order: (col: string, opts: { ascending: boolean }) => Promise<{ data: unknown[] | null; error: { code?: string; message?: string } | null }>;
     };
   };
+}
+
+const raceColumns = "id, name, start_time, distance_km, difficulty_level, status";
+const compatibleRaceColumns = "id, name, start_time, distance_km, status";
+
+function isMissingDifficultyColumn(error: { code?: string; message?: string } | null) {
+  return !!error && (error.code === "42703" || error.code === "PGRST204") && !!error.message?.includes("difficulty_level");
 }
 
 export default function EventDetail() {
@@ -54,10 +61,17 @@ export default function EventDetail() {
 
   const fetchRaces = async () => {
     if (!id) return;
-    const rc = await (supabase.from as unknown as (t: string) => UntypedQuery)("races")
-      .select("id, name, start_time, distance_km, difficulty_level, status")
+    const loadRaces = (columns: string) => (supabase.from as unknown as (t: string) => UntypedQuery)("races")
+      .select(columns)
       .eq("event_id", id)
       .order("start_time", { ascending: true });
+
+    const rc = await loadRaces(raceColumns);
+    if (isMissingDifficultyColumn(rc.error)) {
+      const fallback = await loadRaces(compatibleRaceColumns);
+      setRaces(((fallback.data ?? []) as Omit<RaceRow, "difficulty_level">[]).map((race) => ({ ...race, difficulty_level: 1 })) as RaceRow[]);
+      return;
+    }
     setRaces((rc.data ?? []) as RaceRow[]);
   };
 
@@ -69,13 +83,18 @@ export default function EventDetail() {
         .eq("id", id)
         .single(),
       (supabase.from as unknown as (t: string) => UntypedQuery)("races")
-        .select("id, name, start_time, distance_km, difficulty_level, status")
+        .select(raceColumns)
         .eq("event_id", id)
         .order("start_time", { ascending: true }),
-    ]).then(([ev, rc]) => {
+    ]).then(async ([ev, rc]) => {
       const evData = ev.data as EventRow | null;
       setEvent(evData);
       if (evData) document.title = `${evData.name} — FinisTrackLive`;
+      if (isMissingDifficultyColumn(rc.error)) {
+        await fetchRaces();
+        setLoading(false);
+        return;
+      }
       setRaces((rc.data ?? []) as RaceRow[]);
       setLoading(false);
     });
@@ -84,7 +103,7 @@ export default function EventDetail() {
       .channel(`event-races-${id}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "races", filter: `event_id=eq.${id}` },
+        { event: "*", schema: "public", table: "races" },
         () => {
           fetchRaces();
         }
