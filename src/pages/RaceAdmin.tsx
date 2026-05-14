@@ -22,6 +22,12 @@ interface RaceSummary {
   name: string;
   start_time: string;
   status: string;
+  event_id: string | null;
+}
+
+interface EventOption {
+  id: string;
+  name: string;
 }
 
 interface GmcapSource {
@@ -169,6 +175,9 @@ export default function RaceAdmin() {
   const [newOrganizerEmail, setNewOrganizerEmail] = useState("");
   const [startTimeInput, setStartTimeInput] = useState("");
   const [savingStart, setSavingStart] = useState(false);
+  const [events, setEvents] = useState<EventOption[]>([]);
+  const [eventId, setEventId] = useState<string>("");
+  const [savingEvent, setSavingEvent] = useState(false);
 
   const invokeAdmin = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("manage-race-admin", { body });
@@ -201,7 +210,7 @@ export default function RaceAdmin() {
 
     supabase
       .from("races")
-      .select("id, name, start_time, status")
+      .select("id, name, start_time, status, event_id")
       .eq("id", raceId)
       .single()
       .then(({ data, error }) => {
@@ -211,10 +220,19 @@ export default function RaceAdmin() {
           return;
         }
         setRace(data as RaceSummary);
+        setEventId((data as RaceSummary).event_id ?? "");
         const d = new Date((data as RaceSummary).start_time);
         const pad = (n: number) => String(n).padStart(2, "0");
         setStartTimeInput(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
         document.title = `Administration ${data.name} — FinisTrackLive`;
+      });
+
+    supabase
+      .from("events")
+      .select("id, name")
+      .order("start_date", { ascending: false })
+      .then(({ data }) => {
+        setEvents((data ?? []) as EventOption[]);
       });
 
     load().catch((error) => {
@@ -262,6 +280,22 @@ export default function RaceAdmin() {
       toast.error((error as Error).message || "Mise à jour impossible");
     } finally {
       setSavingStart(false);
+    }
+  };
+
+  const saveEvent = async () => {
+    if (!raceId) return;
+    setSavingEvent(true);
+    try {
+      const newEventId = eventId || null;
+      const { error } = await supabase.from("races").update({ event_id: newEventId }).eq("id", raceId);
+      if (error) throw error;
+      setRace((prev) => (prev ? { ...prev, event_id: newEventId } : prev));
+      toast.success(newEventId ? "Course rattachée à l'épreuve" : "Course détachée de l'épreuve");
+    } catch (error) {
+      toast.error((error as Error).message || "Mise à jour impossible");
+    } finally {
+      setSavingEvent(false);
     }
   };
 
@@ -531,6 +565,31 @@ export default function RaceAdmin() {
       <Card className="glass-card p-4 mb-6">
         <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
           <div className="space-y-2">
+            <Label htmlFor="race-event">Épreuve de rattachement</Label>
+            <select
+              id="race-event"
+              value={eventId}
+              onChange={(e) => setEventId(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">— Aucune épreuve —</option>
+              {events.map((ev) => (
+                <option key={ev.id} value={ev.id}>{ev.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Rattache cette course à une épreuve pour qu'elle apparaisse dans la section « Courses de l'épreuve ».
+            </p>
+          </div>
+          <Button variant="hero" onClick={saveEvent} disabled={savingEvent}>
+            <Save className="h-4 w-4 mr-2" /> Enregistrer
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="glass-card p-4 mb-6">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="space-y-2">
             <Label htmlFor="race-start-time">Heure de départ officielle (chrono)</Label>
             <Input
               id="race-start-time"
@@ -539,7 +598,7 @@ export default function RaceAdmin() {
               onChange={(e) => setStartTimeInput(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Sert de référence pour calculer les temps de course (même rôle que l’heure de départ GMCAP).
+              Sert de référence pour calculer les temps de course (même rôle que l'heure de départ GMCAP).
             </p>
           </div>
           <Button variant="hero" onClick={saveStartTime} disabled={savingStart}>
