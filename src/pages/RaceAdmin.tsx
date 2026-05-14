@@ -22,6 +22,12 @@ interface RaceSummary {
   name: string;
   start_time: string;
   status: string;
+  event_id: string | null;
+}
+
+interface EventOption {
+  id: string;
+  name: string;
 }
 
 interface GmcapSource {
