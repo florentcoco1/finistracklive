@@ -52,6 +52,15 @@ export default function EventDetail() {
   const [races, setRaces] = useState<RaceRow[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchRaces = async () => {
+    if (!id) return;
+    const rc = await (supabase.from as unknown as (t: string) => UntypedQuery)("races")
+      .select("id, name, start_time, distance_km, difficulty_level, status")
+      .eq("event_id", id)
+      .order("start_time", { ascending: true });
+    setRaces((rc.data ?? []) as RaceRow[]);
+  };
+
   useEffect(() => {
     if (!id) return;
     Promise.all([
@@ -70,6 +79,21 @@ export default function EventDetail() {
       setRaces((rc.data ?? []) as RaceRow[]);
       setLoading(false);
     });
+
+    const channel = supabase
+      .channel(`event-races-${id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "races", filter: `event_id=eq.${id}` },
+        () => {
+          fetchRaces();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [id]);
 
   const isOwner = user && event && user.id === event.organizer_id;
