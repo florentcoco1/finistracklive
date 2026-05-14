@@ -175,6 +175,9 @@ export default function RaceAdmin() {
   const [newOrganizerEmail, setNewOrganizerEmail] = useState("");
   const [startTimeInput, setStartTimeInput] = useState("");
   const [savingStart, setSavingStart] = useState(false);
+  const [events, setEvents] = useState<EventOption[]>([]);
+  const [eventId, setEventId] = useState<string>("");
+  const [savingEvent, setSavingEvent] = useState(false);
 
   const invokeAdmin = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("manage-race-admin", { body });
