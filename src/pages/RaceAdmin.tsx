@@ -283,6 +283,22 @@ export default function RaceAdmin() {
     }
   };
 
+  const saveEvent = async () => {
+    if (!raceId) return;
+    setSavingEvent(true);
+    try {
+      const newEventId = eventId || null;
+      const { error } = await supabase.from("races").update({ event_id: newEventId }).eq("id", raceId);
+      if (error) throw error;
+      setRace((prev) => (prev ? { ...prev, event_id: newEventId } : prev));
+      toast.success(newEventId ? "Course rattachée à l'épreuve" : "Course détachée de l'épreuve");
+    } catch (error) {
+      toast.error((error as Error).message || "Mise à jour impossible");
+    } finally {
+      setSavingEvent(false);
+    }
+  };
+
   const syncGmcap = async () => {
     if (!raceId) return;
     const isCompletedManualImport = source?.source_type === "manual_upload" || (source?.source_type === "manual_file" && source?.last_import_status !== "pending_schema");
