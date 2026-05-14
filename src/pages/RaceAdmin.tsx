@@ -565,6 +565,31 @@ export default function RaceAdmin() {
       <Card className="glass-card p-4 mb-6">
         <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
           <div className="space-y-2">
+            <Label htmlFor="race-event">Épreuve de rattachement</Label>
+            <select
+              id="race-event"
+              value={eventId}
+              onChange={(e) => setEventId(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">— Aucune épreuve —</option>
+              {events.map((ev) => (
+                <option key={ev.id} value={ev.id}>{ev.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Rattache cette course à une épreuve pour qu'elle apparaisse dans la section « Courses de l'épreuve ».
+            </p>
+          </div>
+          <Button variant="hero" onClick={saveEvent} disabled={savingEvent}>
+            <Save className="h-4 w-4 mr-2" /> Enregistrer
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="glass-card p-4 mb-6">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="space-y-2">
             <Label htmlFor="race-start-time">Heure de départ officielle (chrono)</Label>
             <Input
               id="race-start-time"
@@ -573,7 +598,7 @@ export default function RaceAdmin() {
               onChange={(e) => setStartTimeInput(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Sert de référence pour calculer les temps de course (même rôle que l’heure de départ GMCAP).
+              Sert de référence pour calculer les temps de course (même rôle que l'heure de départ GMCAP).
             </p>
           </div>
           <Button variant="hero" onClick={saveStartTime} disabled={savingStart}>
