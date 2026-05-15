@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Activity, MapPin, Radio, Trophy, Smartphone, Zap } from "lucide-react";
+import { Activity, MapPin, Radio, Trophy, Smartphone, Zap, Calendar } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
+import { format, isToday, isPast, isFuture, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import { DifficultyStars } from "@/components/DifficultyStars";
 
@@ -15,6 +15,15 @@ interface Race {
   distance_km: number | null;
   difficulty_level: number | null;
   status: "upcoming" | "live" | "finished";
+}
+
+interface EventItem {
+  id: string;
+  name: string;
+  location: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  poster_url: string | null;
 }
 
 interface UntypedRacesQuery {
@@ -30,8 +39,28 @@ function isMissingDifficultyColumn(error: { code?: string; message?: string } | 
   return !!error && (error.code === "42703" || error.code === "PGRST204") && !!error.message?.includes("difficulty_level");
 }
 
+function getEventStatus(ev: EventItem): "live" | "upcoming" | "finished" {
+  const start = ev.start_date ? parseISO(ev.start_date) : null;
+  const end = ev.end_date ? parseISO(ev.end_date) : null;
+  const now = new Date();
+  if (start && end) {
+    const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    if (now >= startDay && now <= endDay) return "live";
+    if (now < startDay) return "upcoming";
+    return "finished";
+  }
+  if (start) {
+    if (isToday(start)) return "live";
+    if (isFuture(start)) return "upcoming";
+    return "finished";
+  }
+  return "upcoming";
+}
+
 const Index = () => {
   const [races, setRaces] = useState<Race[]>([]);
+  const [liveEvent, setLiveEvent] = useState<EventItem | null>(null);
 
   useEffect(() => {
     document.title = "FinisTrackLive — Suivi de course en direct";
@@ -48,6 +77,27 @@ const Index = () => {
       }
       setRaces((data ?? []) as Race[]);
     });
+
+    // Fetch events and find one that is currently live
+    (supabase.from as unknown as (table: string) => UntypedRacesQuery)("events")
+      .select("id, name, location, start_date, end_date, poster_url")
+      .order("start_date", { ascending: false })
+      .limit(20)
+      .then(({ data }) => {
+        const events = (data ?? []) as EventItem[];
+        const live = events.find((e) => getEventStatus(e) === "live");
+        if (live) {
+          setLiveEvent(live);
+        } else {
+          // fallback to most recent upcoming or finished
+          const sorted = events.sort((a, b) => {
+            const ad = a.start_date ? new Date(a.start_date).getTime() : 0;
+            const bd = b.start_date ? new Date(b.start_date).getTime() : 0;
+            return bd - ad;
+          });
+          setLiveEvent(sorted[0] ?? null);
+        }
+      });
   }, []);
 
   return (
@@ -74,6 +124,9 @@ const Index = () => {
               <Link to="/races">Voir les courses live</Link>
             </Button>
             <Button asChild variant="glass" size="xl">
+              <Link to="/events">Voir les épreuves</Link>
+            </Button>
+            <Button asChild variant="ghost" size="xl">
               <Link to="/auth?mode=signup">Créer un compte</Link>
             </Button>
           </div>
