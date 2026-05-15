@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Activity, MapPin, Radio, Trophy, Smartphone, Zap } from "lucide-react";
+import { Activity, MapPin, Radio, Trophy, Smartphone, Zap, Calendar } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
+import { format, isToday, isPast, isFuture, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import { DifficultyStars } from "@/components/DifficultyStars";
 
@@ -15,6 +15,15 @@ interface Race {
   distance_km: number | null;
   difficulty_level: number | null;
   status: "upcoming" | "live" | "finished";
+}
+
+interface EventItem {
+  id: string;
+  name: string;
+  location: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  poster_url: string | null;
 }
 
 interface UntypedRacesQuery {
@@ -30,8 +39,28 @@ function isMissingDifficultyColumn(error: { code?: string; message?: string } | 
   return !!error && (error.code === "42703" || error.code === "PGRST204") && !!error.message?.includes("difficulty_level");
 }
 
+function getEventStatus(ev: EventItem): "live" | "upcoming" | "finished" {
+  const start = ev.start_date ? parseISO(ev.start_date) : null;
+  const end = ev.end_date ? parseISO(ev.end_date) : null;
+  const now = new Date();
+  if (start && end) {
+    const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    if (now >= startDay && now <= endDay) return "live";
+    if (now < startDay) return "upcoming";
+    return "finished";
+  }
+  if (start) {
+    if (isToday(start)) return "live";
+    if (isFuture(start)) return "upcoming";
+    return "finished";
+  }
+  return "upcoming";
+}
+
 const Index = () => {
   const [races, setRaces] = useState<Race[]>([]);
+  const [liveEvent, setLiveEvent] = useState<EventItem | null>(null);
 
   useEffect(() => {
     document.title = "FinisTrackLive — Suivi de course en direct";
@@ -48,6 +77,27 @@ const Index = () => {
       }
       setRaces((data ?? []) as Race[]);
     });
+
+    // Fetch events and find one that is currently live
+    (supabase.from as unknown as (table: string) => UntypedRacesQuery)("events")
+      .select("id, name, location, start_date, end_date, poster_url")
+      .order("start_date", { ascending: false })
+      .limit(20)
+      .then(({ data }) => {
+        const events = (data ?? []) as EventItem[];
+        const live = events.find((e) => getEventStatus(e) === "live");
+        if (live) {
+          setLiveEvent(live);
+        } else {
+          // fallback to most recent upcoming or finished
+          const sorted = events.sort((a, b) => {
+            const ad = a.start_date ? new Date(a.start_date).getTime() : 0;
+            const bd = b.start_date ? new Date(b.start_date).getTime() : 0;
+            return bd - ad;
+          });
+          setLiveEvent(sorted[0] ?? null);
+        }
+      });
   }, []);
 
   return (
@@ -74,11 +124,62 @@ const Index = () => {
               <Link to="/races">Voir les courses live</Link>
             </Button>
             <Button asChild variant="glass" size="xl">
+              <Link to="/events">Voir les épreuves</Link>
+            </Button>
+            <Button asChild variant="ghost" size="xl">
               <Link to="/auth?mode=signup">Créer un compte</Link>
             </Button>
           </div>
         </div>
       </section>
+
+      {/* Live event highlight */}
+      {liveEvent && (
+        <section className="container -mt-8 mb-8 relative z-10">
+          <Link to={`/events/${liveEvent.id}`}>
+            <Card className="glass-card p-6 md:p-8 hover:border-primary/50 hover:shadow-glow transition-smooth relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-success/5 to-transparent pointer-events-none" />
+              <div className="relative flex flex-col md:flex-row md:items-center gap-4 md:gap-8">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    {getEventStatus(liveEvent) === "live" ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-success/15 border border-success/30 text-success text-xs font-semibold">
+                        <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> En cours
+                      </span>
+                    ) : getEventStatus(liveEvent) === "upcoming" ? (
+                      <span className="px-2.5 py-0.5 rounded-full bg-primary/15 border border-primary/30 text-primary-glow text-xs font-medium">
+                        Prochainement
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full bg-muted border border-border text-muted-foreground text-xs font-medium">
+                        Terminée
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="font-display text-2xl md:text-3xl font-bold">{liveEvent.name}</h2>
+                  <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                    {liveEvent.location && (
+                      <span className="inline-flex items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5" />
+                        {liveEvent.location}
+                      </span>
+                    )}
+                    <span className="inline-flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5" />
+                      {liveEvent.start_date
+                        ? format(parseISO(liveEvent.start_date), "EEEE d MMMM yyyy", { locale: fr })
+                        : "Date à confirmer"}
+                    </span>
+                  </div>
+                </div>
+                <Button variant="hero" size="lg" className="shrink-0">
+                  Voir l'épreuve
+                </Button>
+              </div>
+            </Card>
+          </Link>
+        </section>
+      )}
 
       {/* Features */}
       <section className="container py-16 md:py-24">
