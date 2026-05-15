@@ -133,6 +133,54 @@ const Index = () => {
         </div>
       </section>
 
+      {/* Live event highlight */}
+      {liveEvent && (
+        <section className="container -mt-8 mb-8 relative z-10">
+          <Link to={`/events/${liveEvent.id}`}>
+            <Card className="glass-card p-6 md:p-8 hover:border-primary/50 hover:shadow-glow transition-smooth relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-success/5 to-transparent pointer-events-none" />
+              <div className="relative flex flex-col md:flex-row md:items-center gap-4 md:gap-8">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    {getEventStatus(liveEvent) === "live" ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-success/15 border border-success/30 text-success text-xs font-semibold">
+                        <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> En cours
+                      </span>
+                    ) : getEventStatus(liveEvent) === "upcoming" ? (
+                      <span className="px-2.5 py-0.5 rounded-full bg-primary/15 border border-primary/30 text-primary-glow text-xs font-medium">
+                        Prochainement
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full bg-muted border border-border text-muted-foreground text-xs font-medium">
+                        Terminée
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="font-display text-2xl md:text-3xl font-bold">{liveEvent.name}</h2>
+                  <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                    {liveEvent.location && (
+                      <span className="inline-flex items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5" />
+                        {liveEvent.location}
+                      </span>
+                    )}
+                    <span className="inline-flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5" />
+                      {liveEvent.start_date
+                        ? format(parseISO(liveEvent.start_date), "EEEE d MMMM yyyy", { locale: fr })
+                        : "Date à confirmer"}
+                    </span>
+                  </div>
+                </div>
+                <Button variant="hero" size="lg" className="shrink-0">
+                  Voir l'épreuve
+                </Button>
+              </div>
+            </Card>
+          </Link>
+        </section>
+      )}
+
       {/* Features */}
       <section className="container py-16 md:py-24">
         <div className="grid md:grid-cols-3 gap-6">
