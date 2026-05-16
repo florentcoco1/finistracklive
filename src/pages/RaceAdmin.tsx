@@ -648,6 +648,27 @@ export default function RaceAdmin() {
         </div>
       </Card>
 
+      <Card className="glass-card p-4 mb-6">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="space-y-2">
+            <Label htmlFor="race-gpx">Fichier GPX du tracé</Label>
+            <Input
+              id="race-gpx"
+              type="file"
+              accept=".gpx,application/gpx+xml,application/xml,text/xml"
+              onChange={(e) => setGpxFile(e.target.files?.[0] ?? null)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Remplace le tracé GPX. La distance et les points de route seront recalculés automatiquement.
+              {gpxFile && ` Fichier sélectionné : ${gpxFile.name} · ${(gpxFile.size / 1024).toFixed(1)} Ko`}
+            </p>
+          </div>
+          <Button variant="hero" onClick={replaceGpx} disabled={!gpxFile || uploadingGpx}>
+            <Map className="h-4 w-4 mr-2" /> {uploadingGpx ? "Envoi…" : "Modifier le GPX"}
+          </Button>
+        </div>
+      </Card>
+
       {race && <RaceInviteCard raceId={race.id} raceName={race.name} />}
 
       <Tabs defaultValue="gmcap" className="space-y-4">
