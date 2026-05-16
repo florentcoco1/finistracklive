@@ -339,6 +339,8 @@ export default function RaceAdmin() {
       setUploadingGpx(false);
     }
   };
+
+  const syncGmcap = async () => {
     if (!raceId) return;
     const isCompletedManualImport = source?.source_type === "manual_upload" || (source?.source_type === "manual_file" && source?.last_import_status !== "pending_schema");
     if (isCompletedManualImport && !localPendingFile) {
