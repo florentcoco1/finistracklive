@@ -128,9 +128,9 @@ export default function EventDetail() {
 
       <div className="grid md:grid-cols-[400px_1fr] gap-8 mb-10">
         <Card className="glass-card overflow-hidden">
-          <div className="aspect-[3/4] bg-secondary/40">
+          <div className="aspect-[210/297] bg-secondary/40">
             {event.poster_url ? (
-              <img src={event.poster_url} alt={`Affiche ${event.name}`} className="w-full h-full object-cover" />
+              <img src={event.poster_url} alt={`Affiche ${event.name}`} className="w-full h-full object-contain" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-muted-foreground">Pas d'affiche</div>
             )}
