@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { AlertTriangle, ChevronLeft, Flag, Link2, Plus, RefreshCw, Save, Shield, Trash2, Upload, UserPlus, Users } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Flag, Link2, Map, Plus, RefreshCw, Save, Shield, Trash2, Upload, UserPlus, Users } from "lucide-react";
+import { parseGpx } from "@/lib/gpx";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -178,6 +179,8 @@ export default function RaceAdmin() {
   const [events, setEvents] = useState<EventOption[]>([]);
   const [eventId, setEventId] = useState<string>("");
   const [savingEvent, setSavingEvent] = useState(false);
+  const [gpxFile, setGpxFile] = useState<File | null>(null);
+  const [uploadingGpx, setUploadingGpx] = useState(false);
 
   const invokeAdmin = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("manage-race-admin", { body });
@@ -296,6 +299,44 @@ export default function RaceAdmin() {
       toast.error((error as Error).message || "Mise à jour impossible");
     } finally {
       setSavingEvent(false);
+    }
+  };
+
+  const replaceGpx = async () => {
+    if (!raceId || !gpxFile || !user) {
+      toast.error("Sélectionne un fichier GPX");
+      return;
+    }
+    if (gpxFile.size > 8 * 1024 * 1024) {
+      toast.error("Fichier trop volumineux : limite 8 Mo");
+      return;
+    }
+    setUploadingGpx(true);
+    try {
+      const text = await gpxFile.text();
+      const { geojson, routePoints, distanceKm } = parseGpx(text);
+      const path = `${user.id}/${Date.now()}-${gpxFile.name.replace(/[^a-z0-9.-]/gi, "_")}`;
+      const { error: upErr } = await supabase.storage
+        .from("gpx-files")
+        .upload(path, gpxFile, { contentType: "application/gpx+xml" });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("gpx-files").getPublicUrl(path);
+      const { error: updErr } = await supabase
+        .from("races")
+        .update({
+          gpx_url: pub.publicUrl,
+          gpx_geojson: geojson as never,
+          route_points: routePoints as never,
+          distance_km: distanceKm,
+        })
+        .eq("id", raceId);
+      if (updErr) throw updErr;
+      toast.success(`Tracé GPX mis à jour (${distanceKm} km)`);
+      setGpxFile(null);
+    } catch (error) {
+      toast.error((error as Error).message || "Mise à jour du GPX impossible");
+    } finally {
+      setUploadingGpx(false);
     }
   };
 
@@ -603,6 +644,27 @@ export default function RaceAdmin() {
           </div>
           <Button variant="hero" onClick={saveStartTime} disabled={savingStart}>
             <Save className="h-4 w-4 mr-2" /> Enregistrer
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="glass-card p-4 mb-6">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="space-y-2">
+            <Label htmlFor="race-gpx">Fichier GPX du tracé</Label>
+            <Input
+              id="race-gpx"
+              type="file"
+              accept=".gpx,application/gpx+xml,application/xml,text/xml"
+              onChange={(e) => setGpxFile(e.target.files?.[0] ?? null)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Remplace le tracé GPX. La distance et les points de route seront recalculés automatiquement.
+              {gpxFile && ` Fichier sélectionné : ${gpxFile.name} · ${(gpxFile.size / 1024).toFixed(1)} Ko`}
+            </p>
+          </div>
+          <Button variant="hero" onClick={replaceGpx} disabled={!gpxFile || uploadingGpx}>
+            <Map className="h-4 w-4 mr-2" /> {uploadingGpx ? "Envoi…" : "Modifier le GPX"}
           </Button>
         </div>
       </Card>
