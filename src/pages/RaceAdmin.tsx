@@ -179,6 +179,8 @@ export default function RaceAdmin() {
   const [events, setEvents] = useState<EventOption[]>([]);
   const [eventId, setEventId] = useState<string>("");
   const [savingEvent, setSavingEvent] = useState(false);
+  const [gpxFile, setGpxFile] = useState<File | null>(null);
+  const [uploadingGpx, setUploadingGpx] = useState(false);
 
   const invokeAdmin = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("manage-race-admin", { body });
