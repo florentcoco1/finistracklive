@@ -302,7 +302,43 @@ export default function RaceAdmin() {
     }
   };
 
-  const syncGmcap = async () => {
+  const replaceGpx = async () => {
+    if (!raceId || !gpxFile || !user) {
+      toast.error("Sélectionne un fichier GPX");
+      return;
+    }
+    if (gpxFile.size > 8 * 1024 * 1024) {
+      toast.error("Fichier trop volumineux : limite 8 Mo");
+      return;
+    }
+    setUploadingGpx(true);
+    try {
+      const text = await gpxFile.text();
+      const { geojson, routePoints, distanceKm } = parseGpx(text);
+      const path = `${user.id}/${Date.now()}-${gpxFile.name.replace(/[^a-z0-9.-]/gi, "_")}`;
+      const { error: upErr } = await supabase.storage
+        .from("gpx-files")
+        .upload(path, gpxFile, { contentType: "application/gpx+xml" });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("gpx-files").getPublicUrl(path);
+      const { error: updErr } = await supabase
+        .from("races")
+        .update({
+          gpx_url: pub.publicUrl,
+          gpx_geojson: geojson as never,
+          route_points: routePoints as never,
+          distance_km: distanceKm,
+        })
+        .eq("id", raceId);
+      if (updErr) throw updErr;
+      toast.success(`Tracé GPX mis à jour (${distanceKm} km)`);
+      setGpxFile(null);
+    } catch (error) {
+      toast.error((error as Error).message || "Mise à jour du GPX impossible");
+    } finally {
+      setUploadingGpx(false);
+    }
+  };
     if (!raceId) return;
     const isCompletedManualImport = source?.source_type === "manual_upload" || (source?.source_type === "manual_file" && source?.last_import_status !== "pending_schema");
     if (isCompletedManualImport && !localPendingFile) {
