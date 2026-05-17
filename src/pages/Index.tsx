@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format, isToday, isPast, isFuture, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import { DifficultyStars } from "@/components/DifficultyStars";
+import logo from "@/assets/logo.png";
 
 interface Race {
   id: string;
