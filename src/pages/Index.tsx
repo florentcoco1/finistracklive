@@ -8,7 +8,7 @@ import { format, isToday, isPast, isFuture, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import { DifficultyStars } from "@/components/DifficultyStars";
 import logo from "@/assets/logo.png";
-
+import LiveRaceCard from "@/components/LiveRaceCard";
 interface Race {
   id: string;
   name: string;
@@ -101,6 +101,13 @@ const Index = () => {
       });
   }, []);
 
+  const liveRace = races.find((r) => {
+    const startMs = new Date(r.start_time).getTime();
+    const now = Date.now();
+    return r.status === "live" || (now >= startMs && r.status !== "finished");
+  });
+  const upcomingRaces = races.filter((r) => r.id !== liveRace?.id);
+
   return (
     <main>
       {/* Hero */}
@@ -141,8 +148,22 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Live event highlight */}
-      {liveEvent && (
+      {/* Live race highlight */}
+      {liveRace && (
+        <section className="container -mt-8 mb-8 relative z-10">
+          <div className="mb-4 flex items-center gap-2">
+            <span className="relative flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-75 animate-ping" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-success" />
+            </span>
+            <h2 className="font-display text-xl font-bold text-success">Course en cours</h2>
+          </div>
+          <LiveRaceCard race={liveRace} showDescription />
+        </section>
+      )}
+
+      {/* Live event highlight (fallback when no live race) */}
+      {!liveRace && liveEvent && (
         <section className="container -mt-8 mb-8 relative z-10">
           <Link to={`/events/${liveEvent.id}`}>
             <Card className="glass-card p-6 md:p-8 hover:border-primary/50 hover:shadow-glow transition-smooth relative overflow-hidden">
@@ -223,13 +244,13 @@ const Index = () => {
           </Button>
         </div>
 
-        {races.length === 0 ? (
+        {upcomingRaces.length === 0 ? (
           <Card className="glass-card p-12 text-center">
             <p className="text-muted-foreground">Aucune course pour l'instant. Les organisateurs peuvent en créer depuis leur espace.</p>
           </Card>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {races.map((r) => (
+            {upcomingRaces.map((r) => (
               <Link key={r.id} to={`/races/${r.id}`}>
                 <Card className="glass-card p-5 h-full hover:border-primary/50 hover:shadow-glow transition-smooth">
                   <div className="flex items-center gap-2 mb-3">
