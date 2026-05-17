@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
-import { StatusBadge } from "./Index";
-import { DifficultyStars } from "@/components/DifficultyStars";
+import LiveRaceCard from "@/components/LiveRaceCard";
 
 interface Race {
   id: string;
