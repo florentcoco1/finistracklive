@@ -534,7 +534,8 @@ export default function RaceAdmin() {
       const data = await invokeAdmin({ action: "bulk_import_registrations", race_id: raceId, file_name: runnerImportFile.name, content });
       applyAdminData(data);
       const summary = data as AdminResponse & { created?: number; updated?: number; registered?: number; skipped?: number; errors?: string[] };
-      if (summary.errors?.length) toast.warning(`${summary.registered ?? 0} coureur(s) importé(s), ${summary.errors.length} erreur(s) à vérifier.`);
+      setRunnerImportReport({ registered: summary.registered ?? 0, created: summary.created ?? 0, errors: summary.errors ?? [] });
+      if (summary.errors?.length) toast.warning(`${summary.registered ?? 0} coureur(s) importé(s), ${summary.errors.length} problème(s) détecté(s). Voir le rapport ci-dessous.`);
       else toast.success(`${summary.registered ?? 0} coureur(s) importé(s) · ${summary.created ?? 0} compte(s) créé(s)`);
       setRunnerImportFile(null);
     } catch (error) {
