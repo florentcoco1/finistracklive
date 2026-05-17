@@ -25,7 +25,7 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/60 bg-background/70 backdrop-blur-xl">
-      <div className="container flex h-20 items-center justify-between gap-4">
+      <div className="container flex h-20 items-center justify-between gap-4 font-medium text-xl">
         <Link to="/" className="flex items-center gap-3 font-display font-bold text-xl" aria-label="FinisTrackLive — accueil">
           <img src={logo} alt="Logo FinisTrackLive" className="h-14 w-14 object-contain" />
           <span className="text-gradient hidden sm:inline">FinisTrackLive</span>
