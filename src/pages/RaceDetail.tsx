@@ -798,14 +798,17 @@ export default function RaceDetail() {
                   ? Date.now() - new Date(r.last_position_at).getTime() > 30000
                   : true;
                 const color = colorForRegistration(r.registration_id);
-                const medal = medalFor(i, r.runner_status);
+                const medal = effectiveStatus === "upcoming" ? null : medalFor(i, r.runner_status);
+                const showDash = effectiveStatus === "upcoming";
                 return (
                   <li
                     key={r.registration_id}
                     onClick={() => setFocused(r.registration_id)}
                     className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:border-primary/40 transition-smooth ${stale ? "opacity-60" : ""} ${medal ? medal.bg : "border-border/50 bg-secondary/40"}`}
                   >
-                    {medal ? (
+                    {showDash ? (
+                      <span className="text-sm font-bold text-muted-foreground w-6 text-center shrink-0">—</span>
+                    ) : medal ? (
                       <span className="text-xl w-6 text-center shrink-0" aria-label={`Médaille ${medal.label}`}>{medal.emoji}</span>
                     ) : (
                       <span className="text-sm font-bold text-muted-foreground w-6 text-center shrink-0">{i + 1}</span>
@@ -827,12 +830,14 @@ export default function RaceDetail() {
                           : `${formatDistance(r.distance_along_route_m)}${r.progress_percent != null ? ` · ${r.progress_percent.toFixed(0)}%` : ""}`}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {(r.category_rank || r.gender_rank)
-                          ? [
-                              r.category ? `cat. ${r.category}${r.category_rank ? ` · ${r.category_rank}e` : ""}` : null,
-                              r.gender_rank ? `sexe · ${r.gender_rank}e` : null,
-                            ].filter(Boolean).join(" · ")
-                          : `${formatSpeed(r.rolling_speed_kmh)} · ${formatPace(r.rolling_pace_sec_per_km)}`}
+                        {showDash
+                          ? "—"
+                          : (r.category_rank || r.gender_rank)
+                            ? [
+                                r.category ? `cat. ${r.category}${r.category_rank ? ` · ${r.category_rank}e` : ""}` : null,
+                                r.gender_rank ? `sexe · ${r.gender_rank}e` : null,
+                              ].filter(Boolean).join(" · ")
+                            : `${formatSpeed(r.rolling_speed_kmh)} · ${formatPace(r.rolling_pace_sec_per_km)}`}
                       </p>
                       {r.overall_rank == null && r.last_position_at && (
                         <p className="text-[10px] text-muted-foreground mt-0.5">GPS support · {formatSpeed(r.rolling_speed_kmh)}</p>
