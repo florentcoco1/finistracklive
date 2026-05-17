@@ -343,6 +343,18 @@ Deno.serve(async (req) => {
             updated_at: new Date().toISOString(),
           }, { onConflict: "race_id,runner_id" });
           if (registrationError) throw new Error(registrationError.message);
+
+          // Persist sexe + identité dans gmcap_results pour qu'ils s'affichent même sans import GMCAP
+          if (runner.gender || runner.first_name || runner.last_name || runner.birth_date) {
+            await admin.from("gmcap_results").upsert({
+              race_id: body.race_id,
+              bib_number: runner.bib_number,
+              first_name: runner.first_name || null,
+              last_name: runner.last_name || null,
+              gender: runner.gender || null,
+              birth_date: runner.birth_date || null,
+            }, { onConflict: "race_id,bib_number" });
+          }
           registered += 1;
         } catch (error) {
           errors.push(`${runner.bib_number || "?"} ${runner.email || runner.last_name}: ${(error as Error).message}`);
