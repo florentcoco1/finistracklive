@@ -107,6 +107,13 @@ const Index = () => {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 hero-grid-bg" />
         <div className="container relative py-20 md:py-28 text-center">
+          <div className="flex justify-center mb-6 animate-fade-in-up">
+            <img
+              src={logo}
+              alt="FinisTrackLive"
+              className="h-24 w-24 md:h-32 md:w-32 object-contain drop-shadow-2xl"
+            />
+          </div>
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-secondary/60 border border-border text-xs font-medium text-muted-foreground mb-6 animate-fade-in-up">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-75 animate-ping" />
