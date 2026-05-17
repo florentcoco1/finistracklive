@@ -62,22 +62,7 @@ export default function RacesList() {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {races.map((r) => (
-            <Link key={r.id} to={`/races/${r.id}`}>
-              <Card className="glass-card p-5 h-full hover:border-primary/50 hover:shadow-glow transition-smooth">
-                <div className="flex items-center gap-2 mb-3">
-                  <StatusBadge status={r.status} />
-                  {r.distance_km && <span className="text-xs text-muted-foreground">{r.distance_km} km</span>}
-                </div>
-                <h3 className="font-display font-semibold text-lg mb-1">{r.name}</h3>
-                <DifficultyStars level={r.difficulty_level} className="mb-2" />
-                <p className="text-sm text-muted-foreground mb-2">
-                  {format(new Date(r.start_time), "EEEE d MMMM yyyy, HH:mm", { locale: fr })}
-                </p>
-                {r.description && (
-                  <p className="text-sm text-muted-foreground line-clamp-2">{r.description}</p>
-                )}
-              </Card>
-            </Link>
+            <LiveRaceCard key={r.id} race={r} showDescription />
           ))}
         </div>
       )}
