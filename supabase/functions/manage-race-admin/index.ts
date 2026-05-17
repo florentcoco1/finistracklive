@@ -115,8 +115,17 @@ function parseRunnerImport(content: string) {
       phone: getCell(row, ["Tel", "Téléphone", "Telephone", "Phone"]),
       category: getCell(row, ["Abbrev. Catégorie", "Abbrev Categorie", "Nom Catégorie", "Nom Categorie", "Catégorie", "Categorie"]),
       birth_date: parseBirthDate(getCell(row, ["DateNaissance", "Date naissance", "Naissance"])),
+      gender: normalizeGender(getCell(row, ["Sexe", "Genre", "Gender", "Sex", "S"])),
     };
   });
+}
+
+function normalizeGender(value: string): string | null {
+  const v = value.trim().toUpperCase();
+  if (!v) return null;
+  if (v === "M" || v === "H" || v.startsWith("HOM") || v === "MALE") return "M";
+  if (v === "F" || v === "W" || v.startsWith("FEM") || v === "FEMALE") return "F";
+  return null;
 }
 
 async function requireRaceAdmin(admin: ReturnType<typeof createClient>, userId: string, raceId: string) {
