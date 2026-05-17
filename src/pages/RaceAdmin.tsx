@@ -171,6 +171,7 @@ export default function RaceAdmin() {
   const [markFinishedOnImport, setMarkFinishedOnImport] = useState(false);
   const [runnerImportFile, setRunnerImportFile] = useState<File | null>(null);
   const [runnerImporting, setRunnerImporting] = useState(false);
+  const [runnerImportReport, setRunnerImportReport] = useState<{ registered: number; created: number; errors: string[] } | null>(null);
   const [localPendingFile, setLocalPendingFile] = useState<string | null>(null);
   const [newRunner, setNewRunner] = useState(emptyRegistration);
   const [newOrganizerEmail, setNewOrganizerEmail] = useState("");
@@ -533,7 +534,8 @@ export default function RaceAdmin() {
       const data = await invokeAdmin({ action: "bulk_import_registrations", race_id: raceId, file_name: runnerImportFile.name, content });
       applyAdminData(data);
       const summary = data as AdminResponse & { created?: number; updated?: number; registered?: number; skipped?: number; errors?: string[] };
-      if (summary.errors?.length) toast.warning(`${summary.registered ?? 0} coureur(s) importé(s), ${summary.errors.length} erreur(s) à vérifier.`);
+      setRunnerImportReport({ registered: summary.registered ?? 0, created: summary.created ?? 0, errors: summary.errors ?? [] });
+      if (summary.errors?.length) toast.warning(`${summary.registered ?? 0} coureur(s) importé(s), ${summary.errors.length} problème(s) détecté(s). Voir le rapport ci-dessous.`);
       else toast.success(`${summary.registered ?? 0} coureur(s) importé(s) · ${summary.created ?? 0} compte(s) créé(s)`);
       setRunnerImportFile(null);
     } catch (error) {
@@ -769,6 +771,27 @@ export default function RaceAdmin() {
                   <Upload className="h-4 w-4 mr-2" /> {runnerImporting ? "Import…" : "Importer les coureurs"}
                 </Button>
               </div>
+              {runnerImportReport && (
+                <div className={`rounded-lg border p-3 text-sm space-y-2 ${runnerImportReport.errors.length ? "border-warning/40 bg-warning/10" : "border-emerald-500/30 bg-emerald-500/10"}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium">
+                      {runnerImportReport.registered} coureur(s) importé(s) · {runnerImportReport.created} compte(s) créé(s)
+                      {runnerImportReport.errors.length ? ` · ${runnerImportReport.errors.length} problème(s)` : ""}
+                    </p>
+                    <Button variant="ghost" size="sm" onClick={() => setRunnerImportReport(null)}>Fermer</Button>
+                  </div>
+                  {runnerImportReport.errors.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-warning">Doublons et conflits de dossards</p>
+                      <ul className="list-disc pl-5 space-y-1 max-h-56 overflow-y-auto">
+                        {runnerImportReport.errors.map((err, idx) => (
+                          <li key={idx} className="text-xs">{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="grid gap-3 md:grid-cols-[1fr_120px_120px_160px_auto] md:items-end">
               <div className="space-y-2"><Label>Email utilisateur</Label><Input value={newRunner.email} onChange={(e) => setNewRunner((v) => ({ ...v, email: e.target.value }))} placeholder="coureur@email.fr" /></div>

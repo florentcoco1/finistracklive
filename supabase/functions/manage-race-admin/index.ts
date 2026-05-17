@@ -250,11 +250,53 @@ Deno.serve(async (req) => {
       if (!runners.length) return json({ error: "Aucun coureur valide trouvé : email, nom, prénom et dossard sont requis." }, 400);
       if (runners.length > 1000) return json({ error: "Import limité à 1000 coureurs par fichier." }, 400);
 
+      // Détection des doublons de dossards dans le fichier
+      const bibCounts = new Map<string, { count: number; emails: string[] }>();
+      for (const runner of runners) {
+        const bib = String(runner.bib_number).trim();
+        const entry = bibCounts.get(bib) ?? { count: 0, emails: [] };
+        entry.count += 1;
+        entry.emails.push(runner.email);
+        bibCounts.set(bib, entry);
+      }
+      const duplicateBibs: string[] = [];
+      const duplicateBibSet = new Set<string>();
+      for (const [bib, info] of bibCounts.entries()) {
+        if (info.count > 1) {
+          duplicateBibs.push(`Dossard #${bib} en doublon dans le fichier (${info.count} fois : ${info.emails.join(", ")})`);
+          duplicateBibSet.add(bib);
+        }
+      }
+
+      // Détection des dossards déjà utilisés dans la course par un autre coureur
+      const { data: existingRegs } = await admin
+        .from("race_registrations")
+        .select("bib_number, runner_id, profiles:runner_id(email)")
+        .eq("race_id", body.race_id);
+      const existingBibToRunner = new Map<string, { runner_id: string; email?: string }>();
+      for (const row of existingRegs ?? []) {
+        const bib = String((row as { bib_number: string }).bib_number).trim();
+        const email = (row as { profiles?: { email?: string } | { email?: string }[] }).profiles;
+        const emailValue = Array.isArray(email) ? email[0]?.email : email?.email;
+        existingBibToRunner.set(bib, { runner_id: (row as { runner_id: string }).runner_id, email: emailValue });
+      }
+
       let created = 0;
       let updated = 0;
       let registered = 0;
-      const errors: string[] = [];
+      const errors: string[] = [...duplicateBibs];
+      // Suivi des dossards à importer pour vérifier les conflits avec coureurs déjà inscrits
       for (const runner of runners) {
+        const bib = String(runner.bib_number).trim();
+        if (duplicateBibSet.has(bib)) {
+          // On n'importe pas les doublons internes au fichier
+          continue;
+        }
+        const existing = existingBibToRunner.get(bib);
+        if (existing && existing.email && existing.email.toLowerCase() !== runner.email.toLowerCase()) {
+          errors.push(`Dossard #${bib} déjà attribué à ${existing.email} dans cette course (conflit avec ${runner.email})`);
+          continue;
+        }
         try {
           let { data: profile } = await admin.from("profiles").select("user_id").ilike("email", runner.email).maybeSingle();
           if (!profile?.user_id) {
@@ -297,7 +339,7 @@ Deno.serve(async (req) => {
           errors.push(`${runner.bib_number || "?"} ${runner.email || runner.last_name}: ${(error as Error).message}`);
         }
       }
-      return json({ ok: true, created, updated, registered, skipped: parsedRunners.length - runners.length, errors: errors.slice(0, 12), ...(await loadRace(admin, body.race_id)) });
+      return json({ ok: true, created, updated, registered, skipped: parsedRunners.length - runners.length, duplicate_bibs: Array.from(duplicateBibSet), errors: errors.slice(0, 50), ...(await loadRace(admin, body.race_id)) });
     }
 
     if (body.action === "add_organizer") {
