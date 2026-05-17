@@ -171,6 +171,7 @@ export default function RaceAdmin() {
   const [markFinishedOnImport, setMarkFinishedOnImport] = useState(false);
   const [runnerImportFile, setRunnerImportFile] = useState<File | null>(null);
   const [runnerImporting, setRunnerImporting] = useState(false);
+  const [runnerImportReport, setRunnerImportReport] = useState<{ registered: number; created: number; errors: string[] } | null>(null);
   const [localPendingFile, setLocalPendingFile] = useState<string | null>(null);
   const [newRunner, setNewRunner] = useState(emptyRegistration);
   const [newOrganizerEmail, setNewOrganizerEmail] = useState("");
