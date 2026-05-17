@@ -339,7 +339,7 @@ Deno.serve(async (req) => {
           errors.push(`${runner.bib_number || "?"} ${runner.email || runner.last_name}: ${(error as Error).message}`);
         }
       }
-      return json({ ok: true, created, updated, registered, skipped: parsedRunners.length - runners.length, errors: errors.slice(0, 12), ...(await loadRace(admin, body.race_id)) });
+      return json({ ok: true, created, updated, registered, skipped: parsedRunners.length - runners.length, duplicate_bibs: Array.from(duplicateBibSet), errors: errors.slice(0, 50), ...(await loadRace(admin, body.race_id)) });
     }
 
     if (body.action === "add_organizer") {
