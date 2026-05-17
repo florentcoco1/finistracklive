@@ -736,24 +736,36 @@ export default function RaceDetail() {
 
       <div className="grid lg:grid-cols-[1fr_360px] gap-6">
         <div className="space-y-4">
-          <Card className="glass-card p-2 h-[420px] md:h-[600px] overflow-hidden">
-            <RaceMap routeCoords={routeCoords} routePoints={race.route_points} runners={rows} focusedRunnerId={focused} checkpoints={checkpoints} />
-          </Card>
+          {effectiveStatus === "upcoming" ? (
+            <Card className="glass-card p-8 h-[420px] md:h-[600px] flex flex-col items-center justify-center text-center">
+              <Timer className="h-16 w-16 text-muted-foreground/40 mb-4" />
+              <h3 className="text-xl font-semibold text-muted-foreground">La course n'est pas encore partie</h3>
+              <p className="text-sm text-muted-foreground/70 mt-2">
+                Départ prévu le {format(new Date(race.start_time), "EEEE d MMMM yyyy à HH:mm", { locale: fr })}
+              </p>
+            </Card>
+          ) : (
+            <Card className="glass-card p-2 h-[420px] md:h-[600px] overflow-hidden">
+              <RaceMap routeCoords={routeCoords} routePoints={race.route_points} runners={rows} focusedRunnerId={focused} checkpoints={checkpoints} />
+            </Card>
+          )}
 
-          <Card className="glass-card p-4 h-[220px]">
-            <div className="flex items-center gap-2 mb-2">
-              <svg className="h-4 w-4 text-primary-glow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 22 5-5 4 4 7-7 4 4"/><path d="M2 22h20"/></svg>
-              <h3 className="font-display font-semibold text-sm">Profil de dénivelé & avancement du peloton</h3>
-            </div>
-            <div className="h-[calc(100%-32px)]">
-              <ElevationChart
-                gpxGeojson={race.gpx_geojson}
-                totalDistanceKm={race.distance_km}
-                runners={rows}
-                checkpoints={checkpoints}
-              />
-            </div>
-          </Card>
+          {effectiveStatus === "upcoming" ? null : (
+            <Card className="glass-card p-4 h-[220px]">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="h-4 w-4 text-primary-glow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 22 5-5 4 4 7-7 4 4"/><path d="M2 22h20"/></svg>
+                <h3 className="font-display font-semibold text-sm">Profil de dénivelé & avancement du peloton</h3>
+              </div>
+              <div className="h-[calc(100%-32px)]">
+                <ElevationChart
+                  gpxGeojson={race.gpx_geojson}
+                  totalDistanceKm={race.distance_km}
+                  runners={rows}
+                  checkpoints={checkpoints}
+                />
+              </div>
+            </Card>
+          )}
         </div>
 
         <Card className="glass-card p-4 max-h-[600px] flex flex-col">
