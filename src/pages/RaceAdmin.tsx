@@ -771,6 +771,27 @@ export default function RaceAdmin() {
                   <Upload className="h-4 w-4 mr-2" /> {runnerImporting ? "Import…" : "Importer les coureurs"}
                 </Button>
               </div>
+              {runnerImportReport && (
+                <div className={`rounded-lg border p-3 text-sm space-y-2 ${runnerImportReport.errors.length ? "border-warning/40 bg-warning/10" : "border-emerald-500/30 bg-emerald-500/10"}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium">
+                      {runnerImportReport.registered} coureur(s) importé(s) · {runnerImportReport.created} compte(s) créé(s)
+                      {runnerImportReport.errors.length ? ` · ${runnerImportReport.errors.length} problème(s)` : ""}
+                    </p>
+                    <Button variant="ghost" size="sm" onClick={() => setRunnerImportReport(null)}>Fermer</Button>
+                  </div>
+                  {runnerImportReport.errors.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-warning">Doublons et conflits de dossards</p>
+                      <ul className="list-disc pl-5 space-y-1 max-h-56 overflow-y-auto">
+                        {runnerImportReport.errors.map((err, idx) => (
+                          <li key={idx} className="text-xs">{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="grid gap-3 md:grid-cols-[1fr_120px_120px_160px_auto] md:items-end">
               <div className="space-y-2"><Label>Email utilisateur</Label><Input value={newRunner.email} onChange={(e) => setNewRunner((v) => ({ ...v, email: e.target.value }))} placeholder="coureur@email.fr" /></div>
