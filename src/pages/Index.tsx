@@ -244,13 +244,13 @@ const Index = () => {
           </Button>
         </div>
 
-        {races.length === 0 ? (
+        {upcomingRaces.length === 0 ? (
           <Card className="glass-card p-12 text-center">
             <p className="text-muted-foreground">Aucune course pour l'instant. Les organisateurs peuvent en créer depuis leur espace.</p>
           </Card>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {races.map((r) => (
+            {upcomingRaces.map((r) => (
               <Link key={r.id} to={`/races/${r.id}`}>
                 <Card className="glass-card p-5 h-full hover:border-primary/50 hover:shadow-glow transition-smooth">
                   <div className="flex items-center gap-2 mb-3">
