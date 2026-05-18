@@ -241,9 +241,16 @@ Deno.serve(async (req) => {
       return json({ error: "Aucun dossard exploitable dans l'export GMCAP" }, 400);
     }
 
+    // Deduplicate by race_id+bib_number to avoid "ON CONFLICT cannot affect row a second time"
+    const dedupedMap = new Map<string, typeof results[number]>();
+    for (const r of results) {
+      dedupedMap.set(`${r.race_id}::${r.bib_number}`, r);
+    }
+    const deduped = Array.from(dedupedMap.values());
+
     const { error: upsertError } = await admin
       .from("gmcap_results")
-      .upsert(results, { onConflict: "race_id,bib_number" });
+      .upsert(deduped, { onConflict: "race_id,bib_number" });
 
     if (upsertError) {
       if (isMissingGmcapSchema(upsertError.message)) {
