@@ -238,6 +238,23 @@ Deno.serve(async (req) => {
       const registrationId = byBib.get(bib) ?? null;
       if (registrationId) matched += 1;
 
+      // Collect detector times for GMCAP checkpoints (e.g. "20|1" column for detector 20).
+      if (registrationId && detectorCheckpoints.length > 0) {
+        for (const cp of detectorCheckpoints) {
+          const raw = pickDetectorTime(row, cp.detector_id as number);
+          if (!raw) continue;
+          const seconds = timeToSeconds(raw);
+          if (seconds == null) continue;
+          checkpointTimes.push({
+            checkpoint_id: cp.id,
+            registration_id: registrationId,
+            time_seconds: seconds,
+            time_text: raw,
+            recorded_at: new Date().toISOString(),
+          });
+        }
+      }
+
       const abandoned = pick(row, "Abandon").toUpperCase() === "O";
       const disqualified = pick(row, "Disqualifié", "Disqualifie").toUpperCase() === "O";
       const started = pick(row, "Pris Départ", "Pris Depart").toUpperCase() === "O";
