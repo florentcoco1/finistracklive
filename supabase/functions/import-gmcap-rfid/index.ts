@@ -124,6 +124,33 @@ function extractSplits(row: ParsedRow) {
   return splits;
 }
 
+// Parse a time string like "1:23:45", "23:45.6", "01:23:45,200" into integer seconds.
+function timeToSeconds(value: string): number | null {
+  const s = clean(value).replace(",", ".");
+  if (!s || /^0+([:.]0+)*$/.test(s)) return null;
+  const parts = s.split(":");
+  if (parts.some((p) => !/^\d+(\.\d+)?$/.test(p))) return null;
+  let h = 0, m = 0, sec = 0;
+  if (parts.length === 3) { h = Number(parts[0]); m = Number(parts[1]); sec = Number(parts[2]); }
+  else if (parts.length === 2) { m = Number(parts[0]); sec = Number(parts[1]); }
+  else { sec = Number(parts[0]); }
+  const total = Math.round(h * 3600 + m * 60 + sec);
+  return total > 0 ? total : null;
+}
+
+// Find the time value for a given detector in a GMCAP row.
+// GMCAP intermediate columns are named like "20|1" (detector 20, passage 1).
+function pickDetectorTime(row: ParsedRow, detectorId: number): string | null {
+  const map = row.__norm;
+  if (!map) return null;
+  // Try common variants: "20|1", "20|2"... pick the first non-empty.
+  for (let pass = 1; pass <= 9; pass += 1) {
+    const v = map.get(normKey(`${detectorId}|${pass}`));
+    if (v) return v;
+  }
+  return null;
+}
+
 async function isRaceAdmin(admin: ReturnType<typeof createClient>, raceId: string, userId: string) {
   const { data, error } = await admin.rpc("is_race_admin", { _race_id: raceId, _user_id: userId });
   if (!error && data) return true;
