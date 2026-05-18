@@ -47,7 +47,7 @@ function formatTime(seconds: number | null, fallback: string | null): string {
 export default function CheckpointRankings({ raceId }: Props) {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [times, setTimes] = useState<CheckpointTime[]>([]);
-  const [regs, setRegs] = useState<Map<string, Registration & { first_name?: string | null; last_name?: string | null }>>(new Map());
+  const [regs, setRegs] = useState<Map<string, Registration & { first_name?: string | null; last_name?: string | null; gender?: "M" | "F" | null }>>(new Map());
   const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -70,7 +70,6 @@ export default function CheckpointRankings({ raceId }: Props) {
       const cpList = ((cps as unknown) as Checkpoint[]) ?? [];
       const regList = ((regsData as unknown) as Array<Registration & { runner_id: string }>) ?? [];
 
-      // Fetch times for these checkpoints
       const cpIds = cpList.map((c) => c.id);
       let timesData: CheckpointTime[] = [];
       if (cpIds.length > 0) {
@@ -81,9 +80,8 @@ export default function CheckpointRankings({ raceId }: Props) {
         timesData = ((data as unknown) as CheckpointTime[]) ?? [];
       }
 
-      // Fetch profiles for runner names
       const runnerIds = Array.from(new Set(regList.map((r) => r.runner_id).filter(Boolean)));
-      let profilesByUserId = new Map<string, Profile>();
+      const profilesByUserId = new Map<string, Profile>();
       if (runnerIds.length > 0) {
         const { data: profs } = await supabase
           .from("profiles")
@@ -94,10 +92,28 @@ export default function CheckpointRankings({ raceId }: Props) {
         }
       }
 
-      const regMap = new Map<string, Registration & { first_name?: string | null; last_name?: string | null }>();
+      const bibs = regList.map((r) => r.bib_number);
+      const genderByBib = new Map<string, "M" | "F" | null>();
+      if (bibs.length > 0) {
+        const { data: gm } = await supabase
+          .from("gmcap_results" as any)
+          .select("bib_number, gender")
+          .eq("race_id", raceId)
+          .in("bib_number", bibs);
+        for (const g of ((gm as unknown) as Array<{ bib_number: string; gender: string | null }>) ?? []) {
+          genderByBib.set(String(g.bib_number).trim(), (g.gender as "M" | "F" | null) ?? null);
+        }
+      }
+
+      const regMap = new Map<string, Registration & { first_name?: string | null; last_name?: string | null; gender?: "M" | "F" | null }>();
       for (const r of regList) {
         const prof = profilesByUserId.get(r.runner_id);
-        regMap.set(r.id, { ...r, first_name: prof?.first_name ?? null, last_name: prof?.last_name ?? null });
+        regMap.set(r.id, {
+          ...r,
+          first_name: prof?.first_name ?? null,
+          last_name: prof?.last_name ?? null,
+          gender: genderByBib.get(String(r.bib_number).trim()) ?? null,
+        });
       }
 
       if (!active) return;
@@ -129,11 +145,24 @@ export default function CheckpointRankings({ raceId }: Props) {
 
   const ranked = useMemo(() => {
     if (!activeId) return [];
-    const filtered = times.filter((t) => t.checkpoint_id === activeId);
-    return filtered
-      .filter((t) => t.time_seconds != null)
+    const filtered = times
+      .filter((t) => t.checkpoint_id === activeId && t.time_seconds != null)
       .sort((a, b) => (a.time_seconds ?? 0) - (b.time_seconds ?? 0));
-  }, [times, activeId]);
+
+    const catCounters = new Map<string, number>();
+    const genderCounters = new Map<string, number>();
+
+    return filtered.map((t, i) => {
+      const reg = regs.get(t.registration_id);
+      const cat = reg?.category ?? "—";
+      const gen = reg?.gender ?? "—";
+      const catRank = (catCounters.get(cat) ?? 0) + 1;
+      catCounters.set(cat, catRank);
+      const genRank = (genderCounters.get(gen) ?? 0) + 1;
+      genderCounters.set(gen, genRank);
+      return { t, reg, rank: i + 1, catRank, genRank, cat, gen };
+    });
+  }, [times, activeId, regs]);
 
   if (checkpoints.length === 0) return null;
 
@@ -159,40 +188,46 @@ export default function CheckpointRankings({ raceId }: Props) {
                 Aucun passage enregistré sur ce point.
               </p>
             ) : (
-              <ol className="space-y-1.5 max-h-[420px] overflow-y-auto pr-1">
-                {ranked.map((t, i) => {
-                  const reg = regs.get(t.registration_id);
-                  return (
+              <div className="max-h-[420px] overflow-y-auto pr-1">
+                <div className="hidden md:grid grid-cols-[60px_90px_80px_1fr_90px_120px] gap-3 px-2 py-1 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground border-b border-border/40">
+                  <span>Clt</span>
+                  <span>Catégorie</span>
+                  <span>Sexe</span>
+                  <span>Coureur</span>
+                  <span>Dossard</span>
+                  <span className="text-right">Temps officiel</span>
+                </div>
+                <ol className="space-y-1.5 mt-1.5">
+                  {ranked.map(({ t, reg, rank, catRank, genRank, cat, gen }) => (
                     <li
                       key={t.id}
-                      className="flex items-center gap-3 p-2 rounded-md border border-border/50 bg-secondary/40"
+                      className="grid grid-cols-[60px_90px_80px_1fr_90px_120px] items-center gap-3 p-2 rounded-md border border-border/50 bg-secondary/40 text-sm"
                     >
-                      <span className="text-sm font-bold text-muted-foreground w-7 text-center shrink-0">
-                        {i + 1}
+                      <span className="font-bold text-muted-foreground">{rank}</span>
+                      <span className="text-xs">
+                        <span className="font-semibold">{catRank}</span>
+                        <span className="text-muted-foreground"> · {cat}</span>
                       </span>
-                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary shrink-0">
+                      <span className="text-xs">
+                        <span className="font-semibold">{genRank}</span>
+                        <span className="text-muted-foreground"> · {gen}</span>
+                      </span>
+                      <span className="font-medium truncate">
+                        {reg?.first_name || reg?.last_name
+                          ? `${reg.first_name ?? ""} ${reg.last_name ?? ""}`.trim()
+                          : `Dossard ${reg?.bib_number ?? ""}`}
+                      </span>
+                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary text-center">
                         #{reg?.bib_number ?? "—"}
                       </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">
-                          {reg?.first_name || reg?.last_name
-                            ? `${reg.first_name ?? ""} ${reg.last_name ?? ""}`.trim()
-                            : `Dossard ${reg?.bib_number ?? ""}`}
-                          {reg?.category ? (
-                            <span className="ml-2 text-xs font-normal text-muted-foreground">
-                              ({reg.category})
-                            </span>
-                          ) : null}
-                        </p>
-                      </div>
-                      <span className="inline-flex items-center gap-1 text-sm font-mono text-foreground shrink-0">
+                      <span className="inline-flex items-center justify-end gap-1 font-mono">
                         <Timer className="h-3.5 w-3.5 text-muted-foreground" />
                         {formatTime(t.time_seconds, t.time_text)}
                       </span>
                     </li>
-                  );
-                })}
-              </ol>
+                  ))}
+                </ol>
+              </div>
             )}
           </TabsContent>
         ))}
