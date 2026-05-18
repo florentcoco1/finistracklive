@@ -243,6 +243,7 @@ export type Database = {
       race_checkpoints: {
         Row: {
           created_at: string
+          detector_id: number | null
           distance_km: number | null
           id: string
           name: string
@@ -253,6 +254,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          detector_id?: number | null
           distance_km?: number | null
           id?: string
           name: string
@@ -263,6 +265,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          detector_id?: number | null
           distance_km?: number | null
           id?: string
           name?: string
