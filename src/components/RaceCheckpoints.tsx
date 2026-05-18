@@ -17,6 +17,7 @@ interface Checkpoint {
   distance_km: number | null;
   source: "manual" | "gmcap";
   position: number;
+  detector_id: number | null;
 }
 
 interface RegistrationLite {
@@ -33,7 +34,7 @@ interface CheckpointTime {
   time_text: string | null;
 }
 
-const emptyNew = { name: "", distance_km: "", source: "manual" as "manual" | "gmcap" };
+const emptyNew = { name: "", distance_km: "", source: "manual" as "manual" | "gmcap", detector_id: "31" };
 
 function parseTime(input: string): { seconds: number | null; text: string | null } {
   const s = input.trim();
