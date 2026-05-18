@@ -124,6 +124,33 @@ function extractSplits(row: ParsedRow) {
   return splits;
 }
 
+// Parse a time string like "1:23:45", "23:45.6", "01:23:45,200" into integer seconds.
+function timeToSeconds(value: string): number | null {
+  const s = clean(value).replace(",", ".");
+  if (!s || /^0+([:.]0+)*$/.test(s)) return null;
+  const parts = s.split(":");
+  if (parts.some((p) => !/^\d+(\.\d+)?$/.test(p))) return null;
+  let h = 0, m = 0, sec = 0;
+  if (parts.length === 3) { h = Number(parts[0]); m = Number(parts[1]); sec = Number(parts[2]); }
+  else if (parts.length === 2) { m = Number(parts[0]); sec = Number(parts[1]); }
+  else { sec = Number(parts[0]); }
+  const total = Math.round(h * 3600 + m * 60 + sec);
+  return total > 0 ? total : null;
+}
+
+// Find the time value for a given detector in a GMCAP row.
+// GMCAP intermediate columns are named like "20|1" (detector 20, passage 1).
+function pickDetectorTime(row: ParsedRow, detectorId: number): string | null {
+  const map = row.__norm;
+  if (!map) return null;
+  // Try common variants: "20|1", "20|2"... pick the first non-empty.
+  for (let pass = 1; pass <= 9; pass += 1) {
+    const v = map.get(normKey(`${detectorId}|${pass}`));
+    if (v) return v;
+  }
+  return null;
+}
+
 async function isRaceAdmin(admin: ReturnType<typeof createClient>, raceId: string, userId: string) {
   const { data, error } = await admin.rpc("is_race_admin", { _race_id: raceId, _user_id: userId });
   if (!error && data) return true;
@@ -180,7 +207,17 @@ Deno.serve(async (req) => {
     const raceNameNorm = normKey(clean(raceRow?.name ?? ""));
 
     const byBib = new Map((registrations ?? []).map((reg: any) => [clean(reg.bib_number), reg.id]));
+
+    // Load GMCAP-source checkpoints to populate runner_checkpoint_times from detector columns.
+    const { data: gmcapCheckpoints } = await admin
+      .from("race_checkpoints")
+      .select("id, detector_id")
+      .eq("race_id", race_id)
+      .eq("source", "gmcap");
+    const detectorCheckpoints = (gmcapCheckpoints ?? []).filter((c: any) => c.detector_id != null);
+
     const results: any[] = [];
+    const checkpointTimes: any[] = [];
     let matched = 0;
     let skippedByCourse = 0;
     let courseFieldSeen = false;
@@ -200,6 +237,23 @@ Deno.serve(async (req) => {
 
       const registrationId = byBib.get(bib) ?? null;
       if (registrationId) matched += 1;
+
+      // Collect detector times for GMCAP checkpoints (e.g. "20|1" column for detector 20).
+      if (registrationId && detectorCheckpoints.length > 0) {
+        for (const cp of detectorCheckpoints) {
+          const raw = pickDetectorTime(row, cp.detector_id as number);
+          if (!raw) continue;
+          const seconds = timeToSeconds(raw);
+          if (seconds == null) continue;
+          checkpointTimes.push({
+            checkpoint_id: cp.id,
+            registration_id: registrationId,
+            time_seconds: seconds,
+            time_text: raw,
+            recorded_at: new Date().toISOString(),
+          });
+        }
+      }
 
       const abandoned = pick(row, "Abandon").toUpperCase() === "O";
       const disqualified = pick(row, "Disqualifié", "Disqualifie").toUpperCase() === "O";
@@ -287,8 +341,22 @@ Deno.serve(async (req) => {
       return json({ error: upsertError.message }, 500);
     }
 
+    // Upsert detector checkpoint times (deduplicated by checkpoint_id+registration_id).
+    let checkpointTimesImported = 0;
+    if (checkpointTimes.length > 0) {
+      const ctMap = new Map<string, typeof checkpointTimes[number]>();
+      for (const t of checkpointTimes) {
+        ctMap.set(`${t.checkpoint_id}::${t.registration_id}`, t);
+      }
+      const ctDeduped = Array.from(ctMap.values());
+      const { error: ctErr } = await admin
+        .from("runner_checkpoint_times")
+        .upsert(ctDeduped, { onConflict: "checkpoint_id,registration_id" });
+      if (!ctErr) checkpointTimesImported = ctDeduped.length;
+    }
+
     await markImportSuccess(admin, race_id, typeof file_name === "string" ? file_name : null, results.length, matched);
-    return json({ ok: true, imported: results.length, matched, unmatched: results.length - matched, skipped_by_course: skippedByCourse });
+    return json({ ok: true, imported: results.length, matched, unmatched: results.length - matched, skipped_by_course: skippedByCourse, checkpoint_times_imported: checkpointTimesImported });
   } catch (error) {
     return json({ error: (error as Error).message ?? "Erreur import GMCAP" }, 500);
   }

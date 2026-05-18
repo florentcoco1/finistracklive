@@ -17,6 +17,7 @@ interface Checkpoint {
   distance_km: number | null;
   source: "manual" | "gmcap";
   position: number;
+  detector_id: number | null;
 }
 
 interface RegistrationLite {
@@ -33,7 +34,7 @@ interface CheckpointTime {
   time_text: string | null;
 }
 
-const emptyNew = { name: "", distance_km: "", source: "manual" as "manual" | "gmcap" };
+const emptyNew = { name: "", distance_km: "", source: "manual" as "manual" | "gmcap", detector_id: "31" };
 
 function parseTime(input: string): { seconds: number | null; text: string | null } {
   const s = input.trim();
@@ -115,12 +116,13 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
   const addCheckpoint = async () => {
     if (!newCp.name.trim()) return toast.error("Nom du point requis");
     setBusy(true);
-    const payload = {
+    const payload: Record<string, unknown> = {
       race_id: raceId,
       name: newCp.name.trim(),
       distance_km: newCp.distance_km ? Number(newCp.distance_km) : null,
       source: newCp.source,
       position: checkpoints.length,
+      detector_id: newCp.source === "gmcap" ? Number(newCp.detector_id) || null : null,
     };
     let { error } = await (supabase as any).from("race_checkpoints").insert(payload);
     if (error && isMissingSchema(error)) {
@@ -227,7 +229,7 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
         </p>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-[1fr_140px_180px_auto] md:items-end">
+      <div className="grid gap-3 md:grid-cols-[1fr_120px_180px_160px_auto] md:items-end">
         <div className="space-y-2"><Label>Nom du point</Label><Input value={newCp.name} onChange={(e) => setNewCp((v) => ({ ...v, name: e.target.value }))} placeholder="KM10" /></div>
         <div className="space-y-2"><Label>Distance (km)</Label><Input type="number" step="0.1" value={newCp.distance_km} onChange={(e) => setNewCp((v) => ({ ...v, distance_km: e.target.value }))} /></div>
         <div className="space-y-2">
@@ -237,6 +239,22 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
             <SelectContent>
               <SelectItem value="manual">Manuel (saisie organisateur)</SelectItem>
               <SelectItem value="gmcap">Automatique (GMCAP)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Détecteur</Label>
+          <Select
+            value={newCp.detector_id}
+            onValueChange={(v) => setNewCp((s) => ({ ...s, detector_id: v }))}
+            disabled={newCp.source !== "gmcap"}
+          >
+            <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="31">31 — Arrivée</SelectItem>
+              {Array.from({ length: 20 }, (_, i) => 11 + i).map((n) => (
+                <SelectItem key={n} value={String(n)}>{n} — Intermédiaire</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -266,7 +284,9 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
                   <TableCell>{cp.distance_km != null ? `${cp.distance_km} km` : "—"}</TableCell>
                   <TableCell>
                     <Badge variant={cp.source === "gmcap" ? "secondary" : "outline"}>
-                      {cp.source === "gmcap" ? "GMCAP auto" : "Manuel"}
+                      {cp.source === "gmcap"
+                        ? `GMCAP auto${cp.detector_id ? ` · D${cp.detector_id}${cp.detector_id === 31 ? " (Arrivée)" : ""}` : ""}`
+                        : "Manuel"}
                     </Badge>
                   </TableCell>
                   <TableCell>{count} / {registrations.length}</TableCell>
