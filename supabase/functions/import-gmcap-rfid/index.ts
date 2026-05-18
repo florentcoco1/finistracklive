@@ -207,7 +207,17 @@ Deno.serve(async (req) => {
     const raceNameNorm = normKey(clean(raceRow?.name ?? ""));
 
     const byBib = new Map((registrations ?? []).map((reg: any) => [clean(reg.bib_number), reg.id]));
+
+    // Load GMCAP-source checkpoints to populate runner_checkpoint_times from detector columns.
+    const { data: gmcapCheckpoints } = await admin
+      .from("race_checkpoints")
+      .select("id, detector_id")
+      .eq("race_id", race_id)
+      .eq("source", "gmcap");
+    const detectorCheckpoints = (gmcapCheckpoints ?? []).filter((c: any) => c.detector_id != null);
+
     const results: any[] = [];
+    const checkpointTimes: any[] = [];
     let matched = 0;
     let skippedByCourse = 0;
     let courseFieldSeen = false;
