@@ -140,13 +140,21 @@ function timeToSeconds(value: string): number | null {
 
 // Find the time value for a given detector in a GMCAP row.
 // GMCAP intermediate columns are named like "20|1" (detector 20, passage 1).
+// We scan the raw row keys to be robust to header variants and to encoding/normalization issues.
 function pickDetectorTime(row: ParsedRow, detectorId: number): string | null {
+  // Match a header whose label contains "<detectorId>|<digit>" anywhere.
+  const re = new RegExp(`(?:^|[^0-9])${detectorId}\\s*\\|\\s*\\d+`);
+  for (const [key, value] of Object.entries(row)) {
+    if (!value) continue;
+    if (re.test(key)) return value;
+  }
+  // Fallback: normalized lookup ("20|1" -> "201", "20|2" -> "202"...).
   const map = row.__norm;
-  if (!map) return null;
-  // Try common variants: "20|1", "20|2"... pick the first non-empty.
-  for (let pass = 1; pass <= 9; pass += 1) {
-    const v = map.get(normKey(`${detectorId}|${pass}`));
-    if (v) return v;
+  if (map) {
+    for (let pass = 1; pass <= 9; pass += 1) {
+      const v = map.get(normKey(`${detectorId}|${pass}`));
+      if (v) return v;
+    }
   }
   return null;
 }
