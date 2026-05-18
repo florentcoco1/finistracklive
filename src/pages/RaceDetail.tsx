@@ -894,6 +894,57 @@ export default function RaceDetail() {
       <div className="mt-6">
         <CheckpointRankings raceId={race.id} />
       </div>
+
+      <Dialog open={!!runnerDetail} onOpenChange={(o) => { if (!o) setRunnerDetail(null); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Timer className="h-5 w-5 text-primary-glow" />
+              {runnerDetail?.first_name} {runnerDetail?.last_name}
+              <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary ml-2">
+                #{runnerDetail?.bib_number}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          {runnerDetail?.official_time && (
+            <p className="text-sm text-muted-foreground">
+              Temps officiel : <span className="font-mono text-foreground">{runnerDetail.official_time}</span>
+            </p>
+          )}
+          <h3 className="font-semibold mt-3 mb-2 text-sm">Temps par point intermédiaire</h3>
+          {runnerDetailLoading ? (
+            <p className="text-sm text-muted-foreground">Chargement…</p>
+          ) : runnerDetailCheckpoints.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Aucun point intermédiaire configuré.</p>
+          ) : (
+            <div className="space-y-1">
+              <div className="grid grid-cols-[1fr_90px_120px] gap-2 px-2 py-1 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground border-b border-border/40">
+                <span>Point</span>
+                <span className="text-right">Distance</span>
+                <span className="text-right">Temps</span>
+              </div>
+              {runnerDetailCheckpoints.map((cp, idx) => {
+                const t = runnerDetailTimes.find((x) => x.checkpoint_id === cp.id);
+                const rowBg = idx % 2 === 0 ? "bg-primary/10" : "bg-background/60";
+                return (
+                  <div
+                    key={cp.id}
+                    className={`grid grid-cols-[1fr_90px_120px] gap-2 items-center p-2 rounded-md border border-border/50 text-sm ${rowBg}`}
+                  >
+                    <span className="font-medium truncate">{cp.name}</span>
+                    <span className="text-right text-muted-foreground text-xs">
+                      {cp.distance_km != null ? `${cp.distance_km} km` : "—"}
+                    </span>
+                    <span className="font-mono text-right">
+                      {t?.time_text ?? (t?.time_seconds != null ? `${Math.floor(t.time_seconds / 3600)}h${String(Math.floor((t.time_seconds % 3600) / 60)).padStart(2, "0")}'${String(t.time_seconds % 60).padStart(2, "0")}"` : "—")}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
