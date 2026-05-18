@@ -365,6 +365,40 @@ export default function RaceDetail() {
     };
   }, [raceId]);
 
+  // Load checkpoints + times for the selected runner detail dialog
+  useEffect(() => {
+    if (!runnerDetail || !raceId) {
+      setRunnerDetailTimes([]);
+      setRunnerDetailCheckpoints([]);
+      return;
+    }
+    let active = true;
+    setRunnerDetailLoading(true);
+    (async () => {
+      const { data: cps } = await supabase
+        .from("race_checkpoints" as any)
+        .select("id, name, distance_km, position")
+        .eq("race_id", raceId)
+        .order("position", { ascending: true });
+      const cpList = ((cps as unknown) as Array<{ id: string; name: string; distance_km: number | null; position: number }>) ?? [];
+      const cpIds = cpList.map((c) => c.id);
+      let times: Array<{ checkpoint_id: string; time_seconds: number | null; time_text: string | null }> = [];
+      if (cpIds.length > 0) {
+        const { data } = await supabase
+          .from("runner_checkpoint_times" as any)
+          .select("checkpoint_id, time_seconds, time_text")
+          .eq("registration_id", runnerDetail.registration_id)
+          .in("checkpoint_id", cpIds);
+        times = ((data as unknown) as typeof times) ?? [];
+      }
+      if (!active) return;
+      setRunnerDetailCheckpoints(cpList);
+      setRunnerDetailTimes(times);
+      setRunnerDetailLoading(false);
+    })();
+    return () => { active = false; };
+  }, [runnerDetail, raceId]);
+
   const isOrganizer = user && race && race.organizer_id === user.id;
 
   // Live tick to update elapsed race time every second
