@@ -29,7 +29,12 @@ interface EventItem {
 
 interface UntypedRacesQuery {
   select: (columns: string) => {
-    order: (column: string, options: { ascending: boolean }) => { limit: (count: number) => Promise<{ data: unknown[] | null; error: { code?: string; message?: string } | null }> };
+    order: (
+      column: string,
+      options: { ascending: boolean },
+    ) => {
+      limit: (count: number) => Promise<{ data: unknown[] | null; error: { code?: string; message?: string } | null }>;
+    };
   };
 }
 
@@ -37,7 +42,9 @@ const raceColumns = "id, name, start_time, distance_km, difficulty_level, status
 const compatibleRaceColumns = "id, name, start_time, distance_km, status";
 
 function isMissingDifficultyColumn(error: { code?: string; message?: string } | null) {
-  return !!error && (error.code === "42703" || error.code === "PGRST204") && !!error.message?.includes("difficulty_level");
+  return (
+    !!error && (error.code === "42703" || error.code === "PGRST204") && !!error.message?.includes("difficulty_level")
+  );
 }
 
 function getEventStatus(ev: EventItem): "live" | "upcoming" | "finished" {
@@ -65,15 +72,21 @@ const Index = () => {
 
   useEffect(() => {
     document.title = "FinisTrackLive — Suivi de course en direct";
-    const loadRaces = (columns: string) => (supabase.from as unknown as (table: string) => UntypedRacesQuery)("races")
-      .select(columns)
-      .order("start_time", { ascending: true })
-      .limit(6);
+    const loadRaces = (columns: string) =>
+      (supabase.from as unknown as (table: string) => UntypedRacesQuery)("races")
+        .select(columns)
+        .order("start_time", { ascending: true })
+        .limit(6);
 
     loadRaces(raceColumns).then(async ({ data, error }) => {
       if (isMissingDifficultyColumn(error)) {
         const fallback = await loadRaces(compatibleRaceColumns);
-        setRaces(((fallback.data ?? []) as Omit<Race, "difficulty_level">[]).map((race) => ({ ...race, difficulty_level: 1 })) as Race[]);
+        setRaces(
+          ((fallback.data ?? []) as Omit<Race, "difficulty_level">[]).map((race) => ({
+            ...race,
+            difficulty_level: 1,
+          })) as Race[],
+        );
         return;
       }
       setRaces((data ?? []) as Race[]);
@@ -115,11 +128,7 @@ const Index = () => {
         <div className="absolute inset-0 hero-grid-bg" />
         <div className="container relative py-20 md:py-28 text-center">
           <div className="flex justify-center mb-6 animate-fade-in-up">
-            <img
-              src={logo}
-              alt="FinisTrackLive"
-              className="h-24 w-24 md:h-32 md:w-32 object-contain drop-shadow-2xl"
-            />
+            <img src={logo} alt="FinisTrackLive" className="h-48 w-48 md:h-32 md:w-32 object-contain drop-shadow-2xl" />
           </div>
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-secondary/60 border border-border text-xs font-medium text-muted-foreground mb-6 animate-fade-in-up">
             <span className="relative flex h-2 w-2">
@@ -132,7 +141,8 @@ const Index = () => {
             Suivez chaque coureur, <span className="text-gradient">seconde par seconde</span>
           </h1>
           <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto animate-fade-in-up">
-            Plateforme de suivi live pour courses et trails. Charge ton GPX, inscris tes coureurs, et regarde-les progresser sur la carte en temps réel.
+            Plateforme de suivi live pour courses et trails. Charge ton GPX, inscris tes coureurs, et regarde-les
+            progresser sur la carte en temps réel.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center animate-fade-in-up">
             <Button asChild variant="hero" size="xl">
@@ -214,12 +224,36 @@ const Index = () => {
       <section className="container py-16 md:py-24">
         <div className="grid md:grid-cols-3 gap-6">
           {[
-            { icon: MapPin, title: "Parcours GPX", desc: "Charge le tracé officiel et il s'affiche sur la carte avec distance et progression." },
-            { icon: Radio, title: "Live temps réel", desc: "Position des coureurs mise à jour en direct via WebSocket. Aucun rafraîchissement." },
-            { icon: Trophy, title: "Classement live", desc: "Distance parcourue sur le tracé, vitesse moyenne et allure sur 5 minutes glissantes." },
-            { icon: Smartphone, title: "Pensé mobile", desc: "Mode coureur optimisé pour smartphone. Un bouton, le suivi démarre." },
-            { icon: Zap, title: "Anti-triche", desc: "Snap-to-route côté serveur. Impossible de gonfler artificiellement sa distance." },
-            { icon: Activity, title: "Vue spectateur", desc: "Page publique pour partager avec famille, supporters et médias." },
+            {
+              icon: MapPin,
+              title: "Parcours GPX",
+              desc: "Charge le tracé officiel et il s'affiche sur la carte avec distance et progression.",
+            },
+            {
+              icon: Radio,
+              title: "Live temps réel",
+              desc: "Position des coureurs mise à jour en direct via WebSocket. Aucun rafraîchissement.",
+            },
+            {
+              icon: Trophy,
+              title: "Classement live",
+              desc: "Distance parcourue sur le tracé, vitesse moyenne et allure sur 5 minutes glissantes.",
+            },
+            {
+              icon: Smartphone,
+              title: "Pensé mobile",
+              desc: "Mode coureur optimisé pour smartphone. Un bouton, le suivi démarre.",
+            },
+            {
+              icon: Zap,
+              title: "Anti-triche",
+              desc: "Snap-to-route côté serveur. Impossible de gonfler artificiellement sa distance.",
+            },
+            {
+              icon: Activity,
+              title: "Vue spectateur",
+              desc: "Page publique pour partager avec famille, supporters et médias.",
+            },
           ].map((f, i) => (
             <Card key={i} className="glass-card p-6 hover:border-primary/40 transition-smooth">
               <div className="h-11 w-11 rounded-xl bg-gradient-mesh border border-primary/20 flex items-center justify-center mb-4">
@@ -246,7 +280,9 @@ const Index = () => {
 
         {upcomingRaces.length === 0 ? (
           <Card className="glass-card p-12 text-center">
-            <p className="text-muted-foreground">Aucune course pour l'instant. Les organisateurs peuvent en créer depuis leur espace.</p>
+            <p className="text-muted-foreground">
+              Aucune course pour l'instant. Les organisateurs peuvent en créer depuis leur espace.
+            </p>
           </Card>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -255,9 +291,7 @@ const Index = () => {
                 <Card className="glass-card p-5 h-full hover:border-primary/50 hover:shadow-glow transition-smooth">
                   <div className="flex items-center gap-2 mb-3">
                     <StatusBadge status={r.status} />
-                    {r.distance_km && (
-                      <span className="text-xs text-muted-foreground">{r.distance_km} km</span>
-                    )}
+                    {r.distance_km && <span className="text-xs text-muted-foreground">{r.distance_km} km</span>}
                   </div>
                   <h3 className="font-display font-semibold text-lg mb-1">{r.name}</h3>
                   <DifficultyStars level={r.difficulty_level} className="mb-2" />
