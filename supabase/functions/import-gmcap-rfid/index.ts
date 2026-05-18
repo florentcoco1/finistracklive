@@ -341,8 +341,22 @@ Deno.serve(async (req) => {
       return json({ error: upsertError.message }, 500);
     }
 
+    // Upsert detector checkpoint times (deduplicated by checkpoint_id+registration_id).
+    let checkpointTimesImported = 0;
+    if (checkpointTimes.length > 0) {
+      const ctMap = new Map<string, typeof checkpointTimes[number]>();
+      for (const t of checkpointTimes) {
+        ctMap.set(`${t.checkpoint_id}::${t.registration_id}`, t);
+      }
+      const ctDeduped = Array.from(ctMap.values());
+      const { error: ctErr } = await admin
+        .from("runner_checkpoint_times")
+        .upsert(ctDeduped, { onConflict: "checkpoint_id,registration_id" });
+      if (!ctErr) checkpointTimesImported = ctDeduped.length;
+    }
+
     await markImportSuccess(admin, race_id, typeof file_name === "string" ? file_name : null, results.length, matched);
-    return json({ ok: true, imported: results.length, matched, unmatched: results.length - matched, skipped_by_course: skippedByCourse });
+    return json({ ok: true, imported: results.length, matched, unmatched: results.length - matched, skipped_by_course: skippedByCourse, checkpoint_times_imported: checkpointTimesImported });
   } catch (error) {
     return json({ error: (error as Error).message ?? "Erreur import GMCAP" }, 500);
   }
