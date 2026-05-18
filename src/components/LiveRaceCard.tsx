@@ -31,6 +31,8 @@ interface PodiumRow {
   checkpoint_position: number;
   time_text: string | null;
   time_seconds: number | null;
+  finished: boolean;
+  finish_rank: number | null;
 }
 
 function formatElapsed(s: number) {
