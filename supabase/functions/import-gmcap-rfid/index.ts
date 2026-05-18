@@ -256,6 +256,9 @@ Deno.serve(async (req) => {
     }
 
     if (results.length === 0) {
+      if (courseFieldSeen && skippedByCourse > 0) {
+        return json({ error: `Aucune ligne ne correspond à la course « ${raceRow?.name ?? ""} » (${skippedByCourse} ligne(s) ignorée(s) car champ "Course" différent).` }, 400);
+      }
       return json({ error: "Aucun dossard exploitable dans l'export GMCAP" }, 400);
     }
 
