@@ -792,79 +792,84 @@ export default function RaceDetail() {
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">Aucun coureur {genderFilter === "M" ? "homme" : genderFilter === "F" ? "femme" : "inscrit"} pour le moment.</p>
           ) : (
-            <ol className="space-y-2 overflow-y-auto pr-1">
-              {filtered.map((r, i) => {
-                const stale = r.last_position_at
-                  ? Date.now() - new Date(r.last_position_at).getTime() > 30000
-                  : true;
-                const color = colorForRegistration(r.registration_id);
-                const medal = effectiveStatus === "upcoming" ? null : medalFor(i, r.runner_status);
-                const showDash = effectiveStatus === "upcoming";
-                return (
-                  <li
-                    key={r.registration_id}
-                    onClick={() => setFocused(r.registration_id)}
-                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:border-primary/40 transition-smooth ${stale ? "opacity-60" : ""} ${medal ? medal.bg : "border-border/50 bg-secondary/40"}`}
-                  >
-                    {showDash ? (
-                      <span className="text-sm font-bold text-muted-foreground w-6 text-center shrink-0">—</span>
-                    ) : medal ? (
-                      <span className="text-xl w-6 text-center shrink-0" aria-label={`Médaille ${medal.label}`}>{medal.emoji}</span>
-                    ) : (
-                      <span className="text-sm font-bold text-muted-foreground w-6 text-center shrink-0">{i + 1}</span>
-                    )}
-                    <span
-                      className={`h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0 ${medal ? medal.ring : ""}`}
-                      style={{ background: color }}
+            <div className="overflow-y-auto pr-1">
+              <div className="hidden md:grid grid-cols-[50px_90px_70px_1fr_70px_110px] gap-2 px-2 py-1 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground border-b border-border/40">
+                <span>Clt</span>
+                <span>Catégorie</span>
+                <span>Sexe</span>
+                <span>Coureur</span>
+                <span>Dossard</span>
+                <span className="text-right">Temps officiel</span>
+              </div>
+              <ol className="space-y-1 mt-1.5">
+                {filtered.map((r, i) => {
+                  const stale = r.last_position_at
+                    ? Date.now() - new Date(r.last_position_at).getTime() > 30000
+                    : true;
+                  const showDash = effectiveStatus === "upcoming";
+                  const rank = r.overall_rank ?? (showDash ? null : i + 1);
+                  const isMedal = !showDash && rank != null && rank <= 3;
+                  const rowBg = isMedal
+                    ? rank === 1
+                      ? "bg-yellow-400/20 border-yellow-400/50"
+                      : rank === 2
+                      ? "bg-slate-300/20 border-slate-300/50"
+                      : "bg-amber-600/20 border-amber-600/50"
+                    : i % 2 === 0
+                    ? "bg-primary/10 border-border/50"
+                    : "bg-background/60 border-border/50";
+                  const rankColor = isMedal
+                    ? rank === 1
+                      ? "text-yellow-400"
+                      : rank === 2
+                      ? "text-slate-300"
+                      : "text-amber-600"
+                    : "text-muted-foreground";
+                  const medalEmoji = isMedal ? (rank === 1 ? "🥇" : rank === 2 ? "🥈" : "🥉") : null;
+                  const officialTime = r.rounded_time ?? r.official_time;
+                  return (
+                    <li
+                      key={r.registration_id}
+                      onClick={() => setFocused(r.registration_id)}
+                      className={`grid grid-cols-[50px_90px_70px_1fr_70px_110px] items-center gap-2 p-2 rounded-md border cursor-pointer hover:border-primary/40 transition-smooth text-sm ${stale ? "opacity-60" : ""} ${rowBg}`}
                     >
-                      {r.bib_number}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className={`text-sm truncate ${medal ? "font-bold" : "font-medium"}`}>
-                        {r.first_name} {r.last_name}
-                        {r.gender ? <span className="ml-2 text-xs font-normal text-muted-foreground">({r.gender === "M" ? "H" : r.gender})</span> : null}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {(r.rounded_time ?? r.official_time)
-                          ? `Temps officiel ${r.rounded_time ?? r.official_time}`
-                          : `${formatDistance(r.distance_along_route_m)}${r.progress_percent != null ? ` · ${r.progress_percent.toFixed(0)}%` : ""}`}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {showDash
-                          ? "—"
-                          : (r.category_rank || r.gender_rank)
-                            ? [
-                                r.category ? `cat. ${r.category}${r.category_rank ? ` · ${r.category_rank}e` : ""}` : null,
-                                r.gender_rank ? `sexe · ${r.gender_rank}e` : null,
-                              ].filter(Boolean).join(" · ")
-                            : `${formatSpeed(r.rolling_speed_kmh)} · ${formatPace(r.rolling_pace_sec_per_km)}`}
-                      </p>
-                      {r.overall_rank == null && r.last_position_at && (
-                        <p className="text-[10px] text-muted-foreground mt-0.5">GPS support · {formatSpeed(r.rolling_speed_kmh)}</p>
-                      )}
-                      {r.finished_at && (
-                        <p className="text-[10px] text-success mt-0.5 font-semibold">
-                          🏁 Arrivée {format(new Date(r.finished_at), "HH:mm:ss", { locale: fr })}
+                      <span className={`font-bold ${rankColor} flex items-center gap-1`}>
+                        {medalEmoji && <span>{medalEmoji}</span>}
+                        <span>{showDash ? "—" : rank ?? "—"}</span>
+                      </span>
+                      <span className="text-xs">
+                        <span className="font-semibold">{r.category_rank ?? "—"}</span>
+                        <span className="text-muted-foreground"> · {r.category ?? "—"}</span>
+                      </span>
+                      <span className="text-xs">
+                        <span className="font-semibold">{r.gender_rank ?? "—"}</span>
+                        <span className="text-muted-foreground"> · {r.gender ?? "—"}</span>
+                      </span>
+                      <div className="min-w-0">
+                        <p className={`truncate ${isMedal ? "font-bold" : "font-medium"}`}>
+                          {r.first_name} {r.last_name}
                         </p>
-                      )}
-                      {r.runner_status === 'dnf' && (
-                        <p className="text-[10px] text-destructive mt-0.5 font-semibold">
-                          🏳️ Abandon{r.dnf_reason ? ` — ${r.dnf_reason}` : ""}
-                        </p>
-                      )}
-                      {r.runner_status === 'problem' && (
-                        <p className="text-[10px] text-warning mt-0.5 font-semibold">
-                          ⚠️ Problème{r.problem_description ? ` — ${r.problem_description}` : ""}
-                        </p>
-                      )}
-                      {stale && r.tracking_active && r.runner_status === 'running' && !r.finished_at && (
-                        <p className="text-[10px] text-warning mt-0.5">📡 signal perdu</p>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
+                        {r.finished_at && (
+                          <p className="text-[10px] text-success font-semibold">🏁 {format(new Date(r.finished_at), "HH:mm:ss", { locale: fr })}</p>
+                        )}
+                        {r.runner_status === 'dnf' && (
+                          <p className="text-[10px] text-destructive font-semibold">🏳️ Abandon{r.dnf_reason ? ` — ${r.dnf_reason}` : ""}</p>
+                        )}
+                        {r.runner_status === 'problem' && (
+                          <p className="text-[10px] text-warning font-semibold">⚠️ {r.problem_description ?? "Problème"}</p>
+                        )}
+                      </div>
+                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary text-center">
+                        #{r.bib_number}
+                      </span>
+                      <span className="font-mono text-right text-sm">
+                        {officialTime ?? "—"}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
           )}
         </Card>
       </div>

@@ -197,55 +197,35 @@ export default function CheckpointRankings({ raceId }: Props) {
                   <span>Dossard</span>
                   <span className="text-right">Temps officiel</span>
                 </div>
-                <ol className="space-y-1 mt-1.5">
-                  {ranked.map(({ t, reg, rank, catRank, genRank, cat, gen }, idx) => {
-                    const medalBg =
-                      rank === 1
-                        ? "bg-yellow-400/20 border-yellow-400/50"
-                        : rank === 2
-                        ? "bg-slate-300/20 border-slate-300/50"
-                        : rank === 3
-                        ? "bg-amber-600/20 border-amber-600/50"
-                        : idx % 2 === 0
-                        ? "bg-primary/10 border-border/50"
-                        : "bg-background/60 border-border/50";
-                    const rankColor =
-                      rank === 1
-                        ? "text-yellow-400"
-                        : rank === 2
-                        ? "text-slate-300"
-                        : rank === 3
-                        ? "text-amber-600"
-                        : "text-muted-foreground";
-                    return (
-                      <li
-                        key={t.id}
-                        className={`grid grid-cols-[60px_90px_80px_1fr_90px_120px] items-center gap-3 p-2 rounded-md border text-sm ${medalBg}`}
-                      >
-                        <span className={`font-bold ${rankColor}`}>{rank}</span>
-                        <span className="text-xs">
-                          <span className="font-semibold">{catRank}</span>
-                          <span className="text-muted-foreground"> · {cat}</span>
-                        </span>
-                        <span className="text-xs">
-                          <span className="font-semibold">{genRank}</span>
-                          <span className="text-muted-foreground"> · {gen}</span>
-                        </span>
-                        <span className="font-medium truncate">
-                          {reg?.first_name || reg?.last_name
-                            ? `${reg.first_name ?? ""} ${reg.last_name ?? ""}`.trim()
-                            : `Dossard ${reg?.bib_number ?? ""}`}
-                        </span>
-                        <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary text-center">
-                          #{reg?.bib_number ?? "—"}
-                        </span>
-                        <span className="inline-flex items-center justify-end gap-1 font-mono">
-                          <Timer className="h-3.5 w-3.5 text-muted-foreground" />
-                          {formatTime(t.time_seconds, t.time_text)}
-                        </span>
-                      </li>
-                    );
-                  })}
+                <ol className="space-y-1.5 mt-1.5">
+                  {ranked.map(({ t, reg, rank, catRank, genRank, cat, gen }) => (
+                    <li
+                      key={t.id}
+                      className="grid grid-cols-[60px_90px_80px_1fr_90px_120px] items-center gap-3 p-2 rounded-md border border-border/50 bg-secondary/40 text-sm"
+                    >
+                      <span className="font-bold text-muted-foreground">{rank}</span>
+                      <span className="text-xs">
+                        <span className="font-semibold">{catRank}</span>
+                        <span className="text-muted-foreground"> · {cat}</span>
+                      </span>
+                      <span className="text-xs">
+                        <span className="font-semibold">{genRank}</span>
+                        <span className="text-muted-foreground"> · {gen}</span>
+                      </span>
+                      <span className="font-medium truncate">
+                        {reg?.first_name || reg?.last_name
+                          ? `${reg.first_name ?? ""} ${reg.last_name ?? ""}`.trim()
+                          : `Dossard ${reg?.bib_number ?? ""}`}
+                      </span>
+                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary text-center">
+                        #{reg?.bib_number ?? "—"}
+                      </span>
+                      <span className="inline-flex items-center justify-end gap-1 font-mono">
+                        <Timer className="h-3.5 w-3.5 text-muted-foreground" />
+                        {formatTime(t.time_seconds, t.time_text)}
+                      </span>
+                    </li>
+                  ))}
                 </ol>
               </div>
             )}
