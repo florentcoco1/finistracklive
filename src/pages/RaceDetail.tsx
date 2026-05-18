@@ -67,6 +67,10 @@ export default function RaceDetail() {
   const [gmcapStatus, setGmcapStatus] = useState<string | null>(null);
   const [savingSource, setSavingSource] = useState(false);
   const [checkpoints, setCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
+  const [runnerDetail, setRunnerDetail] = useState<{ registration_id: string; bib_number: string; first_name: string | null; last_name: string | null; official_time: string | null } | null>(null);
+  const [runnerDetailTimes, setRunnerDetailTimes] = useState<Array<{ checkpoint_id: string; time_seconds: number | null; time_text: string | null }>>([]);
+  const [runnerDetailCheckpoints, setRunnerDetailCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null; position: number }>>([]);
+  const [runnerDetailLoading, setRunnerDetailLoading] = useState(false);
 
   useEffect(() => {
     if (!raceId) return;
@@ -360,6 +364,40 @@ export default function RaceDetail() {
       supabase.removeChannel(channel);
     };
   }, [raceId]);
+
+  // Load checkpoints + times for the selected runner detail dialog
+  useEffect(() => {
+    if (!runnerDetail || !raceId) {
+      setRunnerDetailTimes([]);
+      setRunnerDetailCheckpoints([]);
+      return;
+    }
+    let active = true;
+    setRunnerDetailLoading(true);
+    (async () => {
+      const { data: cps } = await supabase
+        .from("race_checkpoints" as any)
+        .select("id, name, distance_km, position")
+        .eq("race_id", raceId)
+        .order("position", { ascending: true });
+      const cpList = ((cps as unknown) as Array<{ id: string; name: string; distance_km: number | null; position: number }>) ?? [];
+      const cpIds = cpList.map((c) => c.id);
+      let times: Array<{ checkpoint_id: string; time_seconds: number | null; time_text: string | null }> = [];
+      if (cpIds.length > 0) {
+        const { data } = await supabase
+          .from("runner_checkpoint_times" as any)
+          .select("checkpoint_id, time_seconds, time_text")
+          .eq("registration_id", runnerDetail.registration_id)
+          .in("checkpoint_id", cpIds);
+        times = ((data as unknown) as typeof times) ?? [];
+      }
+      if (!active) return;
+      setRunnerDetailCheckpoints(cpList);
+      setRunnerDetailTimes(times);
+      setRunnerDetailLoading(false);
+    })();
+    return () => { active = false; };
+  }, [runnerDetail, raceId]);
 
   const isOrganizer = user && race && race.organizer_id === user.id;
 
@@ -846,9 +884,22 @@ export default function RaceDetail() {
                         <span className="text-muted-foreground"> · {r.gender ?? "—"}</span>
                       </span>
                       <div className="min-w-0">
-                        <p className={`truncate ${isMedal ? "font-bold" : "font-medium"}`}>
+                        <button
+                          type="button"
+                          className={`truncate text-left hover:text-primary transition-colors ${isMedal ? "font-bold" : "font-medium"}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRunnerDetail({
+                              registration_id: r.registration_id,
+                              bib_number: r.bib_number,
+                              first_name: r.first_name,
+                              last_name: r.last_name,
+                              official_time: officialTime,
+                            });
+                          }}
+                        >
                           {r.first_name} {r.last_name}
-                        </p>
+                        </button>
                         {r.finished_at && (
                           <p className="text-[10px] text-success font-semibold">🏁 {format(new Date(r.finished_at), "HH:mm:ss", { locale: fr })}</p>
                         )}
@@ -877,6 +928,57 @@ export default function RaceDetail() {
       <div className="mt-6">
         <CheckpointRankings raceId={race.id} />
       </div>
+
+      <Dialog open={!!runnerDetail} onOpenChange={(o) => { if (!o) setRunnerDetail(null); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Timer className="h-5 w-5 text-primary-glow" />
+              {runnerDetail?.first_name} {runnerDetail?.last_name}
+              <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary ml-2">
+                #{runnerDetail?.bib_number}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          {runnerDetail?.official_time && (
+            <p className="text-sm text-muted-foreground">
+              Temps officiel : <span className="font-mono text-foreground">{runnerDetail.official_time}</span>
+            </p>
+          )}
+          <h3 className="font-semibold mt-3 mb-2 text-sm">Temps par point intermédiaire</h3>
+          {runnerDetailLoading ? (
+            <p className="text-sm text-muted-foreground">Chargement…</p>
+          ) : runnerDetailCheckpoints.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Aucun point intermédiaire configuré.</p>
+          ) : (
+            <div className="space-y-1">
+              <div className="grid grid-cols-[1fr_90px_120px] gap-2 px-2 py-1 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground border-b border-border/40">
+                <span>Point</span>
+                <span className="text-right">Distance</span>
+                <span className="text-right">Temps</span>
+              </div>
+              {runnerDetailCheckpoints.map((cp, idx) => {
+                const t = runnerDetailTimes.find((x) => x.checkpoint_id === cp.id);
+                const rowBg = idx % 2 === 0 ? "bg-primary/10" : "bg-background/60";
+                return (
+                  <div
+                    key={cp.id}
+                    className={`grid grid-cols-[1fr_90px_120px] gap-2 items-center p-2 rounded-md border border-border/50 text-sm ${rowBg}`}
+                  >
+                    <span className="font-medium truncate">{cp.name}</span>
+                    <span className="text-right text-muted-foreground text-xs">
+                      {cp.distance_km != null ? `${cp.distance_km} km` : "—"}
+                    </span>
+                    <span className="font-mono text-right">
+                      {t?.time_text ?? (t?.time_seconds != null ? `${Math.floor(t.time_seconds / 3600)}h${String(Math.floor((t.time_seconds % 3600) / 60)).padStart(2, "0")}'${String(t.time_seconds % 60).padStart(2, "0")}"` : "—")}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
