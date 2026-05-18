@@ -116,12 +116,13 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
   const addCheckpoint = async () => {
     if (!newCp.name.trim()) return toast.error("Nom du point requis");
     setBusy(true);
-    const payload = {
+    const payload: Record<string, unknown> = {
       race_id: raceId,
       name: newCp.name.trim(),
       distance_km: newCp.distance_km ? Number(newCp.distance_km) : null,
       source: newCp.source,
       position: checkpoints.length,
+      detector_id: newCp.source === "gmcap" ? Number(newCp.detector_id) || null : null,
     };
     let { error } = await (supabase as any).from("race_checkpoints").insert(payload);
     if (error && isMissingSchema(error)) {
