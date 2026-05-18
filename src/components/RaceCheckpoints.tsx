@@ -284,7 +284,9 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
                   <TableCell>{cp.distance_km != null ? `${cp.distance_km} km` : "—"}</TableCell>
                   <TableCell>
                     <Badge variant={cp.source === "gmcap" ? "secondary" : "outline"}>
-                      {cp.source === "gmcap" ? "GMCAP auto" : "Manuel"}
+                      {cp.source === "gmcap"
+                        ? `GMCAP auto${cp.detector_id ? ` · D${cp.detector_id}${cp.detector_id === 31 ? " (Arrivée)" : ""}` : ""}`
+                        : "Manuel"}
                     </Badge>
                   </TableCell>
                   <TableCell>{count} / {registrations.length}</TableCell>
