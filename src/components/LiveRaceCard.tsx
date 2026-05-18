@@ -101,7 +101,7 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
           .in("user_id", runnerIds),
         supabase
           .from("gmcap_results")
-          .select("bib_number, gender")
+          .select("bib_number, gender, official_time_seconds, official_time_text, scratch_rank")
           .eq("race_id", race.id)
           .in("bib_number", bibs),
       ]);
@@ -109,12 +109,11 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
 
       const cpById = new Map(cpList.map((c) => [c.id, c]));
       const profileById = new Map((profiles ?? []).map((p) => [p.user_id, p]));
-      const genderByBib = new Map(
-        ((gmcap ?? []) as Array<{ bib_number: string; gender: string | null }>)
-          .map((g) => [String(g.bib_number).trim(), (g.gender as "M" | "F" | null) ?? null]),
+      const gmcapByBib = new Map(
+        ((gmcap ?? []) as Array<{ bib_number: string; gender: string | null; official_time_seconds: number | null; official_time_text: string | null; scratch_rank: number | null }>)
+          .map((g) => [String(g.bib_number).trim(), g]),
       );
 
-      // Last checkpoint reached per registration
       const bestByReg = new Map<string, { position: number; checkpoint_id: string; time_seconds: number | null; time_text: string | null }>();
       for (const t of (times ?? []) as Array<{ registration_id: string; checkpoint_id: string; time_seconds: number | null; time_text: string | null }>) {
         const cp = cpById.get(t.checkpoint_id);
@@ -132,25 +131,36 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
 
       const rows: PodiumRow[] = regList
         .map((r) => {
+          const g = gmcapByBib.get(String(r.bib_number).trim());
           const best = bestByReg.get(r.id);
-          if (!best) return null;
-          const cp = cpById.get(best.checkpoint_id);
+          const finished = !!(g && g.official_time_seconds != null);
+          if (!finished && !best) return null;
+          const cp = best ? cpById.get(best.checkpoint_id) : null;
           const profile = profileById.get(r.runner_id);
           return {
             registration_id: r.id,
             bib_number: r.bib_number,
             first_name: profile?.first_name ?? null,
             last_name: profile?.last_name ?? null,
-            gender: genderByBib.get(String(r.bib_number).trim()) ?? null,
-            checkpoint_name: cp?.name ?? null,
-            checkpoint_position: best.position,
-            time_text: best.time_text,
-            time_seconds: best.time_seconds,
+            gender: (g?.gender as "M" | "F" | null) ?? null,
+            checkpoint_name: finished ? "Arrivée" : (cp?.name ?? null),
+            checkpoint_position: finished ? Number.MAX_SAFE_INTEGER : (best?.position ?? 0),
+            time_text: finished ? (g?.official_time_text ?? null) : (best?.time_text ?? null),
+            time_seconds: finished ? (g?.official_time_seconds ?? null) : (best?.time_seconds ?? null),
+            finished,
+            finish_rank: finished ? (g?.scratch_rank ?? null) : null,
           } as PodiumRow;
         })
         .filter((r): r is PodiumRow => r !== null);
 
       const sortFn = (a: PodiumRow, b: PodiumRow) => {
+        if (a.finished !== b.finished) return a.finished ? -1 : 1;
+        if (a.finished && b.finished) {
+          const ra = a.finish_rank ?? Number.POSITIVE_INFINITY;
+          const rb = b.finish_rank ?? Number.POSITIVE_INFINITY;
+          if (ra !== rb) return ra - rb;
+          return (a.time_seconds ?? Infinity) - (b.time_seconds ?? Infinity);
+        }
         if (b.checkpoint_position !== a.checkpoint_position) return b.checkpoint_position - a.checkpoint_position;
         const ta = a.time_seconds ?? Number.POSITIVE_INFINITY;
         const tb = b.time_seconds ?? Number.POSITIVE_INFINITY;
@@ -164,9 +174,16 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
 
     load();
     const poll = window.setInterval(load, 15000);
+    const channel = supabase
+      .channel(`live-card:${race.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "runner_checkpoint_times" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "gmcap_results", filter: `race_id=eq.${race.id}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "race_registrations", filter: `race_id=eq.${race.id}` }, () => load())
+      .subscribe();
     return () => {
       active = false;
       window.clearInterval(poll);
+      supabase.removeChannel(channel);
     };
   }, [isLive, race.id]);
 
