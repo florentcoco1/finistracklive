@@ -172,11 +172,29 @@ Deno.serve(async (req) => {
       .select("id, bib_number")
       .eq("race_id", race_id);
 
+    const { data: raceRow } = await admin
+      .from("races")
+      .select("name")
+      .eq("id", race_id)
+      .single();
+    const raceNameNorm = normKey(clean(raceRow?.name ?? ""));
+
     const byBib = new Map((registrations ?? []).map((reg: any) => [clean(reg.bib_number), reg.id]));
     const results: any[] = [];
     let matched = 0;
+    let skippedByCourse = 0;
+    let courseFieldSeen = false;
 
     for (const row of rows) {
+      const courseValue = pick(row, "Course", "Épreuve", "Epreuve", "Race");
+      if (courseValue) {
+        courseFieldSeen = true;
+        if (raceNameNorm && normKey(courseValue) !== raceNameNorm) {
+          skippedByCourse += 1;
+          continue;
+        }
+      }
+
       const bib = pick(row, "Numéro", "Numero", "Numro", "No", "N°", "Dossard", "Doss.", "Doss", "Bib", "Bib Number");
       if (!bib) continue;
 
