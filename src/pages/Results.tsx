@@ -188,61 +188,57 @@ export default function Results() {
           <p className="text-muted-foreground">Aucun résultat disponible.</p>
         </Card>
       ) : (
-        <Card className="glass-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">Scratch</TableHead>
-                <TableHead className="w-20">Dossard</TableHead>
-                <TableHead>Coureur</TableHead>
-                <TableHead className="w-16">Sexe</TableHead>
-                <TableHead>Catégorie</TableHead>
-                {selectedRaceId === "all" && <TableHead>Course</TableHead>}
-                <TableHead>Temps</TableHead>
-                <TableHead className="w-16">Sexe</TableHead>
-                <TableHead className="w-16">Cat.</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredResults.map((r) => {
+        <Card className="glass-card overflow-hidden p-4">
+          <div className="max-h-[600px] overflow-y-auto pr-1">
+            <div className="hidden md:grid grid-cols-[60px_100px_90px_1fr_100px_120px] gap-3 px-2 py-1 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground border-b border-border/40">
+              <span>Clt</span>
+              <span>Catégorie</span>
+              <span>Sexe</span>
+              <span>Coureur</span>
+              <span>Dossard</span>
+              <span className="text-right">Temps officiel</span>
+            </div>
+            <div className="space-y-1 mt-1.5">
+              {filteredResults.map((r, idx) => {
                 const race = racesById.get(r.race_id);
+                const rowBg = idx % 2 === 0 ? "bg-primary/10" : "bg-background/60";
                 return (
-                  <TableRow key={r.id}>
-                    <TableCell className="font-semibold">{rankBadge(r.scratch_rank)}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.bib_number}</TableCell>
-                    <TableCell>
-                      <button
-                        className="text-left hover:text-primary transition-colors font-medium inline-flex items-center gap-1"
-                        onClick={() => setOpenRunner({
-                          first_name: r.first_name ?? "",
-                          last_name: r.last_name ?? "",
-                          gender: r.gender,
-                        })}
-                      >
-                        <UserIcon className="h-3 w-3" />
-                        {r.last_name?.toUpperCase()} {r.first_name}
-                      </button>
-                      {r.club && <div className="text-xs text-muted-foreground">{r.club}</div>}
-                    </TableCell>
-                    <TableCell>{r.gender ?? "—"}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{r.category ?? "—"}</TableCell>
-                    {selectedRaceId === "all" && (
-                      <TableCell className="text-sm">
-                        {race ? (
-                          <Link to={`/races/${race.id}`} className="hover:text-primary">
-                            {race.name}
-                          </Link>
-                        ) : "—"}
-                      </TableCell>
-                    )}
-                    <TableCell className="font-mono">{r.official_time_text ?? "—"}</TableCell>
-                    <TableCell>{rankBadge(r.gender_rank)}</TableCell>
-                    <TableCell>{rankBadge(r.category_rank)}</TableCell>
-                  </TableRow>
+                  <div
+                    key={r.id}
+                    className={`grid grid-cols-[60px_100px_90px_1fr_100px_120px] items-center gap-3 p-2 rounded-md border border-border/50 text-sm ${rowBg}`}
+                  >
+                    <span className="font-bold text-muted-foreground">{r.scratch_rank ?? "—"}</span>
+                    <span className="text-xs">
+                      <span className="font-semibold">{r.category_rank ?? "—"}</span>
+                      <span className="text-muted-foreground"> · {r.category ?? "—"}</span>
+                    </span>
+                    <span className="text-xs">
+                      <span className="font-semibold">{r.gender_rank ?? "—"}</span>
+                      <span className="text-muted-foreground"> · {r.gender ?? "—"}</span>
+                    </span>
+                    <button
+                      className="text-left hover:text-primary transition-colors font-medium truncate inline-flex items-center gap-1"
+                      onClick={() => setOpenRunner({
+                        first_name: r.first_name ?? "",
+                        last_name: r.last_name ?? "",
+                        gender: r.gender,
+                      })}
+                    >
+                      <UserIcon className="h-3 w-3 shrink-0" />
+                      {r.last_name?.toUpperCase()} {r.first_name}
+                      {r.club && <span className="text-xs text-muted-foreground ml-1">({r.club})</span>}
+                    </button>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary text-center">
+                      #{r.bib_number}
+                    </span>
+                    <span className="font-mono text-right">
+                      {r.official_time_text ?? "—"}
+                    </span>
+                  </div>
                 );
               })}
-            </TableBody>
-          </Table>
+            </div>
+          </div>
         </Card>
       )}
 
