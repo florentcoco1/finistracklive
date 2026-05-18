@@ -140,13 +140,21 @@ function timeToSeconds(value: string): number | null {
 
 // Find the time value for a given detector in a GMCAP row.
 // GMCAP intermediate columns are named like "20|1" (detector 20, passage 1).
+// We scan the raw row keys to be robust to header variants and to encoding/normalization issues.
 function pickDetectorTime(row: ParsedRow, detectorId: number): string | null {
+  // Match a header whose label contains "<detectorId>|<digit>" anywhere.
+  const re = new RegExp(`(?:^|[^0-9])${detectorId}\\s*\\|\\s*\\d+`);
+  for (const [key, value] of Object.entries(row)) {
+    if (!value) continue;
+    if (re.test(key)) return value;
+  }
+  // Fallback: normalized lookup ("20|1" -> "201", "20|2" -> "202"...).
   const map = row.__norm;
-  if (!map) return null;
-  // Try common variants: "20|1", "20|2"... pick the first non-empty.
-  for (let pass = 1; pass <= 9; pass += 1) {
-    const v = map.get(normKey(`${detectorId}|${pass}`));
-    if (v) return v;
+  if (map) {
+    for (let pass = 1; pass <= 9; pass += 1) {
+      const v = map.get(normKey(`${detectorId}|${pass}`));
+      if (v) return v;
+    }
   }
   return null;
 }
@@ -343,6 +351,7 @@ Deno.serve(async (req) => {
 
     // Upsert detector checkpoint times (deduplicated by checkpoint_id+registration_id).
     let checkpointTimesImported = 0;
+    let checkpointTimesError: string | null = null;
     if (checkpointTimes.length > 0) {
       const ctMap = new Map<string, typeof checkpointTimes[number]>();
       for (const t of checkpointTimes) {
@@ -352,11 +361,25 @@ Deno.serve(async (req) => {
       const { error: ctErr } = await admin
         .from("runner_checkpoint_times")
         .upsert(ctDeduped, { onConflict: "checkpoint_id,registration_id" });
-      if (!ctErr) checkpointTimesImported = ctDeduped.length;
+      if (ctErr) {
+        checkpointTimesError = ctErr.message;
+      } else {
+        checkpointTimesImported = ctDeduped.length;
+      }
     }
 
     await markImportSuccess(admin, race_id, typeof file_name === "string" ? file_name : null, results.length, matched);
-    return json({ ok: true, imported: results.length, matched, unmatched: results.length - matched, skipped_by_course: skippedByCourse, checkpoint_times_imported: checkpointTimesImported });
+    return json({
+      ok: true,
+      imported: results.length,
+      matched,
+      unmatched: results.length - matched,
+      skipped_by_course: skippedByCourse,
+      checkpoint_times_imported: checkpointTimesImported,
+      checkpoint_times_found: checkpointTimes.length,
+      detector_checkpoints: detectorCheckpoints.length,
+      checkpoint_times_error: checkpointTimesError,
+    });
   } catch (error) {
     return json({ error: (error as Error).message ?? "Erreur import GMCAP" }, 500);
   }
