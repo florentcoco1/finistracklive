@@ -846,9 +846,22 @@ export default function RaceDetail() {
                         <span className="text-muted-foreground"> · {r.gender ?? "—"}</span>
                       </span>
                       <div className="min-w-0">
-                        <p className={`truncate ${isMedal ? "font-bold" : "font-medium"}`}>
+                        <button
+                          type="button"
+                          className={`truncate text-left hover:text-primary transition-colors ${isMedal ? "font-bold" : "font-medium"}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRunnerDetail({
+                              registration_id: r.registration_id,
+                              bib_number: r.bib_number,
+                              first_name: r.first_name,
+                              last_name: r.last_name,
+                              official_time: officialTime,
+                            });
+                          }}
+                        >
                           {r.first_name} {r.last_name}
-                        </p>
+                        </button>
                         {r.finished_at && (
                           <p className="text-[10px] text-success font-semibold">🏁 {format(new Date(r.finished_at), "HH:mm:ss", { locale: fr })}</p>
                         )}
