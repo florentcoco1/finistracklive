@@ -229,7 +229,7 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
         </p>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-[1fr_140px_180px_auto] md:items-end">
+      <div className="grid gap-3 md:grid-cols-[1fr_120px_180px_160px_auto] md:items-end">
         <div className="space-y-2"><Label>Nom du point</Label><Input value={newCp.name} onChange={(e) => setNewCp((v) => ({ ...v, name: e.target.value }))} placeholder="KM10" /></div>
         <div className="space-y-2"><Label>Distance (km)</Label><Input type="number" step="0.1" value={newCp.distance_km} onChange={(e) => setNewCp((v) => ({ ...v, distance_km: e.target.value }))} /></div>
         <div className="space-y-2">
@@ -239,6 +239,22 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
             <SelectContent>
               <SelectItem value="manual">Manuel (saisie organisateur)</SelectItem>
               <SelectItem value="gmcap">Automatique (GMCAP)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Détecteur</Label>
+          <Select
+            value={newCp.detector_id}
+            onValueChange={(v) => setNewCp((s) => ({ ...s, detector_id: v }))}
+            disabled={newCp.source !== "gmcap"}
+          >
+            <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="31">31 — Arrivée</SelectItem>
+              {Array.from({ length: 20 }, (_, i) => 11 + i).map((n) => (
+                <SelectItem key={n} value={String(n)}>{n} — Intermédiaire</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
