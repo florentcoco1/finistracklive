@@ -415,7 +415,11 @@ export default function RaceAdmin() {
       }
       if (payload?.error) throw new Error(payload.error);
       await load();
-      toast.success(`Import GMCAP terminé : ${payload.matched ?? 0} coureur(s) lié(s), ${payload.imported ?? 0} résultat(s) importé(s)`);
+      const p: any = payload;
+      const cpInfo = p.detector_checkpoints > 0
+        ? ` · ${p.checkpoint_times_imported ?? 0} temps intermédiaires (sur ${p.checkpoint_times_found ?? 0} détectés, ${p.detector_checkpoints} détecteur(s) configuré(s))${p.checkpoint_times_error ? ` ⚠️ ${p.checkpoint_times_error}` : ""}`
+        : "";
+      toast.success(`Import GMCAP terminé : ${payload.matched ?? 0} coureur(s) lié(s), ${payload.imported ?? 0} résultat(s) importé(s)${cpInfo}`);
       await clearLocalPendingImport(raceId);
       setLocalPendingFile(null);
       setGmcapFile(null);
