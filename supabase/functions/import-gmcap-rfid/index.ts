@@ -288,7 +288,7 @@ Deno.serve(async (req) => {
     }
 
     await markImportSuccess(admin, race_id, typeof file_name === "string" ? file_name : null, results.length, matched);
-    return json({ ok: true, imported: results.length, matched, unmatched: results.length - matched });
+    return json({ ok: true, imported: results.length, matched, unmatched: results.length - matched, skipped_by_course: skippedByCourse });
   } catch (error) {
     return json({ error: (error as Error).message ?? "Erreur import GMCAP" }, 500);
   }
