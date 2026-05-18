@@ -242,9 +242,10 @@ function PodiumList({ title, rows }: { title: string; rows: PodiumRow[] }) {
             <span className="font-medium truncate flex-1">
               #{r.bib_number} {r.first_name} {r.last_name}
             </span>
-            <span className="text-muted-foreground shrink-0">
-              {r.checkpoint_name ?? `CP ${r.checkpoint_position + 1}`}
-              {r.time_text ? ` · ${r.time_text}` : ""}
+            <span className={`shrink-0 ${r.finished ? "text-success font-semibold" : "text-muted-foreground"}`}>
+              {r.finished
+                ? `Arrivé${r.finish_rank ? ` · ${r.finish_rank}e` : ""}${r.time_text ? ` · ${r.time_text}` : ""}`
+                : `${r.checkpoint_name ?? `CP ${r.checkpoint_position + 1}`}${r.time_text ? ` · ${r.time_text}` : ""}`}
             </span>
           </li>
         ))}
