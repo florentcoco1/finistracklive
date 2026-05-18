@@ -172,11 +172,29 @@ Deno.serve(async (req) => {
       .select("id, bib_number")
       .eq("race_id", race_id);
 
+    const { data: raceRow } = await admin
+      .from("races")
+      .select("name")
+      .eq("id", race_id)
+      .single();
+    const raceNameNorm = normKey(clean(raceRow?.name ?? ""));
+
     const byBib = new Map((registrations ?? []).map((reg: any) => [clean(reg.bib_number), reg.id]));
     const results: any[] = [];
     let matched = 0;
+    let skippedByCourse = 0;
+    let courseFieldSeen = false;
 
     for (const row of rows) {
+      const courseValue = pick(row, "Course", "Épreuve", "Epreuve", "Race");
+      if (courseValue) {
+        courseFieldSeen = true;
+        if (raceNameNorm && normKey(courseValue) !== raceNameNorm) {
+          skippedByCourse += 1;
+          continue;
+        }
+      }
+
       const bib = pick(row, "Numéro", "Numero", "Numro", "No", "N°", "Dossard", "Doss.", "Doss", "Bib", "Bib Number");
       if (!bib) continue;
 
@@ -238,6 +256,9 @@ Deno.serve(async (req) => {
     }
 
     if (results.length === 0) {
+      if (courseFieldSeen && skippedByCourse > 0) {
+        return json({ error: `Aucune ligne ne correspond à la course « ${raceRow?.name ?? ""} » (${skippedByCourse} ligne(s) ignorée(s) car champ "Course" différent).` }, 400);
+      }
       return json({ error: "Aucun dossard exploitable dans l'export GMCAP" }, 400);
     }
 
@@ -267,7 +288,7 @@ Deno.serve(async (req) => {
     }
 
     await markImportSuccess(admin, race_id, typeof file_name === "string" ? file_name : null, results.length, matched);
-    return json({ ok: true, imported: results.length, matched, unmatched: results.length - matched });
+    return json({ ok: true, imported: results.length, matched, unmatched: results.length - matched, skipped_by_course: skippedByCourse });
   } catch (error) {
     return json({ error: (error as Error).message ?? "Erreur import GMCAP" }, 500);
   }
