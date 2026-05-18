@@ -283,11 +283,32 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
                   <TableCell className="font-medium"><Flag className="h-4 w-4 inline mr-2 text-primary" />{cp.name}</TableCell>
                   <TableCell>{cp.distance_km != null ? `${cp.distance_km} km` : "—"}</TableCell>
                   <TableCell>
-                    <Badge variant={cp.source === "gmcap" ? "secondary" : "outline"}>
-                      {cp.source === "gmcap"
-                        ? `GMCAP auto${cp.detector_id ? ` · D${cp.detector_id}${cp.detector_id === 31 ? " (Arrivée)" : ""}` : ""}`
-                        : "Manuel"}
-                    </Badge>
+                    {cp.source === "gmcap" ? (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">GMCAP auto</Badge>
+                        <Select
+                          value={cp.detector_id != null ? String(cp.detector_id) : ""}
+                          onValueChange={async (v) => {
+                            const { error } = await (supabase as any)
+                              .from("race_checkpoints")
+                              .update({ detector_id: Number(v) })
+                              .eq("id", cp.id);
+                            if (error) toast.error(error.message);
+                            else { toast.success(`Détecteur D${v} associé`); void load(); }
+                          }}
+                        >
+                          <SelectTrigger className="h-7 w-32 text-xs"><SelectValue placeholder="Détecteur…" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="31">31 — Arrivée</SelectItem>
+                            {Array.from({ length: 20 }, (_, i) => 11 + i).map((n) => (
+                              <SelectItem key={n} value={String(n)}>{n} — Intermédiaire</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      <Badge variant="outline">Manuel</Badge>
+                    )}
                   </TableCell>
                   <TableCell>{count} / {registrations.length}</TableCell>
                   <TableCell className="text-right">
