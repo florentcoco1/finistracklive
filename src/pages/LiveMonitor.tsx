@@ -164,12 +164,74 @@ export default function LiveMonitor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isAdmin]);
 
+  // Map data for the selected race (route + checkpoints + live runners)
+  const [mapRoutePoints, setMapRoutePoints] = useState<RouteCoord[] | null>(null);
+  const [mapCheckpoints, setMapCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
+  const [mapRunners, setMapRunners] = useState<LeaderboardRow[]>([]);
+  const [focusedRunner, setFocusedRunner] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedRaceId === "all") {
+      setMapRoutePoints(null);
+      setMapCheckpoints([]);
+      setMapRunners([]);
+      return;
+    }
+    let active = true;
+    const raceId = selectedRaceId;
+
+    const loadStatic = async () => {
+      const [{ data: raceData }, { data: cps }] = await Promise.all([
+        supabase.from("races").select("route_points").eq("id", raceId).single(),
+        supabase
+          .from("race_checkpoints" as any)
+          .select("id, name, distance_km, position")
+          .eq("race_id", raceId)
+          .order("position", { ascending: true }),
+      ]);
+      if (!active) return;
+      const rp = (raceData as { route_points: RouteCoord[] | null } | null)?.route_points ?? null;
+      setMapRoutePoints(rp);
+      setMapCheckpoints(((cps as unknown) as Array<{ id: string; name: string; distance_km: number | null }>) ?? []);
+    };
+
+    const loadRunners = async () => {
+      const { data } = await supabase.from("live_leaderboard").select("*").eq("race_id", raceId);
+      if (!active) return;
+      setMapRunners(((data ?? []) as LeaderboardRow[]));
+    };
+
+    loadStatic();
+    loadRunners();
+
+    const channel = supabase
+      .channel(`live-monitor-map:${raceId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "runner_positions" }, () => loadRunners())
+      .on("postgres_changes", { event: "*", schema: "public", table: "race_registrations", filter: `race_id=eq.${raceId}` }, () => loadRunners())
+      .on("postgres_changes", { event: "*", schema: "public", table: "race_checkpoints", filter: `race_id=eq.${raceId}` }, () => loadStatic())
+      .subscribe();
+
+    const interval = window.setInterval(loadRunners, 15000);
+
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+      window.clearInterval(interval);
+    };
+  }, [selectedRaceId]);
+
+  const mapRouteCoords = useMemo<[number, number][]>(
+    () => (mapRoutePoints ?? []).map((p) => [p.lat, p.lng]),
+    [mapRoutePoints],
+  );
+
   const filteredRows = useMemo(
     () => (selectedRaceId === "all" ? rows : rows.filter((r) => r.race_id === selectedRaceId)),
     [rows, selectedRaceId],
   );
   const dnfRows = useMemo(() => filteredRows.filter((r) => r.runner_status === "dnf"), [filteredRows]);
   const problemRows = useMemo(() => filteredRows.filter((r) => r.runner_status === "problem"), [filteredRows]);
+
 
   // Count alerts per race for the selector
   const alertsPerRace = useMemo(() => {
