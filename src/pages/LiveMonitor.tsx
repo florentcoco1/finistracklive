@@ -190,7 +190,7 @@ export default function LiveMonitor() {
           .order("position", { ascending: true }),
       ]);
       if (!active) return;
-      const rp = (raceData as { route_points: RouteCoord[] | null } | null)?.route_points ?? null;
+      const rp = ((raceData as unknown) as { route_points: RouteCoord[] | null } | null)?.route_points ?? null;
       setMapRoutePoints(rp);
       setMapCheckpoints(((cps as unknown) as Array<{ id: string; name: string; distance_km: number | null }>) ?? []);
     };
