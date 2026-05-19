@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { AlertTriangle, MapPin, Phone, RefreshCw, ShieldAlert, XOctagon } from "lucide-react";
+import { AlertTriangle, MapPin, Maximize2, Minimize2, Phone, RefreshCw, ShieldAlert, XOctagon } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -169,6 +169,19 @@ export default function LiveMonitor() {
   const [mapCheckpoints, setMapCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
   const [mapRunners, setMapRunners] = useState<LeaderboardRow[]>([]);
   const [focusedRunner, setFocusedRunner] = useState<string | null>(null);
+  const [mapFullscreen, setMapFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!mapFullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMapFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [mapFullscreen]);
 
   useEffect(() => {
     if (selectedRaceId === "all") {
@@ -300,24 +313,34 @@ export default function LiveMonitor() {
                 Position en temps réel des coureurs · {mapRunners.filter((r) => r.latitude != null && r.longitude != null).length} coureur·euse·s géolocalisé·e·s
               </p>
             </div>
-            {filteredRows.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {filteredRows
-                  .filter((r) => r.last_lat != null && r.last_lng != null)
-                  .slice(0, 12)
-                  .map((r) => (
-                    <Button
-                      key={r.registration_id}
-                      size="sm"
-                      variant={focusedRunner === r.registration_id ? "default" : "outline"}
-                      className="h-7 px-2 text-xs"
-                      onClick={() => setFocusedRunner(r.registration_id)}
-                    >
-                      #{r.bib_number}
-                    </Button>
-                  ))}
-              </div>
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              {filteredRows.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {filteredRows
+                    .filter((r) => r.last_lat != null && r.last_lng != null)
+                    .slice(0, 12)
+                    .map((r) => (
+                      <Button
+                        key={r.registration_id}
+                        size="sm"
+                        variant={focusedRunner === r.registration_id ? "default" : "outline"}
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setFocusedRunner(r.registration_id)}
+                      >
+                        #{r.bib_number}
+                      </Button>
+                    ))}
+                </div>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setMapFullscreen(true)}
+                disabled={mapRouteCoords.length === 0}
+              >
+                <Maximize2 className="h-4 w-4 mr-2" /> Plein écran
+              </Button>
+            </div>
           </div>
           <div className="h-[420px] w-full">
             {mapRouteCoords.length > 0 ? (
@@ -336,6 +359,57 @@ export default function LiveMonitor() {
           </div>
         </Card>
       )}
+
+      {mapFullscreen && selectedRaceId !== "all" && mapRouteCoords.length > 0 && (
+        <div className="fixed inset-0 z-[1000] bg-background">
+          <div className="absolute inset-0">
+            <RaceMap
+              routeCoords={mapRouteCoords}
+              routePoints={mapRoutePoints}
+              runners={mapRunners}
+              focusedRunnerId={focusedRunner}
+              checkpoints={mapCheckpoints}
+            />
+          </div>
+          <div className="absolute top-3 left-3 right-3 z-[1001] flex items-start justify-between gap-3 pointer-events-none">
+            <Card className="p-3 pointer-events-auto max-w-[70%]">
+              <div className="text-sm font-semibold flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-primary" />
+                {selectedRaceName}
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {mapRunners.filter((r) => r.latitude != null && r.longitude != null).length} coureur·euse·s géolocalisé·e·s
+              </div>
+              {filteredRows.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2 max-h-24 overflow-auto">
+                  {filteredRows
+                    .filter((r) => r.last_lat != null && r.last_lng != null)
+                    .map((r) => (
+                      <Button
+                        key={r.registration_id}
+                        size="sm"
+                        variant={focusedRunner === r.registration_id ? "default" : "outline"}
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setFocusedRunner(r.registration_id)}
+                      >
+                        #{r.bib_number}
+                      </Button>
+                    ))}
+                </div>
+              )}
+            </Card>
+            <Button
+              size="sm"
+              variant="default"
+              className="pointer-events-auto shadow-lg"
+              onClick={() => setMapFullscreen(false)}
+            >
+              <Minimize2 className="h-4 w-4 mr-2" /> Fermer
+            </Button>
+          </div>
+        </div>
+      )}
+
 
 
 
