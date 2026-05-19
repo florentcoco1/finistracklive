@@ -169,6 +169,19 @@ export default function LiveMonitor() {
   const [mapCheckpoints, setMapCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
   const [mapRunners, setMapRunners] = useState<LeaderboardRow[]>([]);
   const [focusedRunner, setFocusedRunner] = useState<string | null>(null);
+  const [mapFullscreen, setMapFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!mapFullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMapFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [mapFullscreen]);
 
   useEffect(() => {
     if (selectedRaceId === "all") {
