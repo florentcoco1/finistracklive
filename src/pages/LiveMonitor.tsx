@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import RaceMap from "@/components/RaceMap";
+import type { LeaderboardRow, RouteCoord } from "@/lib/types";
 
 interface RaceOption {
   id: string;
@@ -162,12 +164,74 @@ export default function LiveMonitor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isAdmin]);
 
+  // Map data for the selected race (route + checkpoints + live runners)
+  const [mapRoutePoints, setMapRoutePoints] = useState<RouteCoord[] | null>(null);
+  const [mapCheckpoints, setMapCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
+  const [mapRunners, setMapRunners] = useState<LeaderboardRow[]>([]);
+  const [focusedRunner, setFocusedRunner] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedRaceId === "all") {
+      setMapRoutePoints(null);
+      setMapCheckpoints([]);
+      setMapRunners([]);
+      return;
+    }
+    let active = true;
+    const raceId = selectedRaceId;
+
+    const loadStatic = async () => {
+      const [{ data: raceData }, { data: cps }] = await Promise.all([
+        supabase.from("races").select("route_points").eq("id", raceId).single(),
+        supabase
+          .from("race_checkpoints" as any)
+          .select("id, name, distance_km, position")
+          .eq("race_id", raceId)
+          .order("position", { ascending: true }),
+      ]);
+      if (!active) return;
+      const rp = ((raceData as unknown) as { route_points: RouteCoord[] | null } | null)?.route_points ?? null;
+      setMapRoutePoints(rp);
+      setMapCheckpoints(((cps as unknown) as Array<{ id: string; name: string; distance_km: number | null }>) ?? []);
+    };
+
+    const loadRunners = async () => {
+      const { data } = await supabase.from("live_leaderboard").select("*").eq("race_id", raceId);
+      if (!active) return;
+      setMapRunners(((data ?? []) as LeaderboardRow[]));
+    };
+
+    loadStatic();
+    loadRunners();
+
+    const channel = supabase
+      .channel(`live-monitor-map:${raceId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "runner_positions" }, () => loadRunners())
+      .on("postgres_changes", { event: "*", schema: "public", table: "race_registrations", filter: `race_id=eq.${raceId}` }, () => loadRunners())
+      .on("postgres_changes", { event: "*", schema: "public", table: "race_checkpoints", filter: `race_id=eq.${raceId}` }, () => loadStatic())
+      .subscribe();
+
+    const interval = window.setInterval(loadRunners, 15000);
+
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+      window.clearInterval(interval);
+    };
+  }, [selectedRaceId]);
+
+  const mapRouteCoords = useMemo<[number, number][]>(
+    () => (mapRoutePoints ?? []).map((p) => [p.lat, p.lng]),
+    [mapRoutePoints],
+  );
+
   const filteredRows = useMemo(
     () => (selectedRaceId === "all" ? rows : rows.filter((r) => r.race_id === selectedRaceId)),
     [rows, selectedRaceId],
   );
   const dnfRows = useMemo(() => filteredRows.filter((r) => r.runner_status === "dnf"), [filteredRows]);
   const problemRows = useMemo(() => filteredRows.filter((r) => r.runner_status === "problem"), [filteredRows]);
+
 
   // Count alerts per race for the selector
   const alertsPerRace = useMemo(() => {
@@ -224,6 +288,56 @@ export default function LiveMonitor() {
           </SelectContent>
         </Select>
       </Card>
+
+      {selectedRaceId !== "all" && (
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-primary" /> Suivi sur la carte
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Position en temps réel des coureurs · {mapRunners.filter((r) => r.latitude != null && r.longitude != null).length} coureur·euse·s géolocalisé·e·s
+              </p>
+            </div>
+            {filteredRows.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {filteredRows
+                  .filter((r) => r.last_lat != null && r.last_lng != null)
+                  .slice(0, 12)
+                  .map((r) => (
+                    <Button
+                      key={r.registration_id}
+                      size="sm"
+                      variant={focusedRunner === r.registration_id ? "default" : "outline"}
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setFocusedRunner(r.registration_id)}
+                    >
+                      #{r.bib_number}
+                    </Button>
+                  ))}
+              </div>
+            )}
+          </div>
+          <div className="h-[420px] w-full">
+            {mapRouteCoords.length > 0 ? (
+              <RaceMap
+                routeCoords={mapRouteCoords}
+                routePoints={mapRoutePoints}
+                runners={mapRunners}
+                focusedRunnerId={focusedRunner}
+                checkpoints={mapCheckpoints}
+              />
+            ) : (
+              <div className="h-full w-full flex items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
+                Aucune trace GPX disponible pour cette course.
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard label="Total alertes" value={filteredRows.length} accent="primary" />
