@@ -289,6 +289,56 @@ export default function LiveMonitor() {
         </Select>
       </Card>
 
+      {selectedRaceId !== "all" && (
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-primary" /> Suivi sur la carte
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Position en temps réel des coureurs · {mapRunners.filter((r) => r.latitude != null && r.longitude != null).length} coureur·euse·s géolocalisé·e·s
+              </p>
+            </div>
+            {filteredRows.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {filteredRows
+                  .filter((r) => r.last_lat != null && r.last_lng != null)
+                  .slice(0, 12)
+                  .map((r) => (
+                    <Button
+                      key={r.registration_id}
+                      size="sm"
+                      variant={focusedRunner === r.registration_id ? "default" : "outline"}
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setFocusedRunner(r.registration_id)}
+                    >
+                      #{r.bib_number}
+                    </Button>
+                  ))}
+              </div>
+            )}
+          </div>
+          <div className="h-[420px] w-full">
+            {mapRouteCoords.length > 0 ? (
+              <RaceMap
+                routeCoords={mapRouteCoords}
+                routePoints={mapRoutePoints}
+                runners={mapRunners}
+                focusedRunnerId={focusedRunner}
+                checkpoints={mapCheckpoints}
+              />
+            ) : (
+              <div className="h-full w-full flex items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
+                Aucune trace GPX disponible pour cette course.
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard label="Total alertes" value={filteredRows.length} accent="primary" />
         <StatCard label="Abandons (DNF)" value={dnfRows.length} accent="destructive" />
