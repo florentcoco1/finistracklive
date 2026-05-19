@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { AlertTriangle, MapPin, Phone, RefreshCw, ShieldAlert, XOctagon } from "lucide-react";
+import { AlertTriangle, MapPin, Maximize2, Minimize2, Phone, RefreshCw, ShieldAlert, XOctagon } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
