@@ -726,51 +726,8 @@ export default function RaceDetail() {
         <p className="text-muted-foreground mb-6 max-w-3xl">{race.description}</p>
       )}
 
-      {/* Organizer alerts */}
-      {isOrganizer && alerts.length > 0 && (
-        <Card className="glass-card p-4 mb-6 border-warning/50">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle className="h-5 w-5 text-warning" />
-            <h2 className="font-display font-semibold text-lg">Alertes coureurs ({alerts.length})</h2>
-          </div>
-          <ul className="space-y-2">
-            {alerts.map((a) => (
-              <li key={a.registration_id} className={`rounded-lg p-3 border ${a.runner_status === "problem" ? "border-warning/50 bg-warning/10" : "border-destructive/30 bg-destructive/5"}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <span className="font-semibold text-sm">
-                      #{a.bib_number} {a.first_name} {a.last_name}
-                    </span>
-                    {a.runner_status === "dnf" ? (
-                      <span className="ml-2 text-xs text-destructive font-semibold">
-                        <Flag className="inline h-3 w-3 mr-1" />Abandon{a.dnf_reason ? ` — ${a.dnf_reason}` : ""}
-                      </span>
-                    ) : (
-                      <span className="ml-2 text-xs text-warning font-semibold">
-                        <AlertTriangle className="inline h-3 w-3 mr-1" />Problème
-                      </span>
-                    )}
-                  </div>
-                  {a.emergency_phone && (
-                    <a href={`tel:${a.emergency_phone}`} className="inline-flex items-center gap-1 text-xs text-primary hover:underline shrink-0">
-                      <Phone className="h-3 w-3" /> {a.emergency_phone}
-                    </a>
-                  )}
-                </div>
-                {a.runner_status === "problem" && a.problem_description && (
-                  <p className="text-xs text-muted-foreground mt-1">« {a.problem_description} »</p>
-                )}
-                {a.latitude && a.longitude && (
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    📍 Dernière position : {a.latitude.toFixed(5)}, {a.longitude.toFixed(5)}
-                    {a.distance_along_route_m != null && ` — ${formatDistance(a.distance_along_route_m)}`}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+      {/* Les alertes coureurs (abandons & problèmes) sont désormais centralisées dans /organizer/live */}
+
 
       <div className="space-y-6">
         <div className="space-y-4">
