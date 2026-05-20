@@ -58,8 +58,9 @@ export default function LiveMonitor() {
     let raceQuery = supabase
       .from("races")
       .select("id, name, start_time")
-      .eq("status", "live")
+      .in("status", ["live", "upcoming"])
       .order("start_time", { ascending: false });
+
     if (!isAdmin) raceQuery = raceQuery.eq("organizer_id", user.id);
     const { data: racesData } = await raceQuery;
     const raceList: RaceOption[] = (racesData ?? []) as RaceOption[];
