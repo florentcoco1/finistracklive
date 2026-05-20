@@ -151,8 +151,24 @@ async function readSource(source: Source) {
   if (!["http:", "https:"].includes(parsed.protocol)) {
     throw new Error("La synchronisation cloud nécessite un lien HTTP/HTTPS vers l'export GMCAP");
   }
-  const response = await fetch(url, { headers: { "Cache-Control": "no-cache" } });
-  if (!response.ok) throw new Error(`Lecture GMCAP impossible [${response.status}]`);
+  const browserHeaders: Record<string, string> = {
+    "Cache-Control": "no-cache",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/plain,text/csv,application/octet-stream,*/*;q=0.8",
+    "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+    "Referer": `${parsed.protocol}//${parsed.host}/`,
+  };
+  let response = await fetch(url, { headers: browserHeaders, redirect: "follow" });
+  if (response.status === 403) {
+    // Retry without Referer — some servers block cross-origin referers
+    const { Referer: _r, ...noReferer } = browserHeaders;
+    response = await fetch(url, { headers: noReferer, redirect: "follow" });
+  }
+  if (!response.ok) {
+    throw new Error(
+      `Lecture GMCAP impossible [${response.status}]. Le serveur distant refuse l'accès — vérifie que l'URL est publique (ouvre-la dans un navigateur en navigation privée) ou utilise l'import manuel du fichier.`,
+    );
+  }
   const bytes = await response.arrayBuffer();
   return new TextDecoder("iso-8859-1").decode(bytes);
 }
