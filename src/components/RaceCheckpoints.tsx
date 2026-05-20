@@ -495,29 +495,53 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
                   <TableHead>Dossard</TableHead>
                   <TableHead>Coureur</TableHead>
                   <TableHead>Temps</TableHead>
+                  <TableHead>Photos</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedRegs.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="font-mono">{r.bib_number}</TableCell>
-                    <TableCell>{`${r.profile?.first_name ?? ""} ${r.profile?.last_name ?? ""}`.trim() || r.profile?.email || "—"}</TableCell>
-                    <TableCell>
-                      <Input
-                        value={drafts[r.id] ?? ""}
-                        onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
-                        onBlur={() => saveTime(r.id)}
-                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                        placeholder="mm:ss"
-                        className="max-w-32"
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="glass" size="icon" onClick={() => saveTime(r.id)} disabled={busy} aria-label="Enregistrer"><Save className="h-4 w-4" /></Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {sortedRegs.map((r) => {
+                  const photos = photosByReg[r.id] ?? [];
+                  return (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-mono">{r.bib_number}</TableCell>
+                      <TableCell>{`${r.profile?.first_name ?? ""} ${r.profile?.last_name ?? ""}`.trim() || r.profile?.email || "—"}</TableCell>
+                      <TableCell>
+                        <Input
+                          value={drafts[r.id] ?? ""}
+                          onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
+                          onBlur={() => saveTime(r.id)}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                          placeholder="mm:ss"
+                          className="max-w-32"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {photos.map((u, j) => (
+                            <a key={j} href={u} target="_blank" rel="noreferrer">
+                              <img src={u} alt="" className="h-10 w-10 object-cover rounded border border-border/50" />
+                            </a>
+                          ))}
+                          <label className="cursor-pointer inline-flex items-center justify-center h-10 w-10 rounded border border-dashed border-border/60 hover:border-primary/60 text-muted-foreground">
+                            {uploadingReg === r.id ? "…" : <Camera className="h-4 w-4" />}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              multiple
+                              className="hidden"
+                              onChange={(e) => { void uploadPhotosForReg(r.id, e.target.files); e.target.value = ""; }}
+                            />
+                          </label>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="glass" size="icon" onClick={() => saveTime(r.id)} disabled={busy} aria-label="Enregistrer"><Save className="h-4 w-4" /></Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
