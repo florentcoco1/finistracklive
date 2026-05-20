@@ -10,7 +10,20 @@ const corsHeaders = {
 const uuid = z.string().uuid();
 const BodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("load"), race_id: uuid }),
-  z.object({ action: z.literal("save_gmcap"), race_id: uuid, source_url: z.string().url().max(1000), enabled: z.boolean() }),
+  z.object({
+    action: z.literal("save_gmcap"),
+    race_id: uuid,
+    source_url: z.preprocess(
+      (v) => {
+        if (typeof v !== "string") return v;
+        const t = v.trim();
+        if (!t) return t;
+        return /^https?:\/\//i.test(t) ? t : `https://${t}`;
+      },
+      z.string().url().max(1000),
+    ),
+    enabled: z.boolean(),
+  }),
   z.object({ action: z.literal("sync_gmcap"), race_id: uuid }),
   z.object({
     action: z.literal("update_registration"),
