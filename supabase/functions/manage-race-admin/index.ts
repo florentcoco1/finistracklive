@@ -263,11 +263,11 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === "add_registration") {
-      const { data: profile } = await admin.from("profiles").select("user_id").ilike("email", body.email).maybeSingle();
-      if (!profile?.user_id) return json({ error: "Aucun utilisateur trouvé avec cet email" }, 404);
+      const userId = await findUserByEmail(admin, body.email);
+      if (!userId) return json({ error: `Aucun compte trouvé pour ${body.email}. Demandez à la personne de créer un compte ou utilisez l'import en masse pour le créer automatiquement.` }, 404);
       const { error } = await admin.from("race_registrations").upsert({
         race_id: body.race_id,
-        runner_id: profile.user_id,
+        runner_id: userId,
         bib_number: body.bib_number,
         category: body.category || null,
         emergency_phone: body.emergency_phone || null,
