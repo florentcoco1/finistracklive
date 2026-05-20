@@ -128,6 +128,29 @@ function normalizeGender(value: string): string | null {
   return null;
 }
 
+async function findUserByEmail(admin: ReturnType<typeof createClient>, email: string): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  const { data: profile } = await admin.from("profiles").select("user_id").ilike("email", normalized).maybeSingle();
+  if (profile?.user_id) return profile.user_id as string;
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error || !data?.users?.length) return null;
+    const match = data.users.find((u) => (u.email ?? "").toLowerCase() === normalized);
+    if (match) {
+      const meta = (match.user_metadata ?? {}) as { first_name?: string; last_name?: string };
+      await admin.from("profiles").upsert({
+        user_id: match.id,
+        email: match.email,
+        first_name: meta.first_name ?? null,
+        last_name: meta.last_name ?? null,
+      }, { onConflict: "user_id" });
+      return match.id;
+    }
+    if (data.users.length < 200) return null;
+  }
+  return null;
+}
+
 async function requireRaceAdmin(admin: ReturnType<typeof createClient>, userId: string, raceId: string) {
   const { data, error } = await admin.rpc("is_race_admin", { _race_id: raceId, _user_id: userId });
   if (!error && data) return;
