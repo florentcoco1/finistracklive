@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Flag, Plus, Save, Trash2, Zap } from "lucide-react";
+import { Camera, Flag, Plus, Save, Trash2, X, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -9,6 +9,19 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+const PHOTO_BUCKET = "checkpoint-photos";
+
+async function uploadCheckpointPhoto(file: File, checkpointId: string, registrationId: string) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("checkpoint_id", checkpointId);
+  form.append("registration_id", registrationId);
+  const { data, error } = await supabase.functions.invoke("upload-checkpoint-photo", { body: form });
+  if (error) throw error;
+  if ((data as any)?.error) throw new Error((data as any).error);
+  return data as { ok: true; path: string; public_url: string };
+}
 
 interface Checkpoint {
   id: string;
@@ -66,8 +79,12 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
   const [activeCp, setActiveCp] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({}); // key registrationId
   const [bibInput, setBibInput] = useState("");
-  const [recentEntries, setRecentEntries] = useState<Array<{ bib: string; name: string; text: string }>>([]);
+  const [recentEntries, setRecentEntries] = useState<Array<{ bib: string; name: string; text: string; photos: string[] }>>([]);
   const bibRef = useRef<HTMLInputElement | null>(null);
+  const [pendingPhotos, setPendingPhotos] = useState<File[]>([]);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const [photosByReg, setPhotosByReg] = useState<Record<string, string[]>>({});
+  const [uploadingReg, setUploadingReg] = useState<string | null>(null);
 
   const ensureSchema = useCallback(async () => {
     await supabase.functions.invoke("ensure-checkpoints-schema");
@@ -205,17 +222,73 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
         { checkpoint_id: activeCp, registration_id: reg.id, time_seconds: seconds, time_text: text, recorded_at: new Date().toISOString() },
         { onConflict: "checkpoint_id,registration_id" },
       );
-    setBusy(false);
     if (error) {
+      setBusy(false);
       toast.error(error.message);
       return;
     }
+    const uploadedUrls: string[] = [];
+    if (pendingPhotos.length > 0) {
+      for (const f of pendingPhotos) {
+        try {
+          const res = await uploadCheckpointPhoto(f, activeCp, reg.id);
+          uploadedUrls.push(res.public_url);
+        } catch (e) {
+          toast.error(`Photo non envoyée : ${(e as Error).message}`);
+        }
+      }
+      setPhotosByReg((m) => ({ ...m, [reg.id]: [...(m[reg.id] ?? []), ...uploadedUrls] }));
+      setPendingPhotos([]);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+    setBusy(false);
     const name = `${reg.profile?.first_name ?? ""} ${reg.profile?.last_name ?? ""}`.trim() || reg.profile?.email || "—";
-    setRecentEntries((prev) => [{ bib, name, text }, ...prev].slice(0, 8));
-    toast.success(`Dossard ${bib} — ${text}`);
+    setRecentEntries((prev) => [{ bib, name, text, photos: uploadedUrls }, ...prev].slice(0, 8));
+    toast.success(`Dossard ${bib} — ${text}${uploadedUrls.length ? ` · ${uploadedUrls.length} photo(s)` : ""}`);
     setBibInput("");
     bibRef.current?.focus();
     void load();
+  };
+
+  // Load existing photos for active checkpoint
+  useEffect(() => {
+    if (!activeCp) { setPhotosByReg({}); return; }
+    let cancelled = false;
+    (async () => {
+      const { data: dirs } = await supabase.storage.from(PHOTO_BUCKET).list(activeCp, { limit: 1000 });
+      if (cancelled || !dirs) return;
+      const map: Record<string, string[]> = {};
+      for (const d of dirs) {
+        if (!d.name) continue;
+        const regId = d.name;
+        const { data: files } = await supabase.storage.from(PHOTO_BUCKET).list(`${activeCp}/${regId}`, { limit: 1000 });
+        if (!files) continue;
+        map[regId] = files
+          .filter((f) => f.name)
+          .map((f) => supabase.storage.from(PHOTO_BUCKET).getPublicUrl(`${activeCp}/${regId}/${f.name}`).data.publicUrl);
+      }
+      if (!cancelled) setPhotosByReg(map);
+    })();
+    return () => { cancelled = true; };
+  }, [activeCp]);
+
+  const uploadPhotosForReg = async (registrationId: string, files: FileList | null) => {
+    if (!activeCp || !files || files.length === 0) return;
+    setUploadingReg(registrationId);
+    const urls: string[] = [];
+    for (const f of Array.from(files)) {
+      try {
+        const res = await uploadCheckpointPhoto(f, activeCp, registrationId);
+        urls.push(res.public_url);
+      } catch (e) {
+        toast.error(`Photo non envoyée : ${(e as Error).message}`);
+      }
+    }
+    if (urls.length) {
+      setPhotosByReg((m) => ({ ...m, [registrationId]: [...(m[registrationId] ?? []), ...urls] }));
+      toast.success(`${urls.length} photo(s) ajoutée(s)`);
+    }
+    setUploadingReg(null);
   };
 
   const active = checkpoints.find((c) => c.id === activeCp) ?? null;
@@ -355,7 +428,40 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
               <Button variant="hero" onClick={() => void submitBib()} disabled={busy || !bibInput.trim() || !raceStartTime}>
                 Valider <span className="ml-2 text-xs opacity-70">(Entrée)</span>
               </Button>
+              <Button type="button" variant="glass" onClick={() => photoInputRef.current?.click()}>
+                <Camera className="h-4 w-4 mr-2" /> Photo {pendingPhotos.length > 0 ? `(${pendingPhotos.length})` : ""}
+              </Button>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (files) setPendingPhotos((prev) => [...prev, ...Array.from(files)]);
+                }}
+              />
             </div>
+            {pendingPhotos.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {pendingPhotos.map((f, i) => (
+                  <div key={i} className="relative">
+                    <img src={URL.createObjectURL(f)} alt="" className="h-16 w-16 object-cover rounded border border-border/50" />
+                    <button
+                      type="button"
+                      onClick={() => setPendingPhotos((p) => p.filter((_, idx) => idx !== i))}
+                      className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5"
+                      aria-label="Retirer"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground w-full">Les photos seront jointes au prochain dossard validé.</p>
+              </div>
+            )}
             {!raceStartTime && (
               <p className="text-xs text-destructive">Définis l'heure de départ de la course pour activer la saisie rapide.</p>
             )}
@@ -364,9 +470,16 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
                 <p className="text-xs text-muted-foreground">Derniers passages enregistrés</p>
                 <div className="flex flex-wrap gap-2">
                   {recentEntries.map((e, i) => (
-                    <Badge key={i} variant="secondary" className="font-mono">
-                      #{e.bib} · {e.text} · {e.name}
-                    </Badge>
+                    <div key={i} className="flex items-center gap-2">
+                      <Badge variant="secondary" className="font-mono">
+                        #{e.bib} · {e.text} · {e.name}{e.photos.length > 0 ? ` · 📷${e.photos.length}` : ""}
+                      </Badge>
+                      {e.photos.map((u, j) => (
+                        <a key={j} href={u} target="_blank" rel="noreferrer">
+                          <img src={u} alt="" className="h-10 w-10 object-cover rounded border border-border/50" />
+                        </a>
+                      ))}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -382,29 +495,53 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
                   <TableHead>Dossard</TableHead>
                   <TableHead>Coureur</TableHead>
                   <TableHead>Temps</TableHead>
+                  <TableHead>Photos</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedRegs.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="font-mono">{r.bib_number}</TableCell>
-                    <TableCell>{`${r.profile?.first_name ?? ""} ${r.profile?.last_name ?? ""}`.trim() || r.profile?.email || "—"}</TableCell>
-                    <TableCell>
-                      <Input
-                        value={drafts[r.id] ?? ""}
-                        onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
-                        onBlur={() => saveTime(r.id)}
-                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                        placeholder="mm:ss"
-                        className="max-w-32"
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="glass" size="icon" onClick={() => saveTime(r.id)} disabled={busy} aria-label="Enregistrer"><Save className="h-4 w-4" /></Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {sortedRegs.map((r) => {
+                  const photos = photosByReg[r.id] ?? [];
+                  return (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-mono">{r.bib_number}</TableCell>
+                      <TableCell>{`${r.profile?.first_name ?? ""} ${r.profile?.last_name ?? ""}`.trim() || r.profile?.email || "—"}</TableCell>
+                      <TableCell>
+                        <Input
+                          value={drafts[r.id] ?? ""}
+                          onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
+                          onBlur={() => saveTime(r.id)}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                          placeholder="mm:ss"
+                          className="max-w-32"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {photos.map((u, j) => (
+                            <a key={j} href={u} target="_blank" rel="noreferrer">
+                              <img src={u} alt="" className="h-10 w-10 object-cover rounded border border-border/50" />
+                            </a>
+                          ))}
+                          <label className="cursor-pointer inline-flex items-center justify-center h-10 w-10 rounded border border-dashed border-border/60 hover:border-primary/60 text-muted-foreground">
+                            {uploadingReg === r.id ? "…" : <Camera className="h-4 w-4" />}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              multiple
+                              className="hidden"
+                              onChange={(e) => { void uploadPhotosForReg(r.id, e.target.files); e.target.value = ""; }}
+                            />
+                          </label>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="glass" size="icon" onClick={() => saveTime(r.id)} disabled={busy} aria-label="Enregistrer"><Save className="h-4 w-4" /></Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
