@@ -337,6 +337,7 @@ export default function RaceAdmin() {
         })
         .eq("id", raceId);
       if (updErr) throw updErr;
+      setRace((prev) => (prev ? { ...prev, gpx_geojson: geojson as any, route_points: routePoints as any, distance_km: distanceKm } : prev));
       toast.success(`Tracé GPX mis à jour (${distanceKm} km)`);
       setGpxFile(null);
     } catch (error) {
