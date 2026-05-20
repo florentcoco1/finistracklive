@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Flag, Plus, Save, Trash2, Zap } from "lucide-react";
+import { Camera, Flag, Plus, Save, Trash2, X, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -9,6 +9,19 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+const PHOTO_BUCKET = "checkpoint-photos";
+
+async function uploadCheckpointPhoto(file: File, checkpointId: string, registrationId: string) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("checkpoint_id", checkpointId);
+  form.append("registration_id", registrationId);
+  const { data, error } = await supabase.functions.invoke("upload-checkpoint-photo", { body: form });
+  if (error) throw error;
+  if ((data as any)?.error) throw new Error((data as any).error);
+  return data as { ok: true; path: string; public_url: string };
+}
 
 interface Checkpoint {
   id: string;
