@@ -219,7 +219,7 @@ export default function RaceAdmin() {
 
     supabase
       .from("races")
-      .select("id, name, start_time, status, event_id")
+      .select("id, name, start_time, status, event_id, gpx_geojson, route_points, distance_km")
       .eq("id", raceId)
       .single()
       .then(({ data, error }) => {
