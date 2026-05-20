@@ -79,8 +79,12 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
   const [activeCp, setActiveCp] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({}); // key registrationId
   const [bibInput, setBibInput] = useState("");
-  const [recentEntries, setRecentEntries] = useState<Array<{ bib: string; name: string; text: string }>>([]);
+  const [recentEntries, setRecentEntries] = useState<Array<{ bib: string; name: string; text: string; photos: string[] }>>([]);
   const bibRef = useRef<HTMLInputElement | null>(null);
+  const [pendingPhotos, setPendingPhotos] = useState<File[]>([]);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const [photosByReg, setPhotosByReg] = useState<Record<string, string[]>>({});
+  const [uploadingReg, setUploadingReg] = useState<string | null>(null);
 
   const ensureSchema = useCallback(async () => {
     await supabase.functions.invoke("ensure-checkpoints-schema");
