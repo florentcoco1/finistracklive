@@ -17,6 +17,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { RaceCheckpoints } from "@/components/RaceCheckpoints";
 import { RaceInviteCard } from "@/components/RaceInviteCard";
+import RaceMap from "@/components/RaceMap";
+import ElevationChart from "@/components/ElevationChart";
 
 interface RaceSummary {
   id: string;
