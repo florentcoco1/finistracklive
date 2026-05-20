@@ -24,6 +24,9 @@ interface RaceSummary {
   start_time: string;
   status: string;
   event_id: string | null;
+  gpx_geojson: any;
+  route_points: { lat: number; lng: number; cumulativeDistanceM: number }[] | null;
+  distance_km: number | null;
 }
 
 interface EventOption {
