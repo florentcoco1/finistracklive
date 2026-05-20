@@ -772,7 +772,7 @@ export default function RaceDetail() {
         </Card>
       )}
 
-      <div className="grid lg:grid-cols-[1fr_360px] gap-6">
+      <div className="space-y-6">
         <div className="space-y-4">
           {effectiveStatus === "upcoming" ? (
             <Card className="glass-card p-8 h-[420px] md:h-[600px] flex flex-col items-center justify-center text-center">
