@@ -387,11 +387,11 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === "add_organizer") {
-      const { data: profile } = await admin.from("profiles").select("user_id").ilike("email", body.email).maybeSingle();
-      if (!profile?.user_id) return json({ error: "Aucun utilisateur trouvé avec cet email" }, 404);
+      const userId = await findUserByEmail(admin, body.email);
+      if (!userId) return json({ error: `Aucun compte trouvé pour ${body.email}. La personne doit d'abord créer un compte sur l'application.` }, 404);
       const [{ error: organizerError }, { error: roleError }] = await Promise.all([
-        admin.from("race_organizers").upsert({ race_id: body.race_id, user_id: profile.user_id, created_by: user.id }, { onConflict: "race_id,user_id" }),
-        admin.from("user_roles").upsert({ user_id: profile.user_id, role: "organizer" }, { onConflict: "user_id,role" }),
+        admin.from("race_organizers").upsert({ race_id: body.race_id, user_id: userId, created_by: user.id }, { onConflict: "race_id,user_id" }),
+        admin.from("user_roles").upsert({ user_id: userId, role: "organizer" }, { onConflict: "user_id,role" }),
       ]);
       if (organizerError || roleError) throw new Error(organizerError?.message ?? roleError?.message);
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
