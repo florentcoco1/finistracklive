@@ -222,17 +222,73 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
         { checkpoint_id: activeCp, registration_id: reg.id, time_seconds: seconds, time_text: text, recorded_at: new Date().toISOString() },
         { onConflict: "checkpoint_id,registration_id" },
       );
-    setBusy(false);
     if (error) {
+      setBusy(false);
       toast.error(error.message);
       return;
     }
+    const uploadedUrls: string[] = [];
+    if (pendingPhotos.length > 0) {
+      for (const f of pendingPhotos) {
+        try {
+          const res = await uploadCheckpointPhoto(f, activeCp, reg.id);
+          uploadedUrls.push(res.public_url);
+        } catch (e) {
+          toast.error(`Photo non envoyée : ${(e as Error).message}`);
+        }
+      }
+      setPhotosByReg((m) => ({ ...m, [reg.id]: [...(m[reg.id] ?? []), ...uploadedUrls] }));
+      setPendingPhotos([]);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+    setBusy(false);
     const name = `${reg.profile?.first_name ?? ""} ${reg.profile?.last_name ?? ""}`.trim() || reg.profile?.email || "—";
-    setRecentEntries((prev) => [{ bib, name, text }, ...prev].slice(0, 8));
-    toast.success(`Dossard ${bib} — ${text}`);
+    setRecentEntries((prev) => [{ bib, name, text, photos: uploadedUrls }, ...prev].slice(0, 8));
+    toast.success(`Dossard ${bib} — ${text}${uploadedUrls.length ? ` · ${uploadedUrls.length} photo(s)` : ""}`);
     setBibInput("");
     bibRef.current?.focus();
     void load();
+  };
+
+  // Load existing photos for active checkpoint
+  useEffect(() => {
+    if (!activeCp) { setPhotosByReg({}); return; }
+    let cancelled = false;
+    (async () => {
+      const { data: dirs } = await supabase.storage.from(PHOTO_BUCKET).list(activeCp, { limit: 1000 });
+      if (cancelled || !dirs) return;
+      const map: Record<string, string[]> = {};
+      for (const d of dirs) {
+        if (!d.name) continue;
+        const regId = d.name;
+        const { data: files } = await supabase.storage.from(PHOTO_BUCKET).list(`${activeCp}/${regId}`, { limit: 1000 });
+        if (!files) continue;
+        map[regId] = files
+          .filter((f) => f.name)
+          .map((f) => supabase.storage.from(PHOTO_BUCKET).getPublicUrl(`${activeCp}/${regId}/${f.name}`).data.publicUrl);
+      }
+      if (!cancelled) setPhotosByReg(map);
+    })();
+    return () => { cancelled = true; };
+  }, [activeCp]);
+
+  const uploadPhotosForReg = async (registrationId: string, files: FileList | null) => {
+    if (!activeCp || !files || files.length === 0) return;
+    setUploadingReg(registrationId);
+    const urls: string[] = [];
+    for (const f of Array.from(files)) {
+      try {
+        const res = await uploadCheckpointPhoto(f, activeCp, registrationId);
+        urls.push(res.public_url);
+      } catch (e) {
+        toast.error(`Photo non envoyée : ${(e as Error).message}`);
+      }
+    }
+    if (urls.length) {
+      setPhotosByReg((m) => ({ ...m, [registrationId]: [...(m[registrationId] ?? []), ...urls] }));
+      toast.success(`${urls.length} photo(s) ajoutée(s)`);
+    }
+    setUploadingReg(null);
   };
 
   const active = checkpoints.find((c) => c.id === activeCp) ?? null;
