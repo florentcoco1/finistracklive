@@ -128,6 +128,29 @@ function normalizeGender(value: string): string | null {
   return null;
 }
 
+async function findUserByEmail(admin: ReturnType<typeof createClient>, email: string): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  const { data: profile } = await admin.from("profiles").select("user_id").ilike("email", normalized).maybeSingle();
+  if (profile?.user_id) return profile.user_id as string;
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error || !data?.users?.length) return null;
+    const match = data.users.find((u) => (u.email ?? "").toLowerCase() === normalized);
+    if (match) {
+      const meta = (match.user_metadata ?? {}) as { first_name?: string; last_name?: string };
+      await admin.from("profiles").upsert({
+        user_id: match.id,
+        email: match.email,
+        first_name: meta.first_name ?? null,
+        last_name: meta.last_name ?? null,
+      }, { onConflict: "user_id" });
+      return match.id;
+    }
+    if (data.users.length < 200) return null;
+  }
+  return null;
+}
+
 async function requireRaceAdmin(admin: ReturnType<typeof createClient>, userId: string, raceId: string) {
   const { data, error } = await admin.rpc("is_race_admin", { _race_id: raceId, _user_id: userId });
   if (!error && data) return;
@@ -240,11 +263,11 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === "add_registration") {
-      const { data: profile } = await admin.from("profiles").select("user_id").ilike("email", body.email).maybeSingle();
-      if (!profile?.user_id) return json({ error: "Aucun utilisateur trouvé avec cet email" }, 404);
+      const userId = await findUserByEmail(admin, body.email);
+      if (!userId) return json({ error: `Aucun compte trouvé pour ${body.email}. Demandez à la personne de créer un compte ou utilisez l'import en masse pour le créer automatiquement.` }, 404);
       const { error } = await admin.from("race_registrations").upsert({
         race_id: body.race_id,
-        runner_id: profile.user_id,
+        runner_id: userId,
         bib_number: body.bib_number,
         category: body.category || null,
         emergency_phone: body.emergency_phone || null,
@@ -364,11 +387,11 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === "add_organizer") {
-      const { data: profile } = await admin.from("profiles").select("user_id").ilike("email", body.email).maybeSingle();
-      if (!profile?.user_id) return json({ error: "Aucun utilisateur trouvé avec cet email" }, 404);
+      const userId = await findUserByEmail(admin, body.email);
+      if (!userId) return json({ error: `Aucun compte trouvé pour ${body.email}. La personne doit d'abord créer un compte sur l'application.` }, 404);
       const [{ error: organizerError }, { error: roleError }] = await Promise.all([
-        admin.from("race_organizers").upsert({ race_id: body.race_id, user_id: profile.user_id, created_by: user.id }, { onConflict: "race_id,user_id" }),
-        admin.from("user_roles").upsert({ user_id: profile.user_id, role: "organizer" }, { onConflict: "user_id,role" }),
+        admin.from("race_organizers").upsert({ race_id: body.race_id, user_id: userId, created_by: user.id }, { onConflict: "race_id,user_id" }),
+        admin.from("user_roles").upsert({ user_id: userId, role: "organizer" }, { onConflict: "user_id,role" }),
       ]);
       if (organizerError || roleError) throw new Error(organizerError?.message ?? roleError?.message);
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
