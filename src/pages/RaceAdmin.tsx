@@ -681,6 +681,36 @@ export default function RaceAdmin() {
         </div>
       </Card>
 
+      {race && (race.route_points?.length ?? 0) > 0 && (
+        <Card className="glass-card p-2 mb-6 overflow-hidden">
+          <div className="px-2 pt-2 pb-1 flex items-center gap-2">
+            <Map className="h-4 w-4 text-primary-glow" />
+            <h3 className="font-display font-semibold text-sm">Aperçu du tracé</h3>
+            {race.distance_km != null && (
+              <span className="ml-auto text-xs text-muted-foreground">{race.distance_km} km</span>
+            )}
+          </div>
+          <div className="h-[360px] md:h-[460px]">
+            <RaceMap
+              routeCoords={(race.route_points ?? []).map((p) => [p.lat, p.lng])}
+              routePoints={race.route_points ?? undefined}
+              runners={[]}
+              checkpoints={[]}
+            />
+          </div>
+          {race.gpx_geojson && (
+            <div className="h-[220px] mt-2 px-1 pb-1">
+              <ElevationChart
+                gpxGeojson={race.gpx_geojson}
+                totalDistanceKm={race.distance_km}
+                runners={[]}
+                checkpoints={[]}
+              />
+            </div>
+          )}
+        </Card>
+      )}
+
       {race && <RaceInviteCard raceId={race.id} raceName={race.name} />}
 
       <Tabs defaultValue="gmcap" className="space-y-4">
