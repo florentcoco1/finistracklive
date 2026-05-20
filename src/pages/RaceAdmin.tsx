@@ -17,6 +17,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { RaceCheckpoints } from "@/components/RaceCheckpoints";
 import { RaceInviteCard } from "@/components/RaceInviteCard";
+import RaceMap from "@/components/RaceMap";
+import ElevationChart from "@/components/ElevationChart";
 
 interface RaceSummary {
   id: string;
@@ -24,6 +26,9 @@ interface RaceSummary {
   start_time: string;
   status: string;
   event_id: string | null;
+  gpx_geojson: any;
+  route_points: { lat: number; lng: number; cumulativeDistanceM: number }[] | null;
+  distance_km: number | null;
 }
 
 interface EventOption {
@@ -214,7 +219,7 @@ export default function RaceAdmin() {
 
     supabase
       .from("races")
-      .select("id, name, start_time, status, event_id")
+      .select("id, name, start_time, status, event_id, gpx_geojson, route_points, distance_km")
       .eq("id", raceId)
       .single()
       .then(({ data, error }) => {
@@ -332,6 +337,7 @@ export default function RaceAdmin() {
         })
         .eq("id", raceId);
       if (updErr) throw updErr;
+      setRace((prev) => (prev ? { ...prev, gpx_geojson: geojson as any, route_points: routePoints as any, distance_km: distanceKm } : prev));
       toast.success(`Tracé GPX mis à jour (${distanceKm} km)`);
       setGpxFile(null);
     } catch (error) {
@@ -674,6 +680,36 @@ export default function RaceAdmin() {
           </Button>
         </div>
       </Card>
+
+      {race && (race.route_points?.length ?? 0) > 0 && (
+        <Card className="glass-card p-2 mb-6 overflow-hidden">
+          <div className="px-2 pt-2 pb-1 flex items-center gap-2">
+            <Map className="h-4 w-4 text-primary-glow" />
+            <h3 className="font-display font-semibold text-sm">Aperçu du tracé</h3>
+            {race.distance_km != null && (
+              <span className="ml-auto text-xs text-muted-foreground">{race.distance_km} km</span>
+            )}
+          </div>
+          <div className="h-[360px] md:h-[460px]">
+            <RaceMap
+              routeCoords={(race.route_points ?? []).map((p) => [p.lat, p.lng])}
+              routePoints={race.route_points ?? undefined}
+              runners={[]}
+              checkpoints={[]}
+            />
+          </div>
+          {race.gpx_geojson && (
+            <div className="h-[220px] mt-2 px-1 pb-1">
+              <ElevationChart
+                gpxGeojson={race.gpx_geojson}
+                totalDistanceKm={race.distance_km}
+                runners={[]}
+                checkpoints={[]}
+              />
+            </div>
+          )}
+        </Card>
+      )}
 
       {race && <RaceInviteCard raceId={race.id} raceName={race.name} />}
 
