@@ -428,7 +428,40 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
               <Button variant="hero" onClick={() => void submitBib()} disabled={busy || !bibInput.trim() || !raceStartTime}>
                 Valider <span className="ml-2 text-xs opacity-70">(Entrée)</span>
               </Button>
+              <Button type="button" variant="glass" onClick={() => photoInputRef.current?.click()}>
+                <Camera className="h-4 w-4 mr-2" /> Photo {pendingPhotos.length > 0 ? `(${pendingPhotos.length})` : ""}
+              </Button>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (files) setPendingPhotos((prev) => [...prev, ...Array.from(files)]);
+                }}
+              />
             </div>
+            {pendingPhotos.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {pendingPhotos.map((f, i) => (
+                  <div key={i} className="relative">
+                    <img src={URL.createObjectURL(f)} alt="" className="h-16 w-16 object-cover rounded border border-border/50" />
+                    <button
+                      type="button"
+                      onClick={() => setPendingPhotos((p) => p.filter((_, idx) => idx !== i))}
+                      className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5"
+                      aria-label="Retirer"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground w-full">Les photos seront jointes au prochain dossard validé.</p>
+              </div>
+            )}
             {!raceStartTime && (
               <p className="text-xs text-destructive">Définis l'heure de départ de la course pour activer la saisie rapide.</p>
             )}
@@ -437,9 +470,16 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
                 <p className="text-xs text-muted-foreground">Derniers passages enregistrés</p>
                 <div className="flex flex-wrap gap-2">
                   {recentEntries.map((e, i) => (
-                    <Badge key={i} variant="secondary" className="font-mono">
-                      #{e.bib} · {e.text} · {e.name}
-                    </Badge>
+                    <div key={i} className="flex items-center gap-2">
+                      <Badge variant="secondary" className="font-mono">
+                        #{e.bib} · {e.text} · {e.name}{e.photos.length > 0 ? ` · 📷${e.photos.length}` : ""}
+                      </Badge>
+                      {e.photos.map((u, j) => (
+                        <a key={j} href={u} target="_blank" rel="noreferrer">
+                          <img src={u} alt="" className="h-10 w-10 object-cover rounded border border-border/50" />
+                        </a>
+                      ))}
+                    </div>
                   ))}
                 </div>
               </div>
