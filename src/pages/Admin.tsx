@@ -193,10 +193,30 @@ export default function AdminPage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               {races.map((race) => (
                 <Card key={race.id} className="glass-card p-5">
-                  <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
-                    <span className="px-2 py-0.5 rounded bg-secondary">{race.status}</span>
-                    {race.distance_km && <span className="ml-auto">{race.distance_km} km</span>}
-                  </div>
+                  {(() => {
+                    const start = new Date(race.start_time).getTime();
+                    const now = Date.now();
+                    const derived =
+                      race.status === "finished"
+                        ? "finished"
+                        : start > now
+                          ? "upcoming"
+                          : "live";
+                    const label =
+                      derived === "live" ? "En cours" : derived === "upcoming" ? "À venir" : "Terminée";
+                    const cls =
+                      derived === "live"
+                        ? "bg-green-500/20 text-green-300"
+                        : derived === "upcoming"
+                          ? "bg-blue-500/20 text-blue-300"
+                          : "bg-secondary";
+                    return (
+                      <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
+                        <span className={`px-2 py-0.5 rounded ${cls}`}>{label}</span>
+                        {race.distance_km && <span className="ml-auto">{race.distance_km} km</span>}
+                      </div>
+                    );
+                  })()}
                   <h3 className="font-display font-semibold text-lg mb-1">{race.name}</h3>
                   <p className="text-sm text-muted-foreground mb-3">
                     {format(new Date(race.start_time), "d MMM yyyy, HH:mm", { locale: fr })}
