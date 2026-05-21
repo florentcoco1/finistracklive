@@ -165,13 +165,18 @@ async function readSource(source: Source) {
     response = await fetch(url, { headers: noReferer, redirect: "follow" });
   }
   if (!response.ok) {
-    throw new Error(
-      `Lecture GMCAP impossible [${response.status}]. Le serveur distant refuse l'accès — vérifie que l'URL est publique (ouvre-la dans un navigateur en navigation privée) ou utilise l'import manuel du fichier.`,
-    );
+    const host = parsed.host;
+    // AwardSpace / atwebpages.com bloquent les IPs hors France (Error 403 - Local).
+    const geoBlocked = response.status === 403 && /atwebpages\.com|awardspace/i.test(host);
+    const detail = geoBlocked
+      ? `L'hébergeur « ${host} » (AwardSpace) bloque les requêtes hors de France, donc le serveur FinisTrackLive ne peut pas lire ce fichier. Solutions : 1) lance l'uploader local (dossier scripts/local-gmcap-uploader) sur le PC de chrono — il enverra le fichier automatiquement toutes les minutes ; 2) ou utilise l'import manuel ci-dessous ; 3) ou héberge le fichier sur un service sans filtrage géographique (GitHub Pages, Netlify, OVH, Cloudflare R2…).`
+      : `Le serveur distant a refusé l'accès (HTTP ${response.status}). Vérifie que l'URL est publique (ouvre-la dans un navigateur en navigation privée) ou utilise l'import manuel.`;
+    throw new Error(`Lecture GMCAP impossible [${response.status}]. ${detail}`);
   }
   const bytes = await response.arrayBuffer();
   return new TextDecoder("iso-8859-1").decode(bytes);
 }
+
 
 async function syncSource(admin: ReturnType<typeof createClient>, source: Source) {
   const content = await readSource(source);
