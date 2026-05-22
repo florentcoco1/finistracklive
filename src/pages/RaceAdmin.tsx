@@ -187,6 +187,25 @@ export default function RaceAdmin() {
   const [savingEvent, setSavingEvent] = useState(false);
   const [gpxFile, setGpxFile] = useState<File | null>(null);
   const [uploadingGpx, setUploadingGpx] = useState(false);
+  const [checkpoints, setCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
+
+  useEffect(() => {
+    if (!raceId) return;
+    const reload = async () => {
+      const { data } = await (supabase as any)
+        .from("race_checkpoints")
+        .select("id, name, distance_km, position")
+        .eq("race_id", raceId)
+        .order("position", { ascending: true });
+      setCheckpoints(((data as unknown) as Array<{ id: string; name: string; distance_km: number | null }>) ?? []);
+    };
+    reload();
+    const ch = supabase
+      .channel(`race-admin-checkpoints:${raceId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "race_checkpoints", filter: `race_id=eq.${raceId}` }, () => reload())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [raceId]);
 
   const invokeAdmin = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("manage-race-admin", { body });
