@@ -209,10 +209,13 @@ Deno.serve(async (req) => {
 
     const { data: raceRow } = await admin
       .from("races")
-      .select("name")
+      .select("name, start_time")
       .eq("id", race_id)
       .single();
     const raceNameNorm = normKey(clean(raceRow?.name ?? ""));
+    const raceStartMs = raceRow?.start_time ? new Date(raceRow.start_time).getTime() : null;
+    const FINISH_DETECTOR_ID = 31;
+    const finishUpdates: Array<{ id: string; finished_at: string }> = [];
 
     const byBib = new Map((registrations ?? []).map((reg: any) => [clean(reg.bib_number), reg.id]));
 
