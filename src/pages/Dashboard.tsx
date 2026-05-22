@@ -147,7 +147,7 @@ export default function Dashboard() {
         </Card>
         <Card className="glass-card p-5">
           <Smartphone className="h-5 w-5 text-primary-glow mb-2" />
-          <p className="text-2xl font-bold">{registrations.filter(r => r.race?.status === "live").length}</p>
+          <p className="text-2xl font-bold">{registrations.filter(r => r.race && r.race.status !== "finished" && new Date(r.race.start_time).getTime() <= Date.now()).length}</p>
           <p className="text-sm text-muted-foreground">Courses en direct</p>
         </Card>
         <Card className="glass-card p-5">
