@@ -256,7 +256,7 @@ export default function Dashboard() {
           {registrations.map((reg) => (
             <Card key={reg.id} className="glass-card p-5">
               <div className="flex items-center gap-2 mb-2">
-                <StatusBadge status={reg.race.status} />
+                <StatusBadge status={reg.race.status === "finished" ? "finished" : new Date(reg.race.start_time).getTime() > Date.now() ? "upcoming" : "live"} />
                 <span className="ml-auto text-xs text-muted-foreground">Dossard #{reg.bib_number}</span>
               </div>
               <h3 className="font-display font-semibold text-lg mb-1">{reg.race.name}</h3>
