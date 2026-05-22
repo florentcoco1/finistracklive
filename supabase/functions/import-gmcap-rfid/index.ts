@@ -278,6 +278,8 @@ Deno.serve(async (req) => {
         }
       }
 
+      const abandoned = pick(row, "Abandon").toUpperCase() === "O";
+      const disqualified = pick(row, "Disqualifié", "Disqualifie").toUpperCase() === "O";
       const started = pick(row, "Pris Départ", "Pris Depart").toUpperCase() === "O";
       const status = disqualified ? "disqualified" : abandoned ? "dnf" : started ? "classified" : "not_started";
 
