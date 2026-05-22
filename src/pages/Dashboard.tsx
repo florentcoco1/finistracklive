@@ -147,7 +147,7 @@ export default function Dashboard() {
         </Card>
         <Card className="glass-card p-5">
           <Smartphone className="h-5 w-5 text-primary-glow mb-2" />
-          <p className="text-2xl font-bold">{registrations.filter(r => r.race?.status === "live").length}</p>
+          <p className="text-2xl font-bold">{registrations.filter(r => r.race && r.race.status !== "finished" && new Date(r.race.start_time).getTime() <= Date.now()).length}</p>
           <p className="text-sm text-muted-foreground">Courses en direct</p>
         </Card>
         <Card className="glass-card p-5">
@@ -222,7 +222,7 @@ export default function Dashboard() {
               {organizerRaces.map((race) => (
                 <Card key={race.id} className="glass-card p-5">
                   <div className="flex items-center gap-2 mb-2">
-                    <StatusBadge status={race.status} />
+                    <StatusBadge status={race.status === "finished" ? "finished" : new Date(race.start_time).getTime() > Date.now() ? "upcoming" : "live"} />
                     {race.distance_km && <span className="ml-auto text-xs text-muted-foreground">{race.distance_km} km</span>}
                   </div>
                   <h3 className="font-display font-semibold text-lg mb-1">{race.name}</h3>
@@ -256,7 +256,7 @@ export default function Dashboard() {
           {registrations.map((reg) => (
             <Card key={reg.id} className="glass-card p-5">
               <div className="flex items-center gap-2 mb-2">
-                <StatusBadge status={reg.race.status} />
+                <StatusBadge status={reg.race.status === "finished" ? "finished" : new Date(reg.race.start_time).getTime() > Date.now() ? "upcoming" : "live"} />
                 <span className="ml-auto text-xs text-muted-foreground">Dossard #{reg.bib_number}</span>
               </div>
               <h3 className="font-display font-semibold text-lg mb-1">{reg.race.name}</h3>
