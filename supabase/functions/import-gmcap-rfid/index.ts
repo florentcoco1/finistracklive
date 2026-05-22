@@ -266,8 +266,18 @@ Deno.serve(async (req) => {
         }
       }
 
-      const abandoned = pick(row, "Abandon").toUpperCase() === "O";
-      const disqualified = pick(row, "Disqualifié", "Disqualifie").toUpperCase() === "O";
+      // Détecteur d'arrivée (GMCAP 31) → marque le coureur comme arrivé
+      if (registrationId && raceStartMs != null) {
+        const rawFinish = pickDetectorTime(row, FINISH_DETECTOR_ID);
+        const finishSeconds = rawFinish ? timeToSeconds(rawFinish) : null;
+        if (finishSeconds != null && finishSeconds > 0) {
+          finishUpdates.push({
+            id: registrationId,
+            finished_at: new Date(raceStartMs + finishSeconds * 1000).toISOString(),
+          });
+        }
+      }
+
       const started = pick(row, "Pris Départ", "Pris Depart").toUpperCase() === "O";
       const status = disqualified ? "disqualified" : abandoned ? "dnf" : started ? "classified" : "not_started";
 
