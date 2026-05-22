@@ -714,7 +714,7 @@ export default function RaceAdmin() {
               routeCoords={(race.route_points ?? []).map((p) => [p.lat, p.lng])}
               routePoints={race.route_points ?? undefined}
               runners={[]}
-              checkpoints={[]}
+              checkpoints={checkpoints}
             />
           </div>
           {race.gpx_geojson && (
