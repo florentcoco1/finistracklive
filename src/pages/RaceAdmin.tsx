@@ -723,7 +723,7 @@ export default function RaceAdmin() {
                 gpxGeojson={race.gpx_geojson}
                 totalDistanceKm={race.distance_km}
                 runners={[]}
-                checkpoints={[]}
+                checkpoints={checkpoints}
               />
             </div>
           )}
