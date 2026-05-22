@@ -209,10 +209,13 @@ Deno.serve(async (req) => {
 
     const { data: raceRow } = await admin
       .from("races")
-      .select("name")
+      .select("name, start_time")
       .eq("id", race_id)
       .single();
     const raceNameNorm = normKey(clean(raceRow?.name ?? ""));
+    const raceStartMs = raceRow?.start_time ? new Date(raceRow.start_time).getTime() : null;
+    const FINISH_DETECTOR_ID = 31;
+    const finishUpdates: Array<{ id: string; finished_at: string }> = [];
 
     const byBib = new Map((registrations ?? []).map((reg: any) => [clean(reg.bib_number), reg.id]));
 
@@ -259,6 +262,18 @@ Deno.serve(async (req) => {
             time_seconds: seconds,
             time_text: raw,
             recorded_at: new Date().toISOString(),
+          });
+        }
+      }
+
+      // Détecteur d'arrivée (GMCAP 31) → marque le coureur comme arrivé
+      if (registrationId && raceStartMs != null) {
+        const rawFinish = pickDetectorTime(row, FINISH_DETECTOR_ID);
+        const finishSeconds = rawFinish ? timeToSeconds(rawFinish) : null;
+        if (finishSeconds != null && finishSeconds > 0) {
+          finishUpdates.push({
+            id: registrationId,
+            finished_at: new Date(raceStartMs + finishSeconds * 1000).toISOString(),
           });
         }
       }
@@ -368,6 +383,19 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Marque les coureurs détectés à l'arrivée (détecteur GMCAP 31) comme arrivés.
+    let finishedMarked = 0;
+    const finishMap = new Map<string, string>();
+    for (const u of finishUpdates) finishMap.set(u.id, u.finished_at);
+    for (const [id, finished_at] of finishMap.entries()) {
+      const { error: finErr } = await admin
+        .from("race_registrations")
+        .update({ finished_at, tracking_active: false, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .is("finished_at", null);
+      if (!finErr) finishedMarked += 1;
+    }
+
     await markImportSuccess(admin, race_id, typeof file_name === "string" ? file_name : null, results.length, matched);
     return json({
       ok: true,
@@ -379,6 +407,7 @@ Deno.serve(async (req) => {
       checkpoint_times_found: checkpointTimes.length,
       detector_checkpoints: detectorCheckpoints.length,
       checkpoint_times_error: checkpointTimesError,
+      finished_marked: finishedMarked,
     });
   } catch (error) {
     return json({ error: (error as Error).message ?? "Erreur import GMCAP" }, 500);
