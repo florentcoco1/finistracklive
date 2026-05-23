@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { AlertTriangle, ChevronLeft, Flag, Link2, Map, Plus, RefreshCw, Save, Shield, Trash2, Upload, UserPlus, Users } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Flag, Image as ImageIcon, Link2, Map, Plus, RefreshCw, Save, Shield, Trash2, Upload, UserPlus, Users } from "lucide-react";
 import { parseGpx } from "@/lib/gpx";
 import { toast } from "sonner";
 
@@ -731,6 +731,21 @@ export default function RaceAdmin() {
       )}
 
       {race && <RaceInviteCard raceId={race.id} raceName={race.name} />}
+
+      {race && (
+        <Card className="glass-card p-4 mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <ImageIcon className="h-5 w-5 text-primary-glow" />
+            <div>
+              <div className="font-display font-semibold">Photos des intermédiaires</div>
+              <div className="text-xs text-muted-foreground">Galerie publique des photos prises sur les points chronos</div>
+            </div>
+          </div>
+          <Button asChild variant="hero" size="sm">
+            <Link to={`/organizer/races/${race.id}/photos`}>Ouvrir la galerie</Link>
+          </Button>
+        </Card>
+      )}
 
       <Tabs defaultValue="gmcap" className="space-y-4">
         <TabsList className="grid w-full max-w-3xl grid-cols-4">
