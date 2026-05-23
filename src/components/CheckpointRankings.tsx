@@ -197,31 +197,41 @@ export default function CheckpointRankings({ raceId }: Props) {
                   <span>Dossard</span>
                   <span className="text-right">Temps officiel</span>
                 </div>
+                <div className="md:hidden grid grid-cols-[40px_1fr_90px] gap-3 px-2 py-1 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground border-b border-border/40">
+                  <span>Clt</span>
+                  <span>Coureur</span>
+                  <span className="text-right">Temps</span>
+                </div>
                 <ol className="space-y-1.5 mt-1.5">
                   {ranked.map(({ t, reg, rank, catRank, genRank, cat, gen }) => (
                     <li
                       key={t.id}
-                      className="grid grid-cols-[60px_90px_80px_1fr_90px_120px] items-center gap-3 p-2 rounded-md border border-border/50 bg-secondary/40 text-sm"
+                      className="md:grid md:grid-cols-[60px_90px_80px_1fr_90px_120px] grid-cols-[40px_1fr_90px] items-center gap-3 p-2 rounded-md border border-border/50 bg-secondary/40 text-sm"
                     >
                       <span className="font-bold text-muted-foreground">{rank}</span>
-                      <span className="text-xs">
+                      <span className="text-xs hidden md:block">
                         <span className="font-semibold">{catRank}</span>
                         <span className="text-muted-foreground"> · {cat}</span>
                       </span>
-                      <span className="text-xs">
+                      <span className="text-xs hidden md:block">
                         <span className="font-semibold">{genRank}</span>
                         <span className="text-muted-foreground"> · {gen}</span>
                       </span>
-                      <span className="font-medium truncate">
+                      <span className="font-medium truncate md:col-auto col-span-1">
                         {reg?.first_name || reg?.last_name
                           ? `${reg.first_name ?? ""} ${reg.last_name ?? ""}`.trim()
                           : `Dossard ${reg?.bib_number ?? ""}`}
+                        <span className="md:hidden block text-[11px] text-muted-foreground">
+                          {cat !== "—" ? `${catRank} · ${cat}` : ""}
+                          {cat !== "—" && gen !== "—" ? " · " : ""}
+                          {gen !== "—" ? `${genRank} · ${gen}` : ""}
+                        </span>
                       </span>
-                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary text-center">
+                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary text-center hidden md:inline-block">
                         #{reg?.bib_number ?? "—"}
                       </span>
                       <span className="inline-flex items-center justify-end gap-1 font-mono">
-                        <Timer className="h-3.5 w-3.5 text-muted-foreground" />
+                        <Timer className="h-3.5 w-3.5 text-muted-foreground hidden md:block" />
                         {formatTime(t.time_seconds, t.time_text)}
                       </span>
                     </li>
