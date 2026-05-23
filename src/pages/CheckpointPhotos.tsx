@@ -54,7 +54,7 @@ export default function CheckpointPhotos() {
         .select("id, name, distance_km, position")
         .eq("race_id", raceId)
         .order("position", { ascending: true }),
-      supabase
+      (supabase as any)
         .from("checkpoint_photos")
         .select("*")
         .eq("race_id", raceId)
@@ -63,7 +63,7 @@ export default function CheckpointPhotos() {
     setRaceName(race?.name ?? "");
     setIsOrganizer(!!user && race?.organizer_id === user.id);
     setCheckpoints(cps ?? []);
-    setPhotos(ph ?? []);
+    setPhotos((ph as Photo[] | null) ?? []);
   }, [raceId, user]);
 
   useEffect(() => {
@@ -103,7 +103,7 @@ export default function CheckpointPhotos() {
             toast.error(`Échec upload ${file.name}: ${upErr.message}`);
             continue;
           }
-          const { error: insErr } = await supabase.from("checkpoint_photos").insert({
+          const { error: insErr } = await (supabase as any).from("checkpoint_photos").insert({
             race_id: raceId,
             checkpoint_id: selectedCp === "none" ? null : selectedCp,
             uploaded_by: user.id,
@@ -133,7 +133,7 @@ export default function CheckpointPhotos() {
   const handleDelete = useCallback(
     async (p: Photo) => {
       if (!confirm("Supprimer cette photo ?")) return;
-      const { error } = await supabase.from("checkpoint_photos").delete().eq("id", p.id);
+      const { error } = await (supabase as any).from("checkpoint_photos").delete().eq("id", p.id);
       if (error) {
         toast.error(error.message);
         return;
