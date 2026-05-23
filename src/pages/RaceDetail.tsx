@@ -9,7 +9,7 @@ import { StatusBadge } from "./Index";
 import { formatDistance, formatPace, formatSpeed } from "@/lib/gpx";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { ChevronLeft, Trophy, UserPlus, Smartphone, AlertTriangle, Flag, Phone, Link2, RefreshCw, Timer, Shield } from "lucide-react";
+import { ChevronLeft, Trophy, UserPlus, Smartphone, AlertTriangle, Flag, Phone, Link2, RefreshCw, Timer, Shield, Image as ImageIcon } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -635,6 +635,9 @@ export default function RaceDetail() {
           <DifficultyStars level={race.difficulty_level} className="mt-2" />
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button asChild variant="glass">
+            <Link to={`/organizer/races/${race.id}/photos`}><ImageIcon className="h-4 w-4 mr-2" /> Photos</Link>
+          </Button>
           {isOrganizer && (
             <div className="flex flex-wrap gap-2">
               <Button asChild variant="hero">
