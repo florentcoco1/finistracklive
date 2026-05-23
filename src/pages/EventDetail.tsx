@@ -208,21 +208,29 @@ export default function EventDetail() {
         </Card>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {races.map((r) => (
-            <Link key={r.id} to={`/races/${r.id}`}>
-              <Card className="glass-card p-5 h-full hover:border-primary/50 hover:shadow-glow transition-smooth">
-                <div className="flex items-center gap-2 mb-3">
-                  <StatusBadge status={r.status} />
-                  {r.distance_km && <span className="text-xs text-muted-foreground">{r.distance_km} km</span>}
-                </div>
-                <h3 className="font-display font-semibold text-lg mb-1">{r.name}</h3>
-                <DifficultyStars level={r.difficulty_level} className="mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  {format(new Date(r.start_time), "EEEE d MMMM yyyy, HH:mm", { locale: fr })}
-                </p>
-              </Card>
-            </Link>
-          ))}
+          {races.map((r) => {
+            const computedStatus: "upcoming" | "live" | "finished" =
+              r.status === "finished"
+                ? "finished"
+                : new Date(r.start_time).getTime() > Date.now()
+                  ? "upcoming"
+                  : "live";
+            return (
+              <Link key={r.id} to={`/races/${r.id}`}>
+                <Card className="glass-card p-5 h-full hover:border-primary/50 hover:shadow-glow transition-smooth">
+                  <div className="flex items-center gap-2 mb-3">
+                    <StatusBadge status={computedStatus} />
+                    {r.distance_km && <span className="text-xs text-muted-foreground">{r.distance_km} km</span>}
+                  </div>
+                  <h3 className="font-display font-semibold text-lg mb-1">{r.name}</h3>
+                  <DifficultyStars level={r.difficulty_level} className="mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    {format(new Date(r.start_time), "EEEE d MMMM yyyy, HH:mm", { locale: fr })}
+                  </p>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       )}
     </main>
