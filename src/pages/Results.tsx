@@ -35,6 +35,7 @@ interface ResultRow {
   category_rank: number | null;
   gender_rank: number | null;
   status: string | null;
+  rgpd_consent: string | null;
 }
 
 interface RunnerKey {
