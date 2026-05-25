@@ -90,13 +90,20 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
       .select("*")
       .eq("id", id)
       .single()
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         if (error || !data) {
           toast.error("Épreuve introuvable");
           navigate("/dashboard");
           return;
         }
         const e = data as Partial<EventForm>;
+        const { data: contact } = await (supabase as any)
+          .from("events_contacts")
+          .select("contact_email, contact_phone")
+          .eq("event_id", id)
+          .maybeSingle();
+
+        const c = (contact ?? {}) as { contact_email?: string | null; contact_phone?: string | null };
         setForm({
           name: e.name ?? "",
           description: e.description ?? "",
@@ -104,8 +111,8 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
           start_date: e.start_date ?? "",
           end_date: e.end_date ?? "",
           website_url: e.website_url ?? "",
-          contact_email: e.contact_email ?? "",
-          contact_phone: e.contact_phone ?? "",
+          contact_email: c.contact_email ?? "",
+          contact_phone: c.contact_phone ?? "",
           facebook_url: e.facebook_url ?? "",
           instagram_url: e.instagram_url ?? "",
           twitter_url: e.twitter_url ?? "",
@@ -114,6 +121,7 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
         setLoadingEvent(false);
       });
   }, [mode, id, navigate]);
+
 
   if (loading || loadingEvent) return <main className="container py-12"><p className="text-muted-foreground">Chargement…</p></main>;
   if (!user) return <Navigate to="/auth" replace />;
@@ -148,12 +156,20 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
         start_date: form.start_date || null,
         end_date: form.end_date || null,
         website_url: form.website_url || null,
-        contact_email: form.contact_email || null,
-        contact_phone: form.contact_phone || null,
         facebook_url: form.facebook_url || null,
         instagram_url: form.instagram_url || null,
         twitter_url: form.twitter_url || null,
         poster_url: posterUrl,
+      };
+
+      const upsertContact = async (eventId: string) => {
+        const hasContact = !!(form.contact_email || form.contact_phone);
+        if (!hasContact) return;
+        await (supabase as any).from("events_contacts").upsert({
+          event_id: eventId,
+          contact_email: form.contact_email || null,
+          contact_phone: form.contact_phone || null,
+        }, { onConflict: "event_id" });
       };
 
       let table = (supabase.from as unknown as (t: string) => UntypedQuery)("events");
@@ -172,8 +188,10 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
           error = retry.error;
         }
         if (error) throw error;
+        const newId = (data as { id: string }).id;
+        await upsertContact(newId);
         toast.success("Épreuve créée");
-        navigate(`/events/${(data as { id: string }).id}`);
+        navigate(`/events/${newId}`);
       } else if (id) {
         let { error } = await table.update(payload).eq("id", id);
         if (isMissingEventsTableError(error)) {
@@ -185,6 +203,7 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
           error = retry.error;
         }
         if (error) throw error;
+        await upsertContact(id);
         toast.success("Épreuve mise à jour");
         navigate(`/events/${id}`);
       }
@@ -194,6 +213,7 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
       setSubmitting(false);
     }
   };
+
 
   return (
     <main className="container py-10 max-w-3xl">

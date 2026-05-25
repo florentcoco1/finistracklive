@@ -79,16 +79,23 @@ export default function EventDetail() {
     if (!id) return;
     Promise.all([
       (supabase.from as unknown as (t: string) => UntypedQuery)("events")
-        .select("id, organizer_id, name, description, location, start_date, end_date, poster_url, website_url, contact_email, contact_phone, facebook_url, instagram_url, twitter_url")
+        .select("id, organizer_id, name, description, location, start_date, end_date, poster_url, website_url, facebook_url, instagram_url, twitter_url")
         .eq("id", id)
         .single(),
       (supabase.from as unknown as (t: string) => UntypedQuery)("races")
         .select(raceColumns)
         .eq("event_id", id)
         .order("start_time", { ascending: true }),
-    ]).then(async ([ev, rc]) => {
+      (supabase as any)
+        .from("events_contacts")
+        .select("contact_email, contact_phone")
+        .eq("event_id", id)
+        .maybeSingle(),
+    ]).then(async ([ev, rc, contact]: any[]) => {
       const evData = ev.data as EventRow | null;
-      setEvent(evData);
+      const c = (contact?.data ?? {}) as { contact_email?: string | null; contact_phone?: string | null };
+      const merged = evData ? { ...evData, contact_email: c.contact_email ?? null, contact_phone: c.contact_phone ?? null } : null;
+      setEvent(merged);
       if (evData) document.title = `${evData.name} — FinisTrackLive`;
       if (isMissingDifficultyColumn(rc.error)) {
         await fetchRaces();
@@ -98,6 +105,7 @@ export default function EventDetail() {
       setRaces((rc.data ?? []) as RaceRow[]);
       setLoading(false);
     });
+
 
     const channel = supabase
       .channel(`event-races-${id}`)

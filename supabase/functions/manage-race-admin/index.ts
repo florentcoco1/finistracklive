@@ -179,14 +179,20 @@ async function requireRaceAdmin(admin: ReturnType<typeof createClient>, userId: 
 async function loadRace(admin: ReturnType<typeof createClient>, raceId: string) {
   const [{ data: source }, { data: registrations }, { data: organizers }, { data: race }, { data: gmcapResults }] = await Promise.all([
     admin.from("gmcap_import_sources").select("id, source_url, source_type, file_name, enabled, last_import_at, last_import_status, last_import_message").eq("race_id", raceId).maybeSingle(),
-    admin.from("race_registrations").select("id, runner_id, bib_number, category, emergency_phone, runner_status, created_at").eq("race_id", raceId).order("bib_number"),
+    admin.from("race_registrations").select("id, runner_id, bib_number, category, runner_status, created_at").eq("race_id", raceId).order("bib_number"),
     admin.from("race_organizers").select("id, user_id, role, created_at").eq("race_id", raceId).order("created_at"),
     admin.from("races").select("id, name, organizer_id").eq("id", raceId).single(),
     admin.from("gmcap_results").select("bib_number, first_name, last_name, gender, birth_date").eq("race_id", raceId),
   ]);
 
-  const registrationRows = (registrations ?? []) as RegistrationRow[];
+  const registrationRows = (registrations ?? []) as Omit<RegistrationRow, "emergency_phone">[];
   const organizerRows = (organizers ?? []) as OrganizerRow[];
+  const regIds = registrationRows.map((r) => r.id);
+  const { data: contacts } = regIds.length
+    ? await admin.from("race_registration_contacts").select("registration_id, emergency_phone").in("registration_id", regIds)
+    : { data: [] as Array<{ registration_id: string; emergency_phone: string | null }> };
+  const phoneByReg = new Map(((contacts ?? []) as Array<{ registration_id: string; emergency_phone: string | null }>).map((c) => [c.registration_id, c.emergency_phone]));
+
   const profileIds = [
     ...new Set([
       race?.organizer_id,
@@ -214,7 +220,7 @@ async function loadRace(admin: ReturnType<typeof createClient>, raceId: string) 
         : gmcap
           ? { email: null, phone: null, first_name: gmcap.first_name, last_name: gmcap.last_name }
           : null;
-      return { ...r, profile: merged, gender: gmcap?.gender ?? null, birth_date: gmcap?.birth_date ?? null };
+      return { ...r, emergency_phone: phoneByReg.get(r.id) ?? null, profile: merged, gender: gmcap?.gender ?? null, birth_date: gmcap?.birth_date ?? null };
     }),
     organizers: [
       race?.organizer_id && { id: "owner", user_id: race.organizer_id, role: "propriétaire", created_at: null, profile: profileById.get(race.organizer_id) ?? null },
@@ -222,6 +228,7 @@ async function loadRace(admin: ReturnType<typeof createClient>, raceId: string) 
     ].filter(Boolean),
   };
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -262,10 +269,18 @@ Deno.serve(async (req) => {
       const { error } = await admin.from("race_registrations").update({
         bib_number: body.bib_number,
         category: body.category || null,
-        emergency_phone: body.emergency_phone || null,
         updated_at: new Date().toISOString(),
       }).eq("id", body.registration_id).eq("race_id", body.race_id);
       if (error) throw new Error(error.message);
+      const phone = body.emergency_phone || null;
+      if (phone) {
+        await admin.from("race_registration_contacts").upsert({
+          registration_id: body.registration_id,
+          emergency_phone: phone,
+        }, { onConflict: "registration_id" });
+      } else {
+        await admin.from("race_registration_contacts").delete().eq("registration_id", body.registration_id);
+      }
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
     }
 
@@ -278,16 +293,22 @@ Deno.serve(async (req) => {
     if (body.action === "add_registration") {
       const userId = await findUserByEmail(admin, body.email);
       if (!userId) return json({ error: `Aucun compte trouvé pour ${body.email}. Demandez à la personne de créer un compte ou utilisez l'import en masse pour le créer automatiquement.` }, 404);
-      const { error } = await admin.from("race_registrations").upsert({
+      const { data: inserted, error } = await admin.from("race_registrations").upsert({
         race_id: body.race_id,
         runner_id: userId,
         bib_number: body.bib_number,
         category: body.category || null,
-        emergency_phone: body.emergency_phone || null,
-      }, { onConflict: "race_id,runner_id" });
+      }, { onConflict: "race_id,runner_id" }).select("id").single();
       if (error) throw new Error(error.message);
+      if (body.emergency_phone && inserted?.id) {
+        await admin.from("race_registration_contacts").upsert({
+          registration_id: inserted.id,
+          emergency_phone: body.emergency_phone,
+        }, { onConflict: "registration_id" });
+      }
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
     }
+
 
     if (body.action === "bulk_import_registrations") {
       const parsedRunners = parseRunnerImport(body.content);
@@ -370,15 +391,21 @@ Deno.serve(async (req) => {
           if (profileError) throw new Error(profileError.message);
 
           await admin.from("user_roles").upsert({ user_id: profile.user_id, role: "runner" }, { onConflict: "user_id,role" });
-          const { error: registrationError } = await admin.from("race_registrations").upsert({
+          const { data: regRow, error: registrationError } = await admin.from("race_registrations").upsert({
             race_id: body.race_id,
             runner_id: profile.user_id,
             bib_number: runner.bib_number,
             category: runner.category || null,
-            emergency_phone: runner.phone || null,
             updated_at: new Date().toISOString(),
-          }, { onConflict: "race_id,runner_id" });
+          }, { onConflict: "race_id,runner_id" }).select("id").single();
           if (registrationError) throw new Error(registrationError.message);
+          if (runner.phone && regRow?.id) {
+            await admin.from("race_registration_contacts").upsert({
+              registration_id: regRow.id,
+              emergency_phone: runner.phone,
+            }, { onConflict: "registration_id" });
+          }
+
 
           // Persist sexe + identité dans gmcap_results pour qu'ils s'affichent même sans import GMCAP
           if (runner.gender || runner.first_name || runner.last_name || runner.birth_date) {

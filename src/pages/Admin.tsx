@@ -69,8 +69,37 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (isAdmin) void refresh();
+    if (isAdmin) {
+      void refresh();
+      // Apply security hardening migration once (idempotent)
+      void supabase.functions.invoke("apply-security-hardening").catch(() => null);
+    }
   }, [isAdmin, refresh]);
+
+  const [roleEmail, setRoleEmail] = useState("");
+  const grantOrganizer = async () => {
+    if (!roleEmail.trim()) return;
+    setBusy(true);
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("user_id")
+        .eq("email", roleEmail.trim().toLowerCase())
+        .maybeSingle();
+      if (!profile?.user_id) {
+        toast({ title: "Compte introuvable", description: roleEmail, variant: "destructive" });
+        return;
+      }
+      const { error } = await supabase
+        .from("user_roles")
+        .insert({ user_id: profile.user_id, role: "organizer" });
+      if (error) toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      else { toast({ title: "Rôle organisateur attribué" }); setRoleEmail(""); }
+    } finally {
+      setBusy(false);
+    }
+  };
+
 
   if (loading) return <main className="container py-12"><p className="text-muted-foreground">Chargement…</p></main>;
   if (!user) return <Navigate to="/auth" replace />;
@@ -136,6 +165,22 @@ export default function AdminPage() {
           <p className="text-muted-foreground">Gestion totale des épreuves, courses et coureurs.</p>
         </div>
       </div>
+
+      <Card className="glass-card p-4 mt-4">
+        <Label className="text-sm font-medium">Attribuer le rôle organisateur</Label>
+        <div className="flex gap-2 mt-2">
+          <Input
+            type="email"
+            placeholder="email@example.com"
+            value={roleEmail}
+            onChange={(e) => setRoleEmail(e.target.value)}
+            className="max-w-sm"
+          />
+          <Button onClick={grantOrganizer} disabled={busy || !roleEmail.trim()}>Promouvoir</Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">Le compte doit déjà exister. Seuls les administrateurs peuvent attribuer ce rôle.</p>
+      </Card>
+
 
       <Tabs defaultValue="events" className="mt-6">
         <TabsList>

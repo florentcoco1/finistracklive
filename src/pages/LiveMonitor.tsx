@@ -78,13 +78,14 @@ export default function LiveMonitor() {
     // 2. Registrations with dnf/problem status
     const { data: regs } = await supabase
       .from("race_registrations")
-      .select("id, race_id, runner_id, bib_number, runner_status, problem_description, dnf_reason, emergency_phone, updated_at")
+      .select("id, race_id, runner_id, bib_number, runner_status, problem_description, dnf_reason, updated_at")
       .in("race_id", raceIds)
       .in("runner_status", ["dnf", "problem"])
       .order("updated_at", { ascending: false });
 
     const regList = regs ?? [];
     const runnerIds = Array.from(new Set(regList.map((r) => r.runner_id)));
+    const regIdsList = regList.map((r) => r.id);
 
     // 3. Profiles for those runners
     const { data: profiles } = runnerIds.length
@@ -95,6 +96,17 @@ export default function LiveMonitor() {
       : { data: [] as any[] };
 
     const profileMap = new Map((profiles ?? []).map((p) => [p.user_id, p]));
+
+    // 3bis. Emergency phones (private table, organizer-readable)
+    const { data: contacts } = regIdsList.length
+      ? await (supabase as any)
+          .from("race_registration_contacts")
+          .select("registration_id, emergency_phone")
+          .in("registration_id", regIdsList)
+      : { data: [] as any[] };
+    const phoneMap = new Map<string, string | null>(
+      ((contacts ?? []) as Array<{ registration_id: string; emergency_phone: string | null }>).map((c) => [c.registration_id, c.emergency_phone]),
+    );
 
     // 4. Last GPS position per registration
     const regIds = regList.map((r) => r.id);
@@ -128,7 +140,7 @@ export default function LiveMonitor() {
         runner_status: r.runner_status as "dnf" | "problem",
         problem_description: r.problem_description,
         dnf_reason: r.dnf_reason,
-        emergency_phone: r.emergency_phone,
+        emergency_phone: phoneMap.get(r.id) ?? null,
         updated_at: r.updated_at,
         first_name: p?.first_name ?? null,
         last_name: p?.last_name ?? null,
@@ -138,6 +150,7 @@ export default function LiveMonitor() {
         last_position_at: pos?.at ?? null,
       };
     });
+
 
     setRows(merged);
     setLoading(false);
