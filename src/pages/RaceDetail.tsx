@@ -210,6 +210,7 @@ export default function RaceDetail() {
             gender_rank: r.gender_rank,
             gmcap_status: r.status,
             gmcap_imported_at: r.imported_at,
+            rgpd_consent: r.rgpd_consent,
           } as LeaderboardRow;
         });
 
