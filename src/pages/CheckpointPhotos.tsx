@@ -26,7 +26,9 @@ interface Checkpoint {
   name: string;
   distance_km: number | null;
   position: number;
+  live_video_url: string | null;
 }
+
 
 const BUCKET = "checkpoint-photos";
 
