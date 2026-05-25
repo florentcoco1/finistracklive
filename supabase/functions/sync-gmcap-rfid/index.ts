@@ -105,6 +105,8 @@ async function importContent(admin: ReturnType<typeof createClient>, raceId: str
     const abandoned = pick(row, "Abandon").toUpperCase() === "O";
     const disqualified = pick(row, "Disqualifié", "Disqualifie").toUpperCase() === "O";
     const started = pick(row, "Pris Départ", "Pris Depart").toUpperCase() === "O";
+    const rgpdValue = pick(row, "RGPD", "Consentement", "Autorisation", "Publication").toUpperCase();
+    const rgpdConsent = rgpdValue === "N" ? "N" : "O";
 
     results.push({
       race_id: raceId,
@@ -123,6 +125,7 @@ async function importContent(admin: ReturnType<typeof createClient>, raceId: str
       category_rank: integer(pick(row, "Classement par Cat.", "Classement par Cat")),
       gender_rank: integer(pick(row, "Classement par Sexe")),
       split_payload: extractSplits(row),
+      rgpd_consent: rgpdConsent,
       raw_payload: row,
       imported_at: new Date().toISOString(),
     });
