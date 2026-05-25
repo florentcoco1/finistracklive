@@ -391,15 +391,21 @@ Deno.serve(async (req) => {
           if (profileError) throw new Error(profileError.message);
 
           await admin.from("user_roles").upsert({ user_id: profile.user_id, role: "runner" }, { onConflict: "user_id,role" });
-          const { error: registrationError } = await admin.from("race_registrations").upsert({
+          const { data: regRow, error: registrationError } = await admin.from("race_registrations").upsert({
             race_id: body.race_id,
             runner_id: profile.user_id,
             bib_number: runner.bib_number,
             category: runner.category || null,
-            emergency_phone: runner.phone || null,
             updated_at: new Date().toISOString(),
-          }, { onConflict: "race_id,runner_id" });
+          }, { onConflict: "race_id,runner_id" }).select("id").single();
           if (registrationError) throw new Error(registrationError.message);
+          if (runner.phone && regRow?.id) {
+            await admin.from("race_registration_contacts").upsert({
+              registration_id: regRow.id,
+              emergency_phone: runner.phone,
+            }, { onConflict: "registration_id" });
+          }
+
 
           // Persist sexe + identité dans gmcap_results pour qu'ils s'affichent même sans import GMCAP
           if (runner.gender || runner.first_name || runner.last_name || runner.birth_date) {
