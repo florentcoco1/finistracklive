@@ -188,7 +188,7 @@ export default function RaceDetail() {
             started_at: base?.started_at ?? null,
             finished_at: base?.finished_at ?? null,
             runner_status: base?.runner_status ?? (isDnf ? "dnf" : "running"),
-            emergency_phone: base?.emergency_phone ?? null,
+            emergency_phone: null,
             dnf_reason: base?.dnf_reason ?? null,
             problem_description: base?.problem_description ?? null,
             first_name: r.first_name ?? base?.first_name ?? null,
