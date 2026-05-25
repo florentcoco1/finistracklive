@@ -55,6 +55,7 @@ Deno.serve(async (req) => {
           )
         `);
         await tx.unsafe(`ALTER TABLE public.race_checkpoints ADD COLUMN IF NOT EXISTS detector_id integer`);
+        await tx.unsafe(`ALTER TABLE public.race_checkpoints ADD COLUMN IF NOT EXISTS live_video_url text`);
         await tx.unsafe(`CREATE INDEX IF NOT EXISTS idx_race_checkpoints_race_id ON public.race_checkpoints(race_id)`);
         await tx.unsafe(`ALTER TABLE public.race_checkpoints ENABLE ROW LEVEL SECURITY`);
         await tx.unsafe(`DROP POLICY IF EXISTS "Checkpoints viewable by everyone" ON public.race_checkpoints`);
