@@ -81,7 +81,7 @@ export default function Results() {
       setLoading(true);
       const [racesRes, resultsRes] = await Promise.all([
         supabase.from("races").select("id, name, start_time, distance_km, status").order("start_time", { ascending: false }),
-        supabase.from("gmcap_results").select("id, race_id, bib_number, first_name, last_name, gender, category, club, official_time_text, official_time_seconds, scratch_rank, category_rank, gender_rank, status"),
+        supabase.from("gmcap_results").select("id, race_id, bib_number, first_name, last_name, gender, category, club, official_time_text, official_time_seconds, scratch_rank, category_rank, gender_rank, status, rgpd_consent"),
       ]);
       setRaces((racesRes.data ?? []) as RaceLite[]);
       setResults((resultsRes.data ?? []) as ResultRow[]);
@@ -100,6 +100,9 @@ export default function Results() {
     return results.filter((r) => {
       if (selectedRaceId !== "all" && r.race_id !== selectedRaceId) return false;
       if (!q) return true;
+      if (r.rgpd_consent === "N") {
+        return String(r.bib_number ?? "").toLowerCase().includes(q);
+      }
       const hay = `${r.first_name ?? ""} ${r.last_name ?? ""} ${r.bib_number ?? ""} ${r.club ?? ""}`.toLowerCase();
       return hay.includes(q);
     }).sort((a, b) => (a.scratch_rank ?? 9999) - (b.scratch_rank ?? 9999));
@@ -220,14 +223,14 @@ export default function Results() {
                     <button
                       className="text-left hover:text-primary transition-colors font-medium truncate inline-flex items-center gap-1"
                       onClick={() => setOpenRunner({
-                        first_name: r.first_name ?? "",
-                        last_name: r.last_name ?? "",
+                        first_name: r.rgpd_consent === "N" ? "XXXXXXX" : (r.first_name ?? ""),
+                        last_name: r.rgpd_consent === "N" ? "XXXXXXX" : (r.last_name ?? ""),
                         gender: r.gender,
                       })}
                     >
                       <UserIcon className="h-3 w-3 shrink-0" />
-                      {r.last_name?.toUpperCase()} {r.first_name}
-                      {r.club && <span className="text-xs text-muted-foreground ml-1">({r.club})</span>}
+                      {r.rgpd_consent === "N" ? "XXXXXXX XXXXXXX" : `${r.last_name?.toUpperCase()} ${r.first_name}`}
+                      {r.club && r.rgpd_consent !== "N" && <span className="text-xs text-muted-foreground ml-1">({r.club})</span>}
                     </button>
                     <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary text-center">
                       #{r.bib_number}
