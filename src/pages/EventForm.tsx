@@ -97,10 +97,12 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
           return;
         }
         const e = data as Partial<EventForm>;
-        const { data: contact } = await (supabase.from as unknown as (t: string) => UntypedQuery)("events_contacts")
+        const { data: contact } = await (supabase as any)
+          .from("events_contacts")
           .select("contact_email, contact_phone")
           .eq("event_id", id)
-          .maybeSingle?.() ?? { data: null };
+          .maybeSingle();
+
         const c = (contact ?? {}) as { contact_email?: string | null; contact_phone?: string | null };
         setForm({
           name: e.name ?? "",
