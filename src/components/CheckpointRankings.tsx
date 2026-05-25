@@ -47,7 +47,7 @@ function formatTime(seconds: number | null, fallback: string | null): string {
 export default function CheckpointRankings({ raceId }: Props) {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [times, setTimes] = useState<CheckpointTime[]>([]);
-  const [regs, setRegs] = useState<Map<string, Registration & { first_name?: string | null; last_name?: string | null; gender?: "M" | "F" | null }>>(new Map());
+  const [regs, setRegs] = useState<Map<string, Registration & { first_name?: string | null; last_name?: string | null; gender?: "M" | "F" | null; rgpd_consent?: string | null }>>(new Map());
   const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
