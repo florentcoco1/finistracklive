@@ -33,6 +33,7 @@ export interface LeaderboardRow {
   gender_rank: number | null;
   gmcap_status: string | null;
   gmcap_imported_at: string | null;
+  rgpd_consent?: string | null;
 }
 
 export interface RouteCoord {
