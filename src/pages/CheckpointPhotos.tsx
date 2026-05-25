@@ -269,6 +269,99 @@ export default function CheckpointPhotos() {
         </Card>
       )}
 
+      <Card className="glass-card p-5 mb-6">
+        <h2 className="font-display text-lg font-semibold flex items-center gap-2 mb-4">
+          <Video className="h-5 w-5 text-primary-glow" /> Liens vidéo live par intermédiaire
+        </h2>
+        {checkpoints.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Aucun intermédiaire défini pour cette course.</p>
+        ) : (
+          <div className="space-y-4">
+            {checkpoints.map((cp) => {
+              const current = cp.live_video_url ?? "";
+              const draft = videoEdits[cp.id] ?? current;
+              const dirty = draft !== current;
+              const embed = current ? toEmbedUrl(current) : null;
+              return (
+                <div key={cp.id} className="rounded-lg border border-border/60 p-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium text-sm">
+                      {cp.name}
+                      {cp.distance_km != null && (
+                        <span className="text-muted-foreground font-normal"> · {cp.distance_km} km</span>
+                      )}
+                    </div>
+                    {current && (
+                      <a
+                        href={current}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs inline-flex items-center gap-1 text-primary hover:underline"
+                      >
+                        Ouvrir <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+                  {isOrganizer ? (
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Input
+                        value={draft}
+                        onChange={(e) =>
+                          setVideoEdits((m) => ({ ...m, [cp.id]: e.target.value }))
+                        }
+                        placeholder="https://youtube.com/watch?v=… ou https://twitch.tv/chaine"
+                      />
+                      <Button
+                        size="sm"
+                        variant={dirty ? "default" : "secondary"}
+                        disabled={!dirty || savingVideoId === cp.id}
+                        onClick={async () => {
+                          setSavingVideoId(cp.id);
+                          const value = draft.trim() || null;
+                          const { error } = await (supabase as any)
+                            .from("race_checkpoints")
+                            .update({ live_video_url: value })
+                            .eq("id", cp.id);
+                          setSavingVideoId(null);
+                          if (error) {
+                            toast.error(error.message);
+                            return;
+                          }
+                          toast.success("Lien vidéo enregistré");
+                          setVideoEdits((m) => {
+                            const { [cp.id]: _, ...rest } = m;
+                            return rest;
+                          });
+                          reload();
+                        }}
+                      >
+                        <Save className="h-4 w-4" />
+                        {savingVideoId === cp.id ? "..." : "Enregistrer"}
+                      </Button>
+                    </div>
+                  ) : current ? null : (
+                    <p className="text-xs text-muted-foreground">Aucun live vidéo pour cet intermédiaire.</p>
+                  )}
+                  {embed && (
+                    <div className="aspect-video w-full overflow-hidden rounded-md bg-black">
+                      <iframe
+                        src={embed}
+                        title={`Live ${cp.name}`}
+                        allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="w-full h-full"
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+
+
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2">
           <Label className="text-sm">Filtrer :</Label>
