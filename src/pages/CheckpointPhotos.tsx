@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ChevronLeft, Upload, Trash2, X, ImageIcon } from "lucide-react";
+import { ChevronLeft, Upload, Trash2, X, ImageIcon, Video, ExternalLink, Save } from "lucide-react";
+
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
