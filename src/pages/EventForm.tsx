@@ -156,12 +156,20 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
         start_date: form.start_date || null,
         end_date: form.end_date || null,
         website_url: form.website_url || null,
-        contact_email: form.contact_email || null,
-        contact_phone: form.contact_phone || null,
         facebook_url: form.facebook_url || null,
         instagram_url: form.instagram_url || null,
         twitter_url: form.twitter_url || null,
         poster_url: posterUrl,
+      };
+
+      const upsertContact = async (eventId: string) => {
+        const hasContact = !!(form.contact_email || form.contact_phone);
+        if (!hasContact) return;
+        await (supabase as any).from("events_contacts").upsert({
+          event_id: eventId,
+          contact_email: form.contact_email || null,
+          contact_phone: form.contact_phone || null,
+        }, { onConflict: "event_id" });
       };
 
       let table = (supabase.from as unknown as (t: string) => UntypedQuery)("events");
@@ -180,8 +188,10 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
           error = retry.error;
         }
         if (error) throw error;
+        const newId = (data as { id: string }).id;
+        await upsertContact(newId);
         toast.success("Épreuve créée");
-        navigate(`/events/${(data as { id: string }).id}`);
+        navigate(`/events/${newId}`);
       } else if (id) {
         let { error } = await table.update(payload).eq("id", id);
         if (isMissingEventsTableError(error)) {
@@ -193,6 +203,7 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
           error = retry.error;
         }
         if (error) throw error;
+        await upsertContact(id);
         toast.success("Épreuve mise à jour");
         navigate(`/events/${id}`);
       }
@@ -202,6 +213,7 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
       setSubmitting(false);
     }
   };
+
 
   return (
     <main className="container py-10 max-w-3xl">
