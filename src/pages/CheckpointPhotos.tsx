@@ -50,11 +50,13 @@ export default function CheckpointPhotos() {
 
   const reload = useCallback(async () => {
     if (!raceId) return;
+    // Ensure schema (adds live_video_url column on legacy DBs)
+    await supabase.functions.invoke("ensure-checkpoints-schema").catch(() => null);
     const [{ data: race }, { data: cps }, { data: ph }] = await Promise.all([
       supabase.from("races").select("name, organizer_id").eq("id", raceId).maybeSingle(),
-      supabase
+      (supabase as any)
         .from("race_checkpoints")
-        .select("id, name, distance_km, position")
+        .select("id, name, distance_km, position, live_video_url")
         .eq("race_id", raceId)
         .order("position", { ascending: true }),
       (supabase as any)
@@ -65,9 +67,10 @@ export default function CheckpointPhotos() {
     ]);
     setRaceName(race?.name ?? "");
     setIsOrganizer(!!user && race?.organizer_id === user.id);
-    setCheckpoints(cps ?? []);
+    setCheckpoints((cps as Checkpoint[] | null) ?? []);
     setPhotos((ph as Photo[] | null) ?? []);
   }, [raceId, user]);
+
 
   useEffect(() => {
     reload();
