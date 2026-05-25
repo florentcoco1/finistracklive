@@ -67,7 +67,7 @@ export default function RaceDetail() {
   const [gmcapStatus, setGmcapStatus] = useState<string | null>(null);
   const [savingSource, setSavingSource] = useState(false);
   const [checkpoints, setCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
-  const [runnerDetail, setRunnerDetail] = useState<{ registration_id: string; bib_number: string; first_name: string | null; last_name: string | null; official_time: string | null } | null>(null);
+  const [runnerDetail, setRunnerDetail] = useState<{ registration_id: string; bib_number: string; first_name: string | null; last_name: string | null; official_time: string | null; rgpd_consent: string | null } | null>(null);
   const [runnerDetailTimes, setRunnerDetailTimes] = useState<Array<{ checkpoint_id: string; time_seconds: number | null; time_text: string | null }>>([]);
   const [runnerDetailCheckpoints, setRunnerDetailCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null; position: number }>>([]);
   const [runnerDetailLoading, setRunnerDetailLoading] = useState(false);
@@ -140,7 +140,7 @@ export default function RaceDetail() {
         supabase.from("live_leaderboard").select("*").eq("race_id", raceId),
         supabase
           .from("gmcap_results" as any)
-          .select("bib_number, first_name, last_name, gender, category, status, official_time_text, official_time_seconds, scratch_rank, category_rank, gender_rank, imported_at")
+          .select("bib_number, first_name, last_name, gender, category, status, official_time_text, official_time_seconds, scratch_rank, category_rank, gender_rank, imported_at, rgpd_consent")
           .eq("race_id", raceId),
       ]);
       if (lbError) console.warn("[leaderboard] reload error", lbError);
@@ -160,6 +160,7 @@ export default function RaceDetail() {
         category_rank: number | null;
         gender_rank: number | null;
         imported_at: string | null;
+        rgpd_consent: string | null;
       }>;
 
       const baseByBib = new Map<string, LeaderboardRow>();
@@ -209,6 +210,7 @@ export default function RaceDetail() {
             gender_rank: r.gender_rank,
             gmcap_status: r.status,
             gmcap_imported_at: r.imported_at,
+            rgpd_consent: r.rgpd_consent,
           } as LeaderboardRow;
         });
 
@@ -475,6 +477,9 @@ export default function RaceDetail() {
     return sorted.filter((r) => {
       if (genderFilter !== "all" && r.gender !== genderFilter) return false;
       if (!q) return true;
+      if (r.rgpd_consent === "N") {
+        return String(r.bib_number ?? "").toLowerCase().includes(q);
+      }
       const haystack = `${r.first_name ?? ""} ${r.last_name ?? ""} ${r.bib_number ?? ""}`.toLowerCase();
       return haystack.includes(q);
     });
@@ -844,22 +849,23 @@ export default function RaceDetail() {
                         <span className="text-muted-foreground"> · {r.gender ?? "—"}</span>
                       </span>
                       <div className="min-w-0">
-                        <button
-                          type="button"
-                          className={`truncate text-left hover:text-primary transition-colors ${isMedal ? "font-bold" : "font-medium"}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRunnerDetail({
-                              registration_id: r.registration_id,
-                              bib_number: r.bib_number,
-                              first_name: r.first_name,
-                              last_name: r.last_name,
-                              official_time: officialTime,
-                            });
-                          }}
-                        >
-                          {r.first_name} {r.last_name}
-                        </button>
+                          <button
+                            type="button"
+                            className={`truncate text-left hover:text-primary transition-colors ${isMedal ? "font-bold" : "font-medium"}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRunnerDetail({
+                                registration_id: r.registration_id,
+                                bib_number: r.bib_number,
+                                first_name: r.first_name,
+                                last_name: r.last_name,
+                                official_time: officialTime,
+                                rgpd_consent: r.rgpd_consent ?? null,
+                              });
+                            }}
+                          >
+                            {r.rgpd_consent === "N" ? "XXXXXXX XXXXXXX" : `${r.first_name} ${r.last_name}`}
+                          </button>
                         {r.finished_at && (
                           <p className="text-[10px] text-success font-semibold">🏁 {format(new Date(r.finished_at), "HH:mm:ss", { locale: fr })}</p>
                         )}
@@ -894,7 +900,7 @@ export default function RaceDetail() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Timer className="h-5 w-5 text-primary-glow" />
-              {runnerDetail?.first_name} {runnerDetail?.last_name}
+              {runnerDetail?.rgpd_consent === "N" ? "XXXXXXX XXXXXXX" : `${runnerDetail?.first_name} ${runnerDetail?.last_name}`}
               <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary ml-2">
                 #{runnerDetail?.bib_number}
               </span>

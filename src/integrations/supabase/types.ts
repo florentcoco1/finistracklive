@@ -246,6 +246,7 @@ export type Database = {
           detector_id: number | null
           distance_km: number | null
           id: string
+          live_video_url: string | null
           name: string
           position: number
           race_id: string
@@ -257,6 +258,7 @@ export type Database = {
           detector_id?: number | null
           distance_km?: number | null
           id?: string
+          live_video_url?: string | null
           name: string
           position?: number
           race_id: string
@@ -268,6 +270,7 @@ export type Database = {
           detector_id?: number | null
           distance_km?: number | null
           id?: string
+          live_video_url?: string | null
           name?: string
           position?: number
           race_id?: string

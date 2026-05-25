@@ -312,6 +312,9 @@ Deno.serve(async (req) => {
       const hasValidTime = !!officialTimeText && !/^0+([:.]0+)+$/.test(officialTimeText.trim()) && (officialTimeSeconds == null || officialTimeSeconds > 0);
       const finalStatus = !hasValidTime && status === "classified" ? "not_started" : status;
 
+      const rgpdValue = pick(row, "RGPD", "Consentement", "Autorisation", "Publication").toUpperCase();
+      const rgpdConsent = rgpdValue === "N" ? "N" : "O";
+
       results.push({
         race_id,
         bib_number: bib,
@@ -328,6 +331,7 @@ Deno.serve(async (req) => {
         category_rank: hasValidTime ? integer(pick(row, "Classement par Cat.", "Classement par Cat")) : null,
         gender_rank: hasValidTime ? integer(pick(row, "Classement par Sexe")) : null,
         split_payload: extractSplits(row),
+        rgpd_consent: rgpdConsent,
         imported_at: new Date().toISOString(),
       });
     }
