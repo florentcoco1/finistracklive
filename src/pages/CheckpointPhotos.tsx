@@ -35,6 +35,37 @@ const BUCKET = "checkpoint-photos";
 const publicUrl = (path: string) =>
   supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 
+function toEmbedUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    // YouTube
+    if (host === "youtu.be") {
+      const id = u.pathname.slice(1);
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+    if (host.endsWith("youtube.com")) {
+      if (u.pathname === "/watch") {
+        const id = u.searchParams.get("v");
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+      if (u.pathname.startsWith("/live/")) {
+        return `https://www.youtube.com/embed/${u.pathname.split("/")[2]}`;
+      }
+      if (u.pathname.startsWith("/embed/")) return url;
+    }
+    // Twitch
+    if (host === "twitch.tv" || host.endsWith(".twitch.tv")) {
+      const channel = u.pathname.split("/").filter(Boolean)[0];
+      if (channel) return `https://player.twitch.tv/?channel=${channel}&parent=${window.location.hostname}`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+
 export default function CheckpointPhotos() {
   const { id: raceId } = useParams<{ id: string }>();
   const { user, loading: authLoading } = useAuth();
