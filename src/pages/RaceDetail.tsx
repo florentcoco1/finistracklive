@@ -140,7 +140,7 @@ export default function RaceDetail() {
         supabase.from("live_leaderboard").select("*").eq("race_id", raceId),
         supabase
           .from("gmcap_results" as any)
-          .select("bib_number, first_name, last_name, gender, category, status, official_time_text, official_time_seconds, scratch_rank, category_rank, gender_rank, imported_at")
+          .select("bib_number, first_name, last_name, gender, category, status, official_time_text, official_time_seconds, scratch_rank, category_rank, gender_rank, imported_at, rgpd_consent")
           .eq("race_id", raceId),
       ]);
       if (lbError) console.warn("[leaderboard] reload error", lbError);
@@ -160,6 +160,7 @@ export default function RaceDetail() {
         category_rank: number | null;
         gender_rank: number | null;
         imported_at: string | null;
+        rgpd_consent: string | null;
       }>;
 
       const baseByBib = new Map<string, LeaderboardRow>();
