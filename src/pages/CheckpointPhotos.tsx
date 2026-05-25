@@ -78,6 +78,9 @@ export default function CheckpointPhotos() {
   const [caption, setCaption] = useState("");
   const [uploading, setUploading] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [videoEdits, setVideoEdits] = useState<Record<string, string>>({});
+  const [savingVideoId, setSavingVideoId] = useState<string | null>(null);
+
 
   const reload = useCallback(async () => {
     if (!raceId) return;
