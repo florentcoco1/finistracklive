@@ -69,8 +69,37 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (isAdmin) void refresh();
+    if (isAdmin) {
+      void refresh();
+      // Apply security hardening migration once (idempotent)
+      void supabase.functions.invoke("apply-security-hardening").catch(() => null);
+    }
   }, [isAdmin, refresh]);
+
+  const [roleEmail, setRoleEmail] = useState("");
+  const grantOrganizer = async () => {
+    if (!roleEmail.trim()) return;
+    setBusy(true);
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("user_id")
+        .eq("email", roleEmail.trim().toLowerCase())
+        .maybeSingle();
+      if (!profile?.user_id) {
+        toast({ title: "Compte introuvable", description: roleEmail, variant: "destructive" });
+        return;
+      }
+      const { error } = await supabase
+        .from("user_roles")
+        .insert({ user_id: profile.user_id, role: "organizer" });
+      if (error) toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      else { toast({ title: "Rôle organisateur attribué" }); setRoleEmail(""); }
+    } finally {
+      setBusy(false);
+    }
+  };
+
 
   if (loading) return <main className="container py-12"><p className="text-muted-foreground">Chargement…</p></main>;
   if (!user) return <Navigate to="/auth" replace />;
