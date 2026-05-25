@@ -84,7 +84,7 @@ export default function Results() {
         supabase.from("gmcap_results").select("id, race_id, bib_number, first_name, last_name, gender, category, club, official_time_text, official_time_seconds, scratch_rank, category_rank, gender_rank, status, rgpd_consent"),
       ]);
       setRaces((racesRes.data ?? []) as RaceLite[]);
-      setResults((resultsRes.data ?? []) as ResultRow[]);
+      setResults(((resultsRes.data ?? []) as unknown) as ResultRow[]);
       setLoading(false);
     })();
   }, [user]);
