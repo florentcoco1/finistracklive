@@ -93,26 +93,31 @@ export default function CheckpointRankings({ raceId }: Props) {
       }
 
       const bibs = regList.map((r) => r.bib_number);
-      const genderByBib = new Map<string, "M" | "F" | null>();
+      const gmcapByBib = new Map<string, { gender: "M" | "F" | null; rgpd_consent: string | null }>();
       if (bibs.length > 0) {
         const { data: gm } = await supabase
           .from("gmcap_results" as any)
-          .select("bib_number, gender")
+          .select("bib_number, gender, rgpd_consent")
           .eq("race_id", raceId)
           .in("bib_number", bibs);
-        for (const g of ((gm as unknown) as Array<{ bib_number: string; gender: string | null }>) ?? []) {
-          genderByBib.set(String(g.bib_number).trim(), (g.gender as "M" | "F" | null) ?? null);
+        for (const g of ((gm as unknown) as Array<{ bib_number: string; gender: string | null; rgpd_consent: string | null }>) ?? []) {
+          gmcapByBib.set(String(g.bib_number).trim(), {
+            gender: (g.gender as "M" | "F" | null) ?? null,
+            rgpd_consent: g.rgpd_consent ?? null,
+          });
         }
       }
 
-      const regMap = new Map<string, Registration & { first_name?: string | null; last_name?: string | null; gender?: "M" | "F" | null }>();
+      const regMap = new Map<string, Registration & { first_name?: string | null; last_name?: string | null; gender?: "M" | "F" | null; rgpd_consent?: string | null }>();
       for (const r of regList) {
         const prof = profilesByUserId.get(r.runner_id);
+        const gm = gmcapByBib.get(String(r.bib_number).trim());
         regMap.set(r.id, {
           ...r,
           first_name: prof?.first_name ?? null,
           last_name: prof?.last_name ?? null,
-          gender: genderByBib.get(String(r.bib_number).trim()) ?? null,
+          gender: gm?.gender ?? null,
+          rgpd_consent: gm?.rgpd_consent ?? null,
         });
       }
 
@@ -218,9 +223,11 @@ export default function CheckpointRankings({ raceId }: Props) {
                         <span className="text-muted-foreground"> · {gen}</span>
                       </span>
                       <span className="font-medium truncate md:col-auto col-span-1">
-                        {reg?.first_name || reg?.last_name
-                          ? `${reg.first_name ?? ""} ${reg.last_name ?? ""}`.trim()
-                          : `Dossard ${reg?.bib_number ?? ""}`}
+                        {reg?.rgpd_consent === "N"
+                          ? "XXXXXXX XXXXXXX"
+                          : reg?.first_name || reg?.last_name
+                            ? `${reg.first_name ?? ""} ${reg.last_name ?? ""}`.trim()
+                            : `Dossard ${reg?.bib_number ?? ""}`}
                         <span className="md:hidden block text-[11px] text-muted-foreground">
                           {cat !== "—" ? `${catRank} · ${cat}` : ""}
                           {cat !== "—" && gen !== "—" ? " · " : ""}
