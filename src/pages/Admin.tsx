@@ -166,6 +166,22 @@ export default function AdminPage() {
         </div>
       </div>
 
+      <Card className="glass-card p-4 mt-4">
+        <Label className="text-sm font-medium">Attribuer le rôle organisateur</Label>
+        <div className="flex gap-2 mt-2">
+          <Input
+            type="email"
+            placeholder="email@example.com"
+            value={roleEmail}
+            onChange={(e) => setRoleEmail(e.target.value)}
+            className="max-w-sm"
+          />
+          <Button onClick={grantOrganizer} disabled={busy || !roleEmail.trim()}>Promouvoir</Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">Le compte doit déjà exister. Seuls les administrateurs peuvent attribuer ce rôle.</p>
+      </Card>
+
+
       <Tabs defaultValue="events" className="mt-6">
         <TabsList>
           <TabsTrigger value="events">Épreuves ({events.length})</TabsTrigger>
