@@ -90,13 +90,18 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
       .select("*")
       .eq("id", id)
       .single()
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         if (error || !data) {
           toast.error("Épreuve introuvable");
           navigate("/dashboard");
           return;
         }
         const e = data as Partial<EventForm>;
+        const { data: contact } = await (supabase.from as unknown as (t: string) => UntypedQuery)("events_contacts")
+          .select("contact_email, contact_phone")
+          .eq("event_id", id)
+          .maybeSingle?.() ?? { data: null };
+        const c = (contact ?? {}) as { contact_email?: string | null; contact_phone?: string | null };
         setForm({
           name: e.name ?? "",
           description: e.description ?? "",
@@ -104,8 +109,8 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
           start_date: e.start_date ?? "",
           end_date: e.end_date ?? "",
           website_url: e.website_url ?? "",
-          contact_email: e.contact_email ?? "",
-          contact_phone: e.contact_phone ?? "",
+          contact_email: c.contact_email ?? "",
+          contact_phone: c.contact_phone ?? "",
           facebook_url: e.facebook_url ?? "",
           instagram_url: e.instagram_url ?? "",
           twitter_url: e.twitter_url ?? "",
@@ -114,6 +119,7 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
         setLoadingEvent(false);
       });
   }, [mode, id, navigate]);
+
 
   if (loading || loadingEvent) return <main className="container py-12"><p className="text-muted-foreground">Chargement…</p></main>;
   if (!user) return <Navigate to="/auth" replace />;
