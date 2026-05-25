@@ -67,7 +67,7 @@ export default function RaceDetail() {
   const [gmcapStatus, setGmcapStatus] = useState<string | null>(null);
   const [savingSource, setSavingSource] = useState(false);
   const [checkpoints, setCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
-  const [runnerDetail, setRunnerDetail] = useState<{ registration_id: string; bib_number: string; first_name: string | null; last_name: string | null; official_time: string | null } | null>(null);
+  const [runnerDetail, setRunnerDetail] = useState<{ registration_id: string; bib_number: string; first_name: string | null; last_name: string | null; official_time: string | null; rgpd_consent: string | null } | null>(null);
   const [runnerDetailTimes, setRunnerDetailTimes] = useState<Array<{ checkpoint_id: string; time_seconds: number | null; time_text: string | null }>>([]);
   const [runnerDetailCheckpoints, setRunnerDetailCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null; position: number }>>([]);
   const [runnerDetailLoading, setRunnerDetailLoading] = useState(false);
