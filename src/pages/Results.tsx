@@ -220,18 +220,25 @@ export default function Results() {
                       <span className="font-semibold">{r.gender_rank ?? "—"}</span>
                       <span className="text-muted-foreground"> · {r.gender ?? "—"}</span>
                     </span>
-                    <button
-                      className="text-left hover:text-primary transition-colors font-medium truncate inline-flex items-center gap-1"
-                      onClick={() => setOpenRunner({
-                        first_name: r.rgpd_consent === "N" ? "XXXXXXX" : (r.first_name ?? ""),
-                        last_name: r.rgpd_consent === "N" ? "XXXXXXX" : (r.last_name ?? ""),
-                        gender: r.gender,
-                      })}
-                    >
-                      <UserIcon className="h-3 w-3 shrink-0" />
-                      {r.rgpd_consent === "N" ? "XXXXXXX XXXXXXX" : `${r.last_name?.toUpperCase()} ${r.first_name}`}
-                      {r.club && r.rgpd_consent !== "N" && <span className="text-xs text-muted-foreground ml-1">({r.club})</span>}
-                    </button>
+                    {r.rgpd_consent === "N" ? (
+                      <span className="font-medium truncate inline-flex items-center gap-1 text-muted-foreground">
+                        <UserIcon className="h-3 w-3 shrink-0" />
+                        XXXXXXX XXXXXXX
+                      </span>
+                    ) : (
+                      <button
+                        className="text-left hover:text-primary transition-colors font-medium truncate inline-flex items-center gap-1"
+                        onClick={() => setOpenRunner({
+                          first_name: r.first_name ?? "",
+                          last_name: r.last_name ?? "",
+                          gender: r.gender,
+                        })}
+                      >
+                        <UserIcon className="h-3 w-3 shrink-0" />
+                        {r.last_name?.toUpperCase()} {r.first_name}
+                        {r.club && <span className="text-xs text-muted-foreground ml-1">({r.club})</span>}
+                      </button>
+                    )}
                     <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary text-center">
                       #{r.bib_number}
                     </span>
