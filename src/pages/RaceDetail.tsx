@@ -593,7 +593,6 @@ export default function RaceDetail() {
         race_id: raceId!,
         runner_id: user.id,
         bib_number: bibInput.trim(),
-        emergency_phone: phoneInput.trim(),
       } as any)
       .select("id, bib_number")
       .single();
@@ -601,10 +600,15 @@ export default function RaceDetail() {
       toast.error(error.message);
       return;
     }
+    await (supabase as any).from("race_registration_contacts").upsert({
+      registration_id: data.id,
+      emergency_phone: phoneInput.trim(),
+    }, { onConflict: "registration_id" });
     setMyRegistration(data);
     setSignupOpen(false);
     toast.success(`Inscrit avec le dossard #${data.bib_number}`);
   };
+
 
   if (!race) {
     return (
