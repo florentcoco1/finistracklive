@@ -269,10 +269,18 @@ Deno.serve(async (req) => {
       const { error } = await admin.from("race_registrations").update({
         bib_number: body.bib_number,
         category: body.category || null,
-        emergency_phone: body.emergency_phone || null,
         updated_at: new Date().toISOString(),
       }).eq("id", body.registration_id).eq("race_id", body.race_id);
       if (error) throw new Error(error.message);
+      const phone = body.emergency_phone || null;
+      if (phone) {
+        await admin.from("race_registration_contacts").upsert({
+          registration_id: body.registration_id,
+          emergency_phone: phone,
+        }, { onConflict: "registration_id" });
+      } else {
+        await admin.from("race_registration_contacts").delete().eq("registration_id", body.registration_id);
+      }
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
     }
 
@@ -285,16 +293,22 @@ Deno.serve(async (req) => {
     if (body.action === "add_registration") {
       const userId = await findUserByEmail(admin, body.email);
       if (!userId) return json({ error: `Aucun compte trouvé pour ${body.email}. Demandez à la personne de créer un compte ou utilisez l'import en masse pour le créer automatiquement.` }, 404);
-      const { error } = await admin.from("race_registrations").upsert({
+      const { data: inserted, error } = await admin.from("race_registrations").upsert({
         race_id: body.race_id,
         runner_id: userId,
         bib_number: body.bib_number,
         category: body.category || null,
-        emergency_phone: body.emergency_phone || null,
-      }, { onConflict: "race_id,runner_id" });
+      }, { onConflict: "race_id,runner_id" }).select("id").single();
       if (error) throw new Error(error.message);
+      if (body.emergency_phone && inserted?.id) {
+        await admin.from("race_registration_contacts").upsert({
+          registration_id: inserted.id,
+          emergency_phone: body.emergency_phone,
+        }, { onConflict: "registration_id" });
+      }
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
     }
+
 
     if (body.action === "bulk_import_registrations") {
       const parsedRunners = parseRunnerImport(body.content);
