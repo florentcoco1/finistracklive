@@ -188,6 +188,37 @@ export default function RaceAdmin() {
   const [gpxFile, setGpxFile] = useState<File | null>(null);
   const [uploadingGpx, setUploadingGpx] = useState(false);
   const [checkpoints, setCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
+  const [githubRepo, setGithubRepo] = useState("florentcoco1/finistracklive");
+  const [githubPath, setGithubPath] = useState("public");
+  const [githubBranch, setGithubBranch] = useState("main");
+  const [githubFiles, setGithubFiles] = useState<Array<{ name: string; download_url: string }>>([]);
+  const [githubLoading, setGithubLoading] = useState(false);
+
+  const loadGithubFiles = async () => {
+    if (!githubRepo.trim()) {
+      toast.error("Renseigne le dépôt GitHub (owner/repo)");
+      return;
+    }
+    setGithubLoading(true);
+    try {
+      const cleanPath = githubPath.replace(/^\/+|\/+$/g, "");
+      const url = `https://api.github.com/repos/${githubRepo.trim()}/contents/${cleanPath}?ref=${githubBranch.trim() || "main"}`;
+      const res = await fetch(url, { headers: { Accept: "application/vnd.github+json" } });
+      if (!res.ok) throw new Error(`GitHub ${res.status} : ${res.statusText}. Vérifie que le dépôt est public.`);
+      const items = await res.json();
+      if (!Array.isArray(items)) throw new Error("Chemin invalide : ce n'est pas un dossier.");
+      const files = items
+        .filter((it: any) => it.type === "file" && /\.(txt|csv|tsv)$/i.test(it.name))
+        .map((it: any) => ({ name: it.name, download_url: it.download_url }));
+      setGithubFiles(files);
+      if (!files.length) toast.warning("Aucun fichier .txt/.csv/.tsv trouvé dans ce dossier.");
+      else toast.success(`${files.length} fichier(s) trouvé(s)`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setGithubLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!raceId) return;
