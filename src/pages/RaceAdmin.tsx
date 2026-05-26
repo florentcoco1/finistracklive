@@ -188,6 +188,37 @@ export default function RaceAdmin() {
   const [gpxFile, setGpxFile] = useState<File | null>(null);
   const [uploadingGpx, setUploadingGpx] = useState(false);
   const [checkpoints, setCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
+  const [githubRepo, setGithubRepo] = useState("florentcoco1/finistracklive");
+  const [githubPath, setGithubPath] = useState("public");
+  const [githubBranch, setGithubBranch] = useState("main");
+  const [githubFiles, setGithubFiles] = useState<Array<{ name: string; download_url: string }>>([]);
+  const [githubLoading, setGithubLoading] = useState(false);
+
+  const loadGithubFiles = async () => {
+    if (!githubRepo.trim()) {
+      toast.error("Renseigne le dépôt GitHub (owner/repo)");
+      return;
+    }
+    setGithubLoading(true);
+    try {
+      const cleanPath = githubPath.replace(/^\/+|\/+$/g, "");
+      const url = `https://api.github.com/repos/${githubRepo.trim()}/contents/${cleanPath}?ref=${githubBranch.trim() || "main"}`;
+      const res = await fetch(url, { headers: { Accept: "application/vnd.github+json" } });
+      if (!res.ok) throw new Error(`GitHub ${res.status} : ${res.statusText}. Vérifie que le dépôt est public.`);
+      const items = await res.json();
+      if (!Array.isArray(items)) throw new Error("Chemin invalide : ce n'est pas un dossier.");
+      const files = items
+        .filter((it: any) => it.type === "file" && /\.(txt|csv|tsv)$/i.test(it.name))
+        .map((it: any) => ({ name: it.name, download_url: it.download_url }));
+      setGithubFiles(files);
+      if (!files.length) toast.warning("Aucun fichier .txt/.csv/.tsv trouvé dans ce dossier.");
+      else toast.success(`${files.length} fichier(s) trouvé(s)`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setGithubLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!raceId) return;
@@ -767,6 +798,43 @@ export default function RaceAdmin() {
                 <Input id="source-url" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://.../GmCAP-Export.txt" />
               </div>
               <Button variant="hero" onClick={saveGmcap} disabled={busy}><Save className="h-4 w-4 mr-2" /> Enregistrer</Button>
+            </div>
+            <div className="space-y-3 rounded-lg border border-border/50 bg-secondary/20 p-4">
+              <div>
+                <h3 className="font-display text-sm font-semibold">Choisir un fichier depuis GitHub</h3>
+                <p className="text-xs text-muted-foreground mt-1">Liste les fichiers .txt/.csv/.tsv d'un dossier d'un dépôt public, puis remplit automatiquement l'URL ci-dessus.</p>
+              </div>
+              <div className="grid gap-2 md:grid-cols-3">
+                <div className="space-y-1">
+                  <Label htmlFor="gh-repo" className="text-xs">Dépôt (owner/repo)</Label>
+                  <Input id="gh-repo" value={githubRepo} onChange={(e) => setGithubRepo(e.target.value)} placeholder="florentcoco1/finistracklive" />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="gh-path" className="text-xs">Dossier</Label>
+                  <Input id="gh-path" value={githubPath} onChange={(e) => setGithubPath(e.target.value)} placeholder="public" />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="gh-branch" className="text-xs">Branche</Label>
+                  <Input id="gh-branch" value={githubBranch} onChange={(e) => setGithubBranch(e.target.value)} placeholder="main" />
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button variant="glass" onClick={loadGithubFiles} disabled={githubLoading}>
+                  {githubLoading ? "Chargement…" : "Lister les fichiers"}
+                </Button>
+                {githubFiles.length > 0 && (
+                  <select
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm flex-1 min-w-[200px]"
+                    value={sourceUrl}
+                    onChange={(e) => setSourceUrl(e.target.value)}
+                  >
+                    <option value="">— Sélectionne un fichier —</option>
+                    {githubFiles.map((f) => (
+                      <option key={f.download_url} value={f.download_url}>{f.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
               <input type="checkbox" checked={sourceEnabled} onChange={(e) => setSourceEnabled(e.target.checked)} className="accent-current" /> Synchronisation automatique toutes les minutes
