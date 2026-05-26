@@ -292,7 +292,7 @@ export default function RaceDetail() {
       window.clearInterval(poll);
       supabase.removeChannel(channel);
     };
-  }, [raceId]);
+  }, [raceId, race?.start_time]);
 
   // Load my registration if logged in
   useEffect(() => {
