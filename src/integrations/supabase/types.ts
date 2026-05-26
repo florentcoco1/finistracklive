@@ -544,19 +544,26 @@ export type Database = {
         Row: {
           bib_number: string | null
           category: string | null
+          category_rank: number | null
           distance_along_route_m: number | null
           dnf_reason: string | null
-          emergency_phone: string | null
           finished_at: string | null
           first_name: string | null
+          gender_rank: number | null
+          gmcap_imported_at: string | null
+          gmcap_status: string | null
           last_name: string | null
           last_position_at: string | null
           latitude: number | null
           longitude: number | null
+          official_seconds: number | null
+          official_time: string | null
+          overall_rank: number | null
           problem_description: string | null
           progress_percent: number | null
           race_id: string | null
           registration_id: string | null
+          rgpd_consent: string | null
           rolling_pace_sec_per_km: number | null
           rolling_speed_kmh: number | null
           runner_id: string | null
