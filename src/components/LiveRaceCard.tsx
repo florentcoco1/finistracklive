@@ -45,12 +45,13 @@ function formatElapsed(s: number) {
 export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProps) {
   const startMs = useMemo(() => new Date(race.start_time).getTime(), [race.start_time]);
   const [nowTs, setNowTs] = useState(() => Date.now());
-  const [podium, setPodium] = useState<{ men: PodiumRow[]; women: PodiumRow[] } | null>(null);
+  const [podium, setPodium] = useState<{ men: PodiumRow[]; women: PodiumRow[]; overall: PodiumRow[] } | null>(null);
 
   const hasStarted = nowTs >= startMs;
   const effectiveStatus: "upcoming" | "live" | "finished" =
     race.status === "finished" ? "finished" : hasStarted ? "live" : "upcoming";
   const isLive = effectiveStatus === "live";
+  const showPodium = effectiveStatus !== "upcoming";
   const elapsedSec = isLive ? Math.floor((nowTs - startMs) / 1000) : 0;
 
   useEffect(() => {
@@ -60,10 +61,11 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
   }, [isLive]);
 
   useEffect(() => {
-    if (!isLive) {
+    if (!showPodium) {
       setPodium(null);
       return;
     }
+
     let active = true;
 
     const load = async () => {
@@ -82,7 +84,7 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
       const regList = (regs ?? []) as Array<{ id: string; runner_id: string; bib_number: string }>;
       const cpList = (checkpoints ?? []) as Array<{ id: string; name: string; position: number }>;
       if (regList.length === 0 || cpList.length === 0) {
-        setPodium({ men: [], women: [] });
+        setPodium({ men: [], women: [], overall: [] });
         return;
       }
 
@@ -169,7 +171,8 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
 
       const men = rows.filter((r) => r.gender === "M").sort(sortFn).slice(0, 3);
       const women = rows.filter((r) => r.gender === "F").sort(sortFn).slice(0, 3);
-      setPodium({ men, women });
+      const overall = rows.slice().sort(sortFn).slice(0, 3);
+      setPodium({ men, women, overall });
     };
 
     load();
@@ -185,7 +188,8 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
       window.clearInterval(poll);
       supabase.removeChannel(channel);
     };
-  }, [isLive, race.id]);
+  }, [showPodium, race.id]);
+
 
   return (
     <Link to={`/races/${race.id}`}>
@@ -208,15 +212,22 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
           <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{race.description}</p>
         )}
 
-        {isLive && podium && (podium.men.length > 0 || podium.women.length > 0) && (
+        {showPodium && podium && (podium.men.length > 0 || podium.women.length > 0 || podium.overall.length > 0) && (
           <div className="mt-3 pt-3 border-t border-border/40 space-y-3">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-primary-glow">
-              <Trophy className="h-3.5 w-3.5" /> Classement provisoire
+              <Trophy className="h-3.5 w-3.5" /> Classement {effectiveStatus === "finished" ? "final" : "provisoire"}
             </div>
-            <PodiumList title="Hommes" rows={podium.men} />
-            <PodiumList title="Femmes" rows={podium.women} />
+            {podium.men.length === 0 && podium.women.length === 0 ? (
+              <PodiumList title="Top 3" rows={podium.overall} />
+            ) : (
+              <>
+                <PodiumList title="Hommes" rows={podium.men} />
+                <PodiumList title="Femmes" rows={podium.women} />
+              </>
+            )}
           </div>
         )}
+
       </Card>
     </Link>
   );
