@@ -84,7 +84,7 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
       const regList = (regs ?? []) as Array<{ id: string; runner_id: string; bib_number: string }>;
       const cpList = (checkpoints ?? []) as Array<{ id: string; name: string; position: number }>;
       if (regList.length === 0 || cpList.length === 0) {
-        setPodium({ men: [], women: [] });
+        setPodium({ men: [], women: [], overall: [] });
         return;
       }
 
