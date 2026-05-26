@@ -118,7 +118,7 @@ async function importContent(admin: ReturnType<typeof createClient>, raceId: str
       club: pick(row, "Club") || null,
       status: disqualified ? "disqualified" : abandoned ? "dnf" : started ? "classified" : "not_started",
       official_time_text: pick(row, "Temps") || null,
-      official_time_seconds: integer(pick(row, "Nb.Secondes")) ?? (decimal(pick(row, "Nb.Secondes")) as any),
+      official_time_seconds: integer(pick(row, "Nb.Secondes")),
       scratch_rank: integer(pick(row, "Classement")),
       category_rank: integer(pick(row, "Classement par Cat.", "Classement par Cat")),
       gender_rank: integer(pick(row, "Classement par Sexe")),
