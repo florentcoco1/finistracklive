@@ -446,6 +446,30 @@ export default function RaceAdmin() {
     return () => window.clearInterval(interval);
   }, [raceId, localPendingFile]);
 
+  // Auto-sync every 60s for URL-based GMCAP sources when "Synchronisation automatique" is enabled
+  useEffect(() => {
+    if (!raceId) return;
+    const isUrlSource = (source?.source_type ?? "url") === "url" && !!source?.source_url;
+    if (!source?.enabled || !isUrlSource) return;
+    let inFlight = false;
+    const tick = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const { data, error } = await supabase.functions.invoke("sync-gmcap-rfid", { body: { race_id: raceId } });
+        const payload = data as SyncResponse;
+        if (!error && !payload?.error) await load();
+      } catch {
+        /* silencieux : la prochaine tentative dans 60s */
+      } finally {
+        inFlight = false;
+      }
+    };
+    const interval = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(interval);
+  }, [raceId, source?.enabled, source?.source_type, source?.source_url, load]);
+
+
   const importGmcapFile = async () => {
     if (!raceId || !gmcapFile) {
       toast.error("Sélectionne un fichier GMCAP à importer");
