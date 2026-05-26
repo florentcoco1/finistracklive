@@ -201,7 +201,7 @@ export default function RaceDetail() {
             finished_at: base?.finished_at ?? (race?.start_time && r.official_time_seconds && r.official_time_seconds > 0
               ? new Date(new Date(race.start_time).getTime() + r.official_time_seconds * 1000).toISOString()
               : null),
-            runner_status: base?.runner_status ?? (isDnf ? "dnf" : (r.official_time_seconds && r.official_time_seconds > 0 ? "finished" : "running")),
+            runner_status: base?.runner_status ?? (isDnf ? "dnf" : "running"),
             emergency_phone: null,
             dnf_reason: base?.dnf_reason ?? null,
             problem_description: base?.problem_description ?? null,
