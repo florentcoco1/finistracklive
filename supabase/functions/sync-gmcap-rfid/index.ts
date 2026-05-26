@@ -110,7 +110,6 @@ async function importContent(admin: ReturnType<typeof createClient>, raceId: str
 
     results.push({
       race_id: raceId,
-      registration_id: registrationId,
       bib_number: bib,
       first_name: pick(row, "Prénom", "Prenom") || null,
       last_name: pick(row, "Nom") || null,
