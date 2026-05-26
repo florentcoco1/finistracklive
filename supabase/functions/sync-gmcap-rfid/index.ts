@@ -110,32 +110,33 @@ async function importContent(admin: ReturnType<typeof createClient>, raceId: str
 
     results.push({
       race_id: raceId,
-      registration_id: registrationId,
       bib_number: bib,
       first_name: pick(row, "Prénom", "Prenom") || null,
       last_name: pick(row, "Nom") || null,
       category: pick(row, "Abbrev. Catégorie", "Abbrev. Categorie", "Catégorie", "Categorie") || null,
       club: pick(row, "Club") || null,
       status: disqualified ? "disqualified" : abandoned ? "dnf" : started ? "classified" : "not_started",
-      official_time: pick(row, "Temps") || null,
-      official_seconds: decimal(pick(row, "Nb.Secondes")),
-      rounded_time: pick(row, "Temps Arrondi") || null,
-      rounded_seconds: decimal(pick(row, "Nb.Secondes Arrondi")),
-      overall_rank: integer(pick(row, "Classement")),
+      official_time_text: pick(row, "Temps") || null,
+      official_time_seconds: integer(pick(row, "Nb.Secondes")),
+      scratch_rank: integer(pick(row, "Classement")),
       category_rank: integer(pick(row, "Classement par Cat.", "Classement par Cat")),
       gender_rank: integer(pick(row, "Classement par Sexe")),
       split_payload: extractSplits(row),
       rgpd_consent: rgpdConsent,
-      raw_payload: row,
       imported_at: new Date().toISOString(),
     });
   }
 
   if (results.length === 0) throw new Error("Aucun dossard exploitable dans l'export GMCAP");
 
+  // Dédoublonnage : garder la dernière occurrence par (race_id, bib_number)
+  const dedupMap = new Map<string, typeof results[number]>();
+  for (const r of results) dedupMap.set(`${r.race_id}::${r.bib_number}`, r);
+  const deduped = Array.from(dedupMap.values());
+
   const { error } = await admin
     .from("gmcap_results")
-    .upsert(results, { onConflict: "race_id,bib_number" });
+    .upsert(deduped, { onConflict: "race_id,bib_number" });
   if (error) throw new Error(error.message);
 
   return { imported: results.length, matched, unmatched: results.length - matched };

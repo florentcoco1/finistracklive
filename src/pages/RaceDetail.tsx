@@ -171,9 +171,21 @@ export default function RaceDetail() {
 
       // If GMCAP data exists, the official ranking is built EXCLUSIVELY from GMCAP rows.
       // We enrich each GMCAP row with live tracking data when a registration matches by bib.
-      if (gmcapRows.length > 0) {
+      // Exclure les coureurs avec un temps nul/00:00:00 qui ne sont pas réellement arrivés
+      const isZeroTime = (txt: string | null, sec: number | null) => {
+        if (sec != null && sec > 0) return false;
+        if (txt && txt.trim() && !/^0+[:.]0+[:.]0+([.,]0+)?$/.test(txt.trim())) return false;
+        return true;
+      };
+      const filteredGmcap = gmcapRows.filter((r) => {
+        const isDnf = r.status === "dnf" || r.status === "disqualified";
+        if (isDnf) return true; // garder DNF / disqualifiés
+        return !isZeroTime(r.official_time_text, r.official_time_seconds);
+      });
+
+      if (filteredGmcap.length > 0) {
         const usedBibs = new Set<string>();
-        const fromGmcap: LeaderboardRow[] = gmcapRows.map((r) => {
+        const fromGmcap: LeaderboardRow[] = filteredGmcap.map((r) => {
           const key = r.bib_number ? String(r.bib_number).trim() : "";
           if (key) usedBibs.add(key);
           const base = key ? baseByBib.get(key) : undefined;
@@ -186,7 +198,9 @@ export default function RaceDetail() {
             category: r.category ?? base?.category ?? null,
             tracking_active: base?.tracking_active ?? false,
             started_at: base?.started_at ?? null,
-            finished_at: base?.finished_at ?? null,
+            finished_at: base?.finished_at ?? (race?.start_time && r.official_time_seconds && r.official_time_seconds > 0
+              ? new Date(new Date(race.start_time).getTime() + r.official_time_seconds * 1000).toISOString()
+              : null),
             runner_status: base?.runner_status ?? (isDnf ? "dnf" : "running"),
             emergency_phone: null,
             dnf_reason: base?.dnf_reason ?? null,
@@ -280,7 +294,7 @@ export default function RaceDetail() {
       window.clearInterval(poll);
       supabase.removeChannel(channel);
     };
-  }, [raceId]);
+  }, [raceId, race?.start_time]);
 
   // Load my registration if logged in
   useEffect(() => {
