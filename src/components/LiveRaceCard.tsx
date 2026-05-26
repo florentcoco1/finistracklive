@@ -45,12 +45,13 @@ function formatElapsed(s: number) {
 export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProps) {
   const startMs = useMemo(() => new Date(race.start_time).getTime(), [race.start_time]);
   const [nowTs, setNowTs] = useState(() => Date.now());
-  const [podium, setPodium] = useState<{ men: PodiumRow[]; women: PodiumRow[] } | null>(null);
+  const [podium, setPodium] = useState<{ men: PodiumRow[]; women: PodiumRow[]; overall: PodiumRow[] } | null>(null);
 
   const hasStarted = nowTs >= startMs;
   const effectiveStatus: "upcoming" | "live" | "finished" =
     race.status === "finished" ? "finished" : hasStarted ? "live" : "upcoming";
   const isLive = effectiveStatus === "live";
+  const showPodium = effectiveStatus !== "upcoming";
   const elapsedSec = isLive ? Math.floor((nowTs - startMs) / 1000) : 0;
 
   useEffect(() => {
@@ -60,10 +61,11 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
   }, [isLive]);
 
   useEffect(() => {
-    if (!isLive) {
+    if (!showPodium) {
       setPodium(null);
       return;
     }
+
     let active = true;
 
     const load = async () => {
