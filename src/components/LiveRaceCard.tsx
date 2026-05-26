@@ -171,7 +171,8 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
 
       const men = rows.filter((r) => r.gender === "M").sort(sortFn).slice(0, 3);
       const women = rows.filter((r) => r.gender === "F").sort(sortFn).slice(0, 3);
-      setPodium({ men, women });
+      const overall = rows.slice().sort(sortFn).slice(0, 3);
+      setPodium({ men, women, overall });
     };
 
     load();
@@ -187,7 +188,8 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
       window.clearInterval(poll);
       supabase.removeChannel(channel);
     };
-  }, [isLive, race.id]);
+  }, [showPodium, race.id]);
+
 
   return (
     <Link to={`/races/${race.id}`}>
