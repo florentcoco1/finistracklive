@@ -129,9 +129,14 @@ async function importContent(admin: ReturnType<typeof createClient>, raceId: str
 
   if (results.length === 0) throw new Error("Aucun dossard exploitable dans l'export GMCAP");
 
+  // Dédoublonnage : garder la dernière occurrence par (race_id, bib_number)
+  const dedupMap = new Map<string, typeof results[number]>();
+  for (const r of results) dedupMap.set(`${r.race_id}::${r.bib_number}`, r);
+  const deduped = Array.from(dedupMap.values());
+
   const { error } = await admin
     .from("gmcap_results")
-    .upsert(results, { onConflict: "race_id,bib_number" });
+    .upsert(deduped, { onConflict: "race_id,bib_number" });
   if (error) throw new Error(error.message);
 
   return { imported: results.length, matched, unmatched: results.length - matched };
