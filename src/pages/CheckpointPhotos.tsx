@@ -134,10 +134,24 @@ export default function CheckpointPhotos() {
         for (const file of Array.from(files)) {
           const ext = file.name.split(".").pop() ?? "jpg";
           const path = `${raceId}/${crypto.randomUUID()}.${ext}`;
-          const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+
+          // Ensure bucket exists via edge function (idempotent)
+          let upErr: { message: string } | null = null;
+          let { error } = await supabase.storage.from(BUCKET).upload(path, file, {
             contentType: file.type || "image/jpeg",
             upsert: false,
           });
+          if (error && /bucket not found/i.test(error.message)) {
+            // Create bucket via edge function then retry
+            await supabase.functions.invoke("upload-checkpoint-photo", { body: {} }).catch(() => null);
+            const retry = await supabase.storage.from(BUCKET).upload(path, file, {
+              contentType: file.type || "image/jpeg",
+              upsert: false,
+            });
+            upErr = retry.error;
+          } else {
+            upErr = error;
+          }
           if (upErr) {
             console.error(upErr);
             toast.error(`Échec upload ${file.name}: ${upErr.message}`);
