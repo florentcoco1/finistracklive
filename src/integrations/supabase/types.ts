@@ -146,6 +146,7 @@ export type Database = {
           last_name: string | null
           official_time_seconds: number | null
           official_time_text: string | null
+          phone: string | null
           race_id: string
           rgpd_consent: string | null
           scratch_rank: number | null
@@ -168,6 +169,7 @@ export type Database = {
           last_name?: string | null
           official_time_seconds?: number | null
           official_time_text?: string | null
+          phone?: string | null
           race_id: string
           rgpd_consent?: string | null
           scratch_rank?: number | null
@@ -190,6 +192,7 @@ export type Database = {
           last_name?: string | null
           official_time_seconds?: number | null
           official_time_text?: string | null
+          phone?: string | null
           race_id?: string
           rgpd_consent?: string | null
           scratch_rank?: number | null
