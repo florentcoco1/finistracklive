@@ -7,7 +7,7 @@ const corsHeaders = {
 
 const BUCKET = 'checkpoint-photos';
 
-async function ensureBucket(admin: ReturnType<typeof createClient>) {
+async function ensureBucket(admin: any) {
   const { data: existing } = await admin.storage.getBucket(BUCKET);
   if (!existing) {
     const { error } = await admin.storage.createBucket(BUCKET, {
