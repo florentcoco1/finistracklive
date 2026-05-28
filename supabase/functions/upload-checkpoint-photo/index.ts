@@ -51,16 +51,23 @@ Deno.serve(async (req) => {
 
     const form = await req.formData();
     const file = form.get('file');
+    const raceId = String(form.get('race_id') ?? '');
     const checkpointId = String(form.get('checkpoint_id') ?? '');
     const registrationId = String(form.get('registration_id') ?? '');
+    const caption = String(form.get('caption') ?? '').trim();
     if (!(file instanceof File)) return json({ error: 'file_required' }, 400);
-    if (!checkpointId || !registrationId) return json({ error: 'missing_ids' }, 400);
+    if (!raceId && !checkpointId) return json({ error: 'missing_race' }, 400);
     if (file.size > 10 * 1024 * 1024) return json({ error: 'file_too_large' }, 400);
 
-    // Verify organizer owns the race
-    const { data: cp } = await admin.from('race_checkpoints').select('race_id').eq('id', checkpointId).maybeSingle();
-    if (!cp) return json({ error: 'checkpoint_not_found' }, 404);
-    const { data: race } = await admin.from('races').select('organizer_id').eq('id', cp.race_id).maybeSingle();
+    // Verify organizer owns the race. Checkpoint uploads can infer the race from the checkpoint.
+    let targetRaceId = raceId;
+    if (checkpointId) {
+      const { data: cp } = await admin.from('race_checkpoints').select('race_id').eq('id', checkpointId).maybeSingle();
+      if (!cp) return json({ error: 'checkpoint_not_found' }, 404);
+      if (targetRaceId && targetRaceId !== cp.race_id) return json({ error: 'checkpoint_race_mismatch' }, 400);
+      targetRaceId = cp.race_id;
+    }
+    const { data: race } = await admin.from('races').select('organizer_id').eq('id', targetRaceId).maybeSingle();
     if (!race) return json({ error: 'race_not_found' }, 404);
 
     const { data: roles } = await userClient.from('user_roles').select('role').eq('user_id', userData.user.id);
@@ -68,9 +75,24 @@ Deno.serve(async (req) => {
     if (race.organizer_id !== userData.user.id && !isAdmin) return json({ error: 'forbidden' }, 403);
 
     const ext = (file.name.split('.').pop() ?? 'jpg').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'jpg';
-    const path = `${checkpointId}/${registrationId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const path = registrationId && checkpointId
+      ? `${checkpointId}/${registrationId}/${Date.now()}-${crypto.randomUUID()}.${ext}`
+      : `${targetRaceId}/${crypto.randomUUID()}.${ext}`;
     const { error: upErr } = await admin.storage.from(BUCKET).upload(path, file, { contentType: file.type, upsert: false });
     if (upErr) return json({ error: upErr.message }, 500);
+    if (!registrationId) {
+      const { error: dbErr } = await admin.from('checkpoint_photos').insert({
+        race_id: targetRaceId,
+        checkpoint_id: checkpointId || null,
+        uploaded_by: userData.user.id,
+        storage_path: path,
+        caption: caption || null,
+      });
+      if (dbErr) {
+        await admin.storage.from(BUCKET).remove([path]);
+        return json({ error: dbErr.message }, 500);
+      }
+    }
     const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(path);
     return json({ ok: true, path, public_url: pub.publicUrl });
   } catch (e) {
