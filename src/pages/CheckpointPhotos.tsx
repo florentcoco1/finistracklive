@@ -132,42 +132,17 @@ export default function CheckpointPhotos() {
       try {
         let ok = 0;
         for (const file of Array.from(files)) {
-          const ext = file.name.split(".").pop() ?? "jpg";
-          const path = `${raceId}/${crypto.randomUUID()}.${ext}`;
+          const form = new FormData();
+          form.append("file", file);
+          form.append("race_id", raceId);
+          if (selectedCp !== "none") form.append("checkpoint_id", selectedCp);
+          if (caption.trim()) form.append("caption", caption.trim());
 
-          // Ensure bucket exists via edge function (idempotent)
-          let upErr: { message: string } | null = null;
-          let { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-            contentType: file.type || "image/jpeg",
-            upsert: false,
-          });
-          if (error && /bucket not found/i.test(error.message)) {
-            // Create bucket via edge function then retry
-            await supabase.functions.invoke("upload-checkpoint-photo", { body: {} }).catch(() => null);
-            const retry = await supabase.storage.from(BUCKET).upload(path, file, {
-              contentType: file.type || "image/jpeg",
-              upsert: false,
-            });
-            upErr = retry.error;
-          } else {
-            upErr = error;
-          }
-          if (upErr) {
-            console.error(upErr);
-            toast.error(`Échec upload ${file.name}: ${upErr.message}`);
-            continue;
-          }
-          const { error: insErr } = await (supabase as any).from("checkpoint_photos").insert({
-            race_id: raceId,
-            checkpoint_id: selectedCp === "none" ? null : selectedCp,
-            uploaded_by: user.id,
-            storage_path: path,
-            caption: caption || null,
-          });
-          if (insErr) {
-            console.error(insErr);
-            toast.error(`Erreur DB: ${insErr.message}`);
-            await supabase.storage.from(BUCKET).remove([path]);
+          const { data, error } = await supabase.functions.invoke("upload-checkpoint-photo", { body: form });
+          const uploadError = error?.message ?? (data as { error?: string } | null)?.error;
+          if (uploadError) {
+            console.error(error ?? data);
+            toast.error(`Échec upload ${file.name}: ${uploadError}`);
             continue;
           }
           ok++;
