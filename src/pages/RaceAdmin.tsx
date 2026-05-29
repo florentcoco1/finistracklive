@@ -936,9 +936,14 @@ export default function RaceAdmin() {
 
         <TabsContent value="runners">
           <Card className="glass-card p-5 space-y-5">
-            <div>
-              <h2 className="font-display text-xl font-semibold">Inscrits coureurs</h2>
-              <p className="text-sm text-muted-foreground mt-1">Associe les dossards et catégories. Le classement officiel est rapproché automatiquement par numéro de dossard avec les résultats GMCAP.</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display text-xl font-semibold">Inscrits coureurs</h2>
+                <p className="text-sm text-muted-foreground mt-1">Associe les dossards et catégories. Le classement officiel est rapproché automatiquement par numéro de dossard avec les résultats GMCAP.</p>
+              </div>
+              <Button variant="destructive" size="sm" onClick={deleteAllRegistrations} disabled={busy || registrations.length === 0}>
+                <Trash2 className="h-4 w-4 mr-2" /> Supprimer tous les coureurs
+              </Button>
             </div>
             <div className="space-y-3 rounded-lg border border-border/50 bg-secondary/20 p-4">
               <div>
