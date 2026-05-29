@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import postgres from "npm:postgres@3.4.5";
 import { z } from "https://esm.sh/zod@3.25.76";
 
 const corsHeaders = {
@@ -32,6 +33,7 @@ const BodySchema = z.discriminatedUnion("action", [
     bib_number: z.string().trim().min(1).max(40),
     category: z.string().trim().max(80).nullable(),
     emergency_phone: z.string().trim().max(40).nullable(),
+    address: z.string().trim().max(500).nullable().optional(),
   }),
   z.object({ action: z.literal("delete_registration"), race_id: uuid, registration_id: uuid }),
   z.object({ action: z.literal("delete_all_registrations"), race_id: uuid }),
@@ -42,6 +44,7 @@ const BodySchema = z.discriminatedUnion("action", [
     bib_number: z.string().trim().min(1).max(40),
     category: z.string().trim().max(80).nullable(),
     emergency_phone: z.string().trim().max(40).nullable(),
+    address: z.string().trim().max(500).nullable().optional(),
   }),
   z.object({
     action: z.literal("bulk_import_registrations"),
@@ -54,8 +57,9 @@ const BodySchema = z.discriminatedUnion("action", [
 ]);
 
 type ProfileRow = { user_id: string; email: string | null; first_name: string | null; last_name: string | null; phone: string | null };
-type RegistrationRow = { id: string; runner_id: string; bib_number: string; category: string | null; emergency_phone: string | null; runner_status: string; created_at: string };
+type RegistrationRow = { id: string; runner_id: string; bib_number: string; category: string | null; emergency_phone: string | null; address: string | null; runner_status: string; created_at: string };
 type OrganizerRow = { id: string; user_id: string; role: string; created_at: string | null };
+type RegistrationContactRow = { registration_id: string; emergency_phone: string | null; address: string | null };
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -119,6 +123,22 @@ function getPhoneCell(row: Record<string, string>) {
   return "";
 }
 
+function getAddressCell(row: Record<string, string>) {
+  const street = getCell(row, ["Adresse", "Adresse 1", "Adresse postale", "Address", "Rue", "Voie"]);
+  const extra = getCell(row, ["Adresse 2", "Complément", "Complement", "Complément adresse", "Complement adresse"]);
+  const zip = getCell(row, ["CP", "Code postal", "CodePostal", "Zip", "Postal code"]);
+  const city = getCell(row, ["Ville", "Commune", "City", "Localité", "Localite"]);
+  const composed = [street, extra, zip, city].filter(Boolean).join(" ").trim();
+  if (composed) return composed;
+  for (const [header, value] of Object.entries(row)) {
+    if (!value?.trim()) continue;
+    const isAddress = header.includes("adresse") || header.includes("address") || header.includes("rue");
+    const isEmail = header.includes("email") || header.includes("mail") || header.includes("courriel");
+    if (isAddress && !isEmail) return value.trim();
+  }
+  return "";
+}
+
 function detectDelimiter(line: string) {
   const delimiters = ["\t", ";", ",", "|"];
   return delimiters
@@ -156,6 +176,7 @@ function parseRunnerImport(content: string) {
       first_name: getCell(row, ["Prénom", "Prenom", "First name"]),
       last_name: getCell(row, ["Nom", "Last name"]),
       phone: getPhoneCell(row),
+      address: getAddressCell(row),
       category: getCell(row, ["Abbrev. Catégorie", "Abbrev Categorie", "Nom Catégorie", "Nom Categorie", "Catégorie", "Categorie"]),
       birth_date: parseBirthDate(getCell(row, ["DateNaissance", "Date naissance", "Naissance"])),
       gender: normalizeGender(getCell(row, ["Sexe", "Genre", "Gender", "Sex", "S"])),
@@ -215,13 +236,11 @@ async function loadRace(admin: any, raceId: string) {
     admin.from("gmcap_results").select("bib_number, first_name, last_name, gender, birth_date, phone").eq("race_id", raceId),
   ]);
 
-  const registrationRows = (registrations ?? []) as Omit<RegistrationRow, "emergency_phone">[];
+  const registrationRows = (registrations ?? []) as Omit<RegistrationRow, "emergency_phone" | "address">[];
   const organizerRows = (organizers ?? []) as OrganizerRow[];
   const regIds = registrationRows.map((r) => r.id);
-  const { data: contacts } = regIds.length
-    ? await admin.from("race_registration_contacts").select("registration_id, emergency_phone").in("registration_id", regIds)
-    : { data: [] as Array<{ registration_id: string; emergency_phone: string | null }> };
-  const phoneByReg = new Map(((contacts ?? []) as Array<{ registration_id: string; emergency_phone: string | null }>).map((c) => [c.registration_id, c.emergency_phone]));
+  const contacts = await getRegistrationContacts(regIds);
+  const contactByReg = new Map(contacts.map((c) => [c.registration_id, c]));
 
   const profileIds = [
     ...new Set([
@@ -250,13 +269,140 @@ async function loadRace(admin: any, raceId: string) {
         : gmcap
           ? { email: null, phone: gmcap.phone ?? null, first_name: gmcap.first_name, last_name: gmcap.last_name }
           : null;
-      return { ...r, emergency_phone: phoneByReg.get(r.id) ?? profile?.phone ?? gmcap?.phone ?? null, profile: merged, gender: gmcap?.gender ?? null, birth_date: gmcap?.birth_date ?? null };
+      const contact = contactByReg.get(r.id) ?? null;
+      return { ...r, emergency_phone: contact?.emergency_phone ?? profile?.phone ?? gmcap?.phone ?? null, address: contact?.address ?? null, profile: merged, gender: gmcap?.gender ?? null, birth_date: gmcap?.birth_date ?? null };
     }),
     organizers: [
       race?.organizer_id && { id: "owner", user_id: race.organizer_id as string, role: "propriétaire", created_at: null, profile: profileById.get(race.organizer_id as string) ?? null },
       ...organizerRows.map((o) => ({ ...o, profile: profileById.get(o.user_id) ?? null })),
     ].filter(Boolean),
   };
+}
+
+function databaseUrl() {
+  const dbUrl = Deno.env.get("SUPABASE_DB_URL");
+  if (!dbUrl) throw new Error("Configuration base de données manquante");
+  return dbUrl;
+}
+
+async function withSql<T>(handler: (sql: postgres.Sql) => Promise<T>) {
+  const sql = postgres(databaseUrl(), { max: 1, prepare: false });
+  try {
+    return await handler(sql);
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
+}
+
+async function getRegistrationContacts(registrationIds: string[]): Promise<RegistrationContactRow[]> {
+  if (!registrationIds.length) return [];
+  return await withSql(async (sql) => {
+    const rows = await sql<RegistrationContactRow[]>`
+      SELECT registration_id::text, emergency_phone, address
+      FROM public.race_registration_contacts
+      WHERE registration_id = ANY(${registrationIds}::uuid[])
+    `;
+    return rows;
+  });
+}
+
+async function upsertRegistrationContact(registrationId: string, emergencyPhone: string | null, address: string | null) {
+  await withSql(async (sql) => {
+    await sql`
+      INSERT INTO public.race_registration_contacts (registration_id, emergency_phone, address)
+      VALUES (${registrationId}::uuid, ${emergencyPhone}, ${address})
+      ON CONFLICT (registration_id) DO UPDATE SET
+        emergency_phone = EXCLUDED.emergency_phone,
+        address = EXCLUDED.address,
+        updated_at = now()
+    `;
+  });
+}
+
+async function deleteRegistrationContact(registrationId: string) {
+  await withSql(async (sql) => {
+    await sql`DELETE FROM public.race_registration_contacts WHERE registration_id = ${registrationId}::uuid`;
+  });
+}
+
+async function deleteRegistrationContacts(registrationIds: string[]) {
+  if (!registrationIds.length) return;
+  await withSql(async (sql) => {
+    await sql`DELETE FROM public.race_registration_contacts WHERE registration_id = ANY(${registrationIds}::uuid[])`;
+  });
+}
+
+async function ensureRegistrationContactsSchema() {
+  await withSql(async (sql) => {
+    await sql.begin(async (tx) => {
+      await tx.unsafe(`CREATE TABLE IF NOT EXISTS public.race_registration_contacts (
+        registration_id uuid PRIMARY KEY,
+        emergency_phone text,
+        address text,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`);
+      await tx.unsafe(`ALTER TABLE public.race_registration_contacts ADD COLUMN IF NOT EXISTS emergency_phone text`);
+      await tx.unsafe(`ALTER TABLE public.race_registration_contacts ADD COLUMN IF NOT EXISTS address text`);
+      await tx.unsafe(`ALTER TABLE public.race_registration_contacts ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now()`);
+      await tx.unsafe(`ALTER TABLE public.race_registration_contacts ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()`);
+      await tx.unsafe(`DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'race_registration_contacts_registration_id_fkey'
+        ) THEN
+          ALTER TABLE public.race_registration_contacts
+            ADD CONSTRAINT race_registration_contacts_registration_id_fkey
+            FOREIGN KEY (registration_id) REFERENCES public.race_registrations(id) ON DELETE CASCADE;
+        END IF;
+      END $$`);
+      await tx.unsafe(`GRANT SELECT, INSERT, UPDATE, DELETE ON public.race_registration_contacts TO authenticated`);
+      await tx.unsafe(`GRANT ALL ON public.race_registration_contacts TO service_role`);
+      await tx.unsafe(`ALTER TABLE public.race_registration_contacts ENABLE ROW LEVEL SECURITY`);
+      await tx.unsafe(`DROP POLICY IF EXISTS "Registration contacts readable by runner or staff" ON public.race_registration_contacts`);
+      await tx.unsafe(`CREATE POLICY "Registration contacts readable by runner or staff" ON public.race_registration_contacts FOR SELECT TO authenticated USING (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR EXISTS (
+          SELECT 1 FROM public.race_registrations rr
+          JOIN public.races r ON r.id = rr.race_id
+          WHERE rr.id = race_registration_contacts.registration_id
+          AND (rr.runner_id = auth.uid() OR r.organizer_id = auth.uid())
+        )
+      )`);
+      await tx.unsafe(`DROP POLICY IF EXISTS "Registration contacts writable by runner or staff" ON public.race_registration_contacts`);
+      await tx.unsafe(`CREATE POLICY "Registration contacts writable by runner or staff" ON public.race_registration_contacts FOR ALL TO authenticated USING (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR EXISTS (
+          SELECT 1 FROM public.race_registrations rr
+          JOIN public.races r ON r.id = rr.race_id
+          WHERE rr.id = race_registration_contacts.registration_id
+          AND (rr.runner_id = auth.uid() OR r.organizer_id = auth.uid())
+        )
+      ) WITH CHECK (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR EXISTS (
+          SELECT 1 FROM public.race_registrations rr
+          JOIN public.races r ON r.id = rr.race_id
+          WHERE rr.id = race_registration_contacts.registration_id
+          AND (rr.runner_id = auth.uid() OR r.organizer_id = auth.uid())
+        )
+      )`);
+      await tx.unsafe(`DROP TRIGGER IF EXISTS update_race_registration_contacts_updated_at ON public.race_registration_contacts`);
+      await tx.unsafe(`CREATE TRIGGER update_race_registration_contacts_updated_at BEFORE UPDATE ON public.race_registration_contacts FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column()`);
+      await tx.unsafe(`NOTIFY pgrst, 'reload schema'`);
+    });
+  });
+}
+
+let registrationContactsSchemaReady: Promise<void> | null = null;
+
+async function ensureRegistrationContactsSchemaOnce() {
+  if (!registrationContactsSchemaReady) {
+    registrationContactsSchemaReady = ensureRegistrationContactsSchema().catch((error) => {
+      registrationContactsSchemaReady = null;
+      throw error;
+    });
+  }
+  await registrationContactsSchemaReady;
 }
 
 
@@ -278,6 +424,7 @@ Deno.serve(async (req) => {
     if (!parsed.success) return json({ error: "Données invalides", details: parsed.error.flatten().fieldErrors }, 400);
     const body = parsed.data;
     await requireRaceAdmin(admin, user.id, body.race_id);
+    await ensureRegistrationContactsSchemaOnce();
 
     if (body.action === "load") return json(await loadRace(admin, body.race_id));
 
@@ -303,13 +450,11 @@ Deno.serve(async (req) => {
       }).eq("id", body.registration_id).eq("race_id", body.race_id);
       if (error) throw new Error(error.message);
       const phone = body.emergency_phone || null;
-      if (phone) {
-        await admin.from("race_registration_contacts").upsert({
-          registration_id: body.registration_id,
-          emergency_phone: phone,
-        }, { onConflict: "registration_id" });
+      const address = body.address || null;
+      if (phone || address) {
+        await upsertRegistrationContact(body.registration_id, phone, address);
       } else {
-        await admin.from("race_registration_contacts").delete().eq("registration_id", body.registration_id);
+        await deleteRegistrationContact(body.registration_id);
       }
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
     }
@@ -325,7 +470,7 @@ Deno.serve(async (req) => {
       if (regsError) throw new Error(regsError.message);
       const ids = (regs ?? []).map((r: { id: string }) => r.id);
       if (ids.length) {
-        await admin.from("race_registration_contacts").delete().in("registration_id", ids);
+        await deleteRegistrationContacts(ids);
       }
       const { error: delError, count } = await admin.from("race_registrations").delete({ count: "exact" }).eq("race_id", body.race_id);
       if (delError) throw new Error(delError.message);
@@ -342,11 +487,8 @@ Deno.serve(async (req) => {
         category: body.category || null,
       }, { onConflict: "race_id,runner_id" }).select("id").single();
       if (error) throw new Error(error.message);
-      if (body.emergency_phone && inserted?.id) {
-        await admin.from("race_registration_contacts").upsert({
-          registration_id: inserted.id,
-          emergency_phone: body.emergency_phone,
-        }, { onConflict: "registration_id" });
+      if ((body.emergency_phone || body.address) && inserted?.id) {
+        await upsertRegistrationContact(inserted.id, body.emergency_phone || null, body.address || null);
       }
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
     }
@@ -441,12 +583,8 @@ Deno.serve(async (req) => {
             updated_at: new Date().toISOString(),
           }, { onConflict: "race_id,runner_id" }).select("id").single();
           if (registrationError) throw new Error(registrationError.message);
-          if (runner.phone && regRow?.id) {
-            const { error: contactError } = await admin.from("race_registration_contacts").upsert({
-              registration_id: regRow.id,
-              emergency_phone: runner.phone,
-            }, { onConflict: "registration_id" });
-            if (contactError) throw new Error(contactError.message);
+          if ((runner.phone || runner.address) && regRow?.id) {
+            await upsertRegistrationContact(regRow.id, runner.phone || null, runner.address || null);
           }
 
 
