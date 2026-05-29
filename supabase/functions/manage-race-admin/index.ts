@@ -170,7 +170,7 @@ function normalizeGender(value: string): string | null {
   return null;
 }
 
-async function findUserByEmail(admin: ReturnType<typeof createClient>, email: string): Promise<string | null> {
+async function findUserByEmail(admin: any, email: string): Promise<string | null> {
   const normalized = email.trim().toLowerCase();
   const { data: profile } = await admin.from("profiles").select("user_id").ilike("email", normalized).maybeSingle();
   if (profile?.user_id) return profile.user_id as string;
@@ -193,7 +193,7 @@ async function findUserByEmail(admin: ReturnType<typeof createClient>, email: st
   return null;
 }
 
-async function requireRaceAdmin(admin: ReturnType<typeof createClient>, userId: string, raceId: string) {
+async function requireRaceAdmin(admin: any, userId: string, raceId: string) {
   const { data, error } = await admin.rpc("is_race_admin", { _race_id: raceId, _user_id: userId });
   if (!error && data) return;
 
@@ -205,7 +205,7 @@ async function requireRaceAdmin(admin: ReturnType<typeof createClient>, userId: 
   if (raceError || race?.organizer_id !== userId) throw new Error("Administration réservée aux organisateurs de cette course");
 }
 
-async function loadRace(admin: ReturnType<typeof createClient>, raceId: string) {
+async function loadRace(admin: any, raceId: string) {
   const [{ data: source }, { data: registrations }, { data: organizers }, { data: race }, { data: gmcapResults }] = await Promise.all([
     admin.from("gmcap_import_sources").select("id, source_url, source_type, file_name, enabled, last_import_at, last_import_status, last_import_message").eq("race_id", raceId).maybeSingle(),
     admin.from("race_registrations").select("id, runner_id, bib_number, category, runner_status, created_at").eq("race_id", raceId).order("bib_number"),
@@ -252,7 +252,7 @@ async function loadRace(admin: ReturnType<typeof createClient>, raceId: string) 
       return { ...r, emergency_phone: phoneByReg.get(r.id) ?? null, profile: merged, gender: gmcap?.gender ?? null, birth_date: gmcap?.birth_date ?? null };
     }),
     organizers: [
-      race?.organizer_id && { id: "owner", user_id: race.organizer_id, role: "propriétaire", created_at: null, profile: profileById.get(race.organizer_id) ?? null },
+      race?.organizer_id && { id: "owner", user_id: race.organizer_id as string, role: "propriétaire", created_at: null, profile: profileById.get(race.organizer_id as string) ?? null },
       ...organizerRows.map((o) => ({ ...o, profile: profileById.get(o.user_id) ?? null })),
     ].filter(Boolean),
   };
