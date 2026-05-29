@@ -990,14 +990,15 @@ export default function RaceAdmin() {
                 </div>
               )}
             </div>
-            <div className="grid gap-3 md:grid-cols-[1fr_120px_120px_160px_auto] md:items-end">
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-[1fr_110px_120px_150px_1fr_auto] lg:items-end">
               <div className="space-y-2"><Label>Email utilisateur</Label><Input value={newRunner.email} onChange={(e) => setNewRunner((v) => ({ ...v, email: e.target.value }))} placeholder="coureur@email.fr" /></div>
               <div className="space-y-2"><Label>Dossard</Label><Input value={newRunner.bib_number} onChange={(e) => setNewRunner((v) => ({ ...v, bib_number: e.target.value }))} /></div>
               <div className="space-y-2"><Label>Catégorie</Label><Input value={newRunner.category} onChange={(e) => setNewRunner((v) => ({ ...v, category: e.target.value }))} /></div>
               <div className="space-y-2"><Label>Téléphone</Label><Input value={newRunner.emergency_phone} onChange={(e) => setNewRunner((v) => ({ ...v, emergency_phone: e.target.value }))} /></div>
+              <div className="space-y-2"><Label>Adresse</Label><Input value={newRunner.address} onChange={(e) => setNewRunner((v) => ({ ...v, address: e.target.value }))} /></div>
               <Button variant="hero" onClick={addRegistration} disabled={busy}><UserPlus className="h-4 w-4 mr-2" /> Ajouter</Button>
             </div>
-            <div className="rounded-lg border border-border/50 overflow-hidden">
+            <div className="rounded-lg border border-border/50 overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1006,6 +1007,7 @@ export default function RaceAdmin() {
                     <TableHead>Dossard</TableHead>
                     <TableHead>Catégorie</TableHead>
                     <TableHead>Téléphone</TableHead>
+                    <TableHead>Adresse</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1025,6 +1027,7 @@ export default function RaceAdmin() {
                       <TableCell><Input value={registration.bib_number} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, bib_number: e.target.value } : r))} className="min-w-20" /></TableCell>
                       <TableCell><Input value={registration.category ?? ""} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, category: e.target.value } : r))} className="min-w-24" /></TableCell>
                       <TableCell><Input value={registration.emergency_phone ?? ""} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, emergency_phone: e.target.value } : r))} className="min-w-32" /></TableCell>
+                      <TableCell><Input value={registration.address ?? ""} onChange={(e) => setRegistrations((rows) => rows.map((r) => r.id === registration.id ? { ...r, address: e.target.value } : r))} className="min-w-56" /></TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="glass" size="icon" onClick={() => updateRegistration(registration)} disabled={busy} aria-label="Enregistrer"><Save className="h-4 w-4" /></Button>
