@@ -294,6 +294,44 @@ async function withSql<T>(handler: (sql: postgres.Sql) => Promise<T>) {
   }
 }
 
+async function getRegistrationContacts(registrationIds: string[]): Promise<RegistrationContactRow[]> {
+  if (!registrationIds.length) return [];
+  return await withSql(async (sql) => {
+    const rows = await sql<RegistrationContactRow[]>`
+      SELECT registration_id::text, emergency_phone, address
+      FROM public.race_registration_contacts
+      WHERE registration_id = ANY(${registrationIds}::uuid[])
+    `;
+    return rows;
+  });
+}
+
+async function upsertRegistrationContact(registrationId: string, emergencyPhone: string | null, address: string | null) {
+  await withSql(async (sql) => {
+    await sql`
+      INSERT INTO public.race_registration_contacts (registration_id, emergency_phone, address)
+      VALUES (${registrationId}::uuid, ${emergencyPhone}, ${address})
+      ON CONFLICT (registration_id) DO UPDATE SET
+        emergency_phone = EXCLUDED.emergency_phone,
+        address = EXCLUDED.address,
+        updated_at = now()
+    `;
+  });
+}
+
+async function deleteRegistrationContact(registrationId: string) {
+  await withSql(async (sql) => {
+    await sql`DELETE FROM public.race_registration_contacts WHERE registration_id = ${registrationId}::uuid`;
+  });
+}
+
+async function deleteRegistrationContacts(registrationIds: string[]) {
+  if (!registrationIds.length) return;
+  await withSql(async (sql) => {
+    await sql`DELETE FROM public.race_registration_contacts WHERE registration_id = ANY(${registrationIds}::uuid[])`;
+  });
+}
+
 async function ensureRegistrationContactsSchema() {
   await withSql(async (sql) => {
     await sql.begin(async (tx) => {
