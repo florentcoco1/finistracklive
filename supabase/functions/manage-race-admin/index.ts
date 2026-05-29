@@ -59,6 +59,7 @@ const BodySchema = z.discriminatedUnion("action", [
 type ProfileRow = { user_id: string; email: string | null; first_name: string | null; last_name: string | null; phone: string | null };
 type RegistrationRow = { id: string; runner_id: string; bib_number: string; category: string | null; emergency_phone: string | null; address: string | null; runner_status: string; created_at: string };
 type OrganizerRow = { id: string; user_id: string; role: string; created_at: string | null };
+type RegistrationContactRow = { registration_id: string; emergency_phone: string | null; address: string | null };
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -280,11 +281,23 @@ async function loadRace(admin: any, raceId: string) {
   };
 }
 
-async function ensureRegistrationContactsSchema() {
+function databaseUrl() {
   const dbUrl = Deno.env.get("SUPABASE_DB_URL");
   if (!dbUrl) throw new Error("Configuration base de données manquante");
-  const sql = postgres(dbUrl, { max: 1, prepare: false });
+  return dbUrl;
+}
+
+async function withSql<T>(handler: (sql: postgres.Sql) => Promise<T>) {
+  const sql = postgres(databaseUrl(), { max: 1, prepare: false });
   try {
+    return await handler(sql);
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
+}
+
+async function ensureRegistrationContactsSchema() {
+  await withSql(async (sql) => {
     await sql.begin(async (tx) => {
       await tx.unsafe(`CREATE TABLE IF NOT EXISTS public.race_registration_contacts (
         registration_id uuid PRIMARY KEY,
@@ -341,9 +354,7 @@ async function ensureRegistrationContactsSchema() {
       await tx.unsafe(`CREATE TRIGGER update_race_registration_contacts_updated_at BEFORE UPDATE ON public.race_registration_contacts FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column()`);
       await tx.unsafe(`NOTIFY pgrst, 'reload schema'`);
     });
-  } finally {
-    await sql.end({ timeout: 5 });
-  }
+  });
 }
 
 let registrationContactsSchemaReady: Promise<void> | null = null;
