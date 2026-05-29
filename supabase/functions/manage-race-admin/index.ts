@@ -211,7 +211,7 @@ async function loadRace(admin: any, raceId: string) {
     admin.from("race_registrations").select("id, runner_id, bib_number, category, runner_status, created_at").eq("race_id", raceId).order("bib_number"),
     admin.from("race_organizers").select("id, user_id, role, created_at").eq("race_id", raceId).order("created_at"),
     admin.from("races").select("id, name, organizer_id").eq("id", raceId).single(),
-    admin.from("gmcap_results").select("bib_number, first_name, last_name, gender, birth_date").eq("race_id", raceId),
+    admin.from("gmcap_results").select("bib_number, first_name, last_name, gender, birth_date, phone").eq("race_id", raceId),
   ]);
 
   const registrationRows = (registrations ?? []) as Omit<RegistrationRow, "emergency_phone">[];
@@ -235,7 +235,7 @@ async function loadRace(admin: any, raceId: string) {
   const profileById = new Map(((profiles ?? []) as ProfileRow[]).map((p) => [p.user_id, p]));
 
   const gmcapByBib = new Map(
-    ((gmcapResults ?? []) as Array<{ bib_number: string; first_name: string | null; last_name: string | null; gender: string | null; birth_date: string | null }>)
+    ((gmcapResults ?? []) as Array<{ bib_number: string; first_name: string | null; last_name: string | null; gender: string | null; birth_date: string | null; phone: string | null }>)
       .map((g) => [String(g.bib_number).trim(), g]),
   );
 
@@ -247,9 +247,9 @@ async function loadRace(admin: any, raceId: string) {
       const merged = profile
         ? { ...profile, first_name: profile.first_name ?? gmcap?.first_name ?? null, last_name: profile.last_name ?? gmcap?.last_name ?? null }
         : gmcap
-          ? { email: null, phone: null, first_name: gmcap.first_name, last_name: gmcap.last_name }
+          ? { email: null, phone: gmcap.phone ?? null, first_name: gmcap.first_name, last_name: gmcap.last_name }
           : null;
-      return { ...r, emergency_phone: phoneByReg.get(r.id) ?? null, profile: merged, gender: gmcap?.gender ?? null, birth_date: gmcap?.birth_date ?? null };
+      return { ...r, emergency_phone: phoneByReg.get(r.id) ?? profile?.phone ?? gmcap?.phone ?? null, profile: merged, gender: gmcap?.gender ?? null, birth_date: gmcap?.birth_date ?? null };
     }),
     organizers: [
       race?.organizer_id && { id: "owner", user_id: race.organizer_id as string, role: "propriétaire", created_at: null, profile: profileById.get(race.organizer_id as string) ?? null },
@@ -429,15 +429,16 @@ Deno.serve(async (req) => {
           }, { onConflict: "race_id,runner_id" }).select("id").single();
           if (registrationError) throw new Error(registrationError.message);
           if (runner.phone && regRow?.id) {
-            await admin.from("race_registration_contacts").upsert({
+            const { error: contactError } = await admin.from("race_registration_contacts").upsert({
               registration_id: regRow.id,
               emergency_phone: runner.phone,
             }, { onConflict: "registration_id" });
+            if (contactError) throw new Error(contactError.message);
           }
 
 
           // Persist sexe + identité dans gmcap_results pour qu'ils s'affichent même sans import GMCAP
-          if (runner.gender || runner.first_name || runner.last_name || runner.birth_date) {
+          if (runner.gender || runner.first_name || runner.last_name || runner.birth_date || runner.phone) {
             await admin.from("gmcap_results").upsert({
               race_id: body.race_id,
               bib_number: runner.bib_number,
@@ -445,6 +446,7 @@ Deno.serve(async (req) => {
               last_name: runner.last_name || null,
               gender: runner.gender || null,
               birth_date: runner.birth_date || null,
+              phone: runner.phone || null,
             }, { onConflict: "race_id,bib_number" });
           }
           registered += 1;

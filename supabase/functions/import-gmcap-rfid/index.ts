@@ -49,7 +49,7 @@ function json(body: unknown, status = 200) {
 const isMissingGmcapSchema = (message: string) =>
   /gmcap_results|schema cache|does not exist|Could not find the table/i.test(message);
 
-async function markImportSuccess(admin: ReturnType<typeof createClient>, raceId: string, fileName: string | null, imported: number, matched: number) {
+async function markImportSuccess(admin: any, raceId: string, fileName: string | null, imported: number, matched: number) {
   const now = new Date().toISOString();
   const safeName = clean(fileName) || `gmcap-import-${now}.txt`;
   const { data: existing } = await admin
@@ -145,7 +145,7 @@ function pickDetectorTime(row: ParsedRow, detectorId: number): string | null {
   // Match a header whose label contains "<detectorId>|<digit>" anywhere.
   const re = new RegExp(`(?:^|[^0-9])${detectorId}\\s*\\|\\s*\\d+`);
   for (const [key, value] of Object.entries(row)) {
-    if (!value) continue;
+    if (typeof value !== "string" || !value) continue;
     if (re.test(key)) return value;
   }
   // Fallback: normalized lookup ("20|1" -> "201", "20|2" -> "202"...).
@@ -159,7 +159,7 @@ function pickDetectorTime(row: ParsedRow, detectorId: number): string | null {
   return null;
 }
 
-async function isRaceAdmin(admin: ReturnType<typeof createClient>, raceId: string, userId: string) {
+async function isRaceAdmin(admin: any, raceId: string, userId: string) {
   const { data, error } = await admin.rpc("is_race_admin", { _race_id: raceId, _user_id: userId });
   if (!error && data) return true;
 
@@ -320,6 +320,7 @@ Deno.serve(async (req) => {
         bib_number: bib,
         first_name: pick(row, "Prénom", "Prenom") || null,
         last_name: pick(row, "Nom") || null,
+        phone: pick(row, "Tel", "Tél", "Téléphone", "Telephone", "Phone", "Portable", "Mobile", "GSM") || null,
         birth_date: birthDate,
         gender,
         category: pick(row, "Abbrev. Catégorie", "Abbrev. Categorie", "Catégorie", "Categorie") || null,
