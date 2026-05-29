@@ -92,6 +92,30 @@ Deno.serve(async (req) => {
         await tx.unsafe(`DROP TRIGGER IF EXISTS update_runner_checkpoint_times_updated_at ON public.runner_checkpoint_times`);
         await tx.unsafe(`CREATE TRIGGER update_runner_checkpoint_times_updated_at BEFORE UPDATE ON public.runner_checkpoint_times FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column()`);
 
+        await tx.unsafe(`
+          CREATE TABLE IF NOT EXISTS public.checkpoint_photos (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            race_id uuid NOT NULL REFERENCES public.races(id) ON DELETE CASCADE,
+            checkpoint_id uuid REFERENCES public.race_checkpoints(id) ON DELETE SET NULL,
+            uploaded_by uuid NOT NULL,
+            storage_path text NOT NULL,
+            caption text,
+            created_at timestamptz NOT NULL DEFAULT now()
+          )
+        `);
+        await tx.unsafe(`GRANT SELECT ON public.checkpoint_photos TO anon`);
+        await tx.unsafe(`GRANT SELECT, INSERT, UPDATE, DELETE ON public.checkpoint_photos TO authenticated`);
+        await tx.unsafe(`GRANT ALL ON public.checkpoint_photos TO service_role`);
+        await tx.unsafe(`CREATE INDEX IF NOT EXISTS idx_checkpoint_photos_race ON public.checkpoint_photos(race_id)`);
+        await tx.unsafe(`CREATE INDEX IF NOT EXISTS idx_checkpoint_photos_checkpoint ON public.checkpoint_photos(checkpoint_id)`);
+        await tx.unsafe(`ALTER TABLE public.checkpoint_photos ENABLE ROW LEVEL SECURITY`);
+        await tx.unsafe(`DROP POLICY IF EXISTS "Photos viewable by everyone" ON public.checkpoint_photos`);
+        await tx.unsafe(`CREATE POLICY "Photos viewable by everyone" ON public.checkpoint_photos FOR SELECT USING (true)`);
+        await tx.unsafe(`DROP POLICY IF EXISTS "Organizers manage their race photos" ON public.checkpoint_photos`);
+        await tx.unsafe(`CREATE POLICY "Organizers manage their race photos" ON public.checkpoint_photos FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.races r WHERE r.id = checkpoint_photos.race_id AND r.organizer_id = auth.uid())) WITH CHECK (EXISTS (SELECT 1 FROM public.races r WHERE r.id = checkpoint_photos.race_id AND r.organizer_id = auth.uid()))`);
+        await tx.unsafe(`DROP POLICY IF EXISTS "Admins manage all photos" ON public.checkpoint_photos`);
+        await tx.unsafe(`CREATE POLICY "Admins manage all photos" ON public.checkpoint_photos FOR ALL TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role)) WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role))`);
+
         await tx.unsafe(`NOTIFY pgrst, 'reload schema'`);
       });
     } finally {
