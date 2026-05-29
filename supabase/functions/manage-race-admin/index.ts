@@ -335,6 +335,15 @@ async function deleteRegistrationContacts(registrationIds: string[]) {
 
 async function ensureRegistrationContactsSchema() {
   await withSql(async (sql) => {
+    // Fast path: if table + required columns already exist, skip the heavy DDL transaction.
+    const rows = await sql`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'race_registration_contacts'
+    `;
+    const cols = new Set(rows.map((r: any) => r.column_name));
+    if (cols.has("registration_id") && cols.has("emergency_phone") && cols.has("address")) {
+      return;
+    }
     await sql.begin(async (tx) => {
       await tx.unsafe(`CREATE TABLE IF NOT EXISTS public.race_registration_contacts (
         registration_id uuid PRIMARY KEY,
@@ -393,6 +402,7 @@ async function ensureRegistrationContactsSchema() {
     });
   });
 }
+
 
 let registrationContactsSchemaReady: Promise<void> | null = null;
 
