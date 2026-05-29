@@ -99,7 +99,7 @@ interface ManualImportResponse {
   unmatched?: number;
 }
 
-const emptyRegistration = { email: "", bib_number: "", category: "", emergency_phone: "", address: "" };
+const emptyRegistration = { email: "", bib_number: "", category: "", gender: "", emergency_phone: "", address: "" };
 const pendingDbName = "finistracklive-gmcap";
 const pendingStoreName = "pending-imports";
 
