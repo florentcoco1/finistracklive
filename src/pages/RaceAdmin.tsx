@@ -81,6 +81,7 @@ interface AdminResponse {
   source?: GmcapSource | null;
   registrations?: RegistrationRow[];
   organizers?: OrganizerRow[];
+  imported_count?: number;
 }
 
 interface SyncResponse {
@@ -170,6 +171,7 @@ export default function RaceAdmin() {
   const [sourceEnabled, setSourceEnabled] = useState(true);
   const [registrations, setRegistrations] = useState<RegistrationRow[]>([]);
   const [organizers, setOrganizers] = useState<OrganizerRow[]>([]);
+  const [importedCount, setImportedCount] = useState(0);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [manualImporting, setManualImporting] = useState(false);
@@ -253,6 +255,7 @@ export default function RaceAdmin() {
     setSourceEnabled(data.source?.enabled ?? true);
     setRegistrations(data.registrations ?? []);
     setOrganizers(data.organizers ?? []);
+    setImportedCount(data.imported_count ?? 0);
   }, []);
 
   const load = useCallback(async () => {
@@ -304,8 +307,8 @@ export default function RaceAdmin() {
   }, [raceId, user, loading, navigate, load]);
 
   const stats = useMemo(() => {
-    return { total: registrations.length, organizers: organizers.length };
-  }, [registrations, organizers]);
+    return { total: registrations.length, organizers: organizers.length, imported: importedCount };
+  }, [registrations, organizers, importedCount]);
 
   const saveGmcap = async () => {
     if (!raceId || !sourceUrl.trim()) {
@@ -710,8 +713,9 @@ export default function RaceAdmin() {
             {format(new Date(race.start_time), "EEEE d MMMM yyyy, HH:mm", { locale: fr })}
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-center">
-          <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-muted-foreground">coureurs</p></Card>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-muted-foreground">inscrits</p></Card>
+          <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.imported}</p><p className="text-xs text-muted-foreground">importés</p></Card>
           <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.organizers}</p><p className="text-xs text-muted-foreground">organisateurs</p></Card>
         </div>
       </div>
