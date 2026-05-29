@@ -583,12 +583,8 @@ Deno.serve(async (req) => {
             updated_at: new Date().toISOString(),
           }, { onConflict: "race_id,runner_id" }).select("id").single();
           if (registrationError) throw new Error(registrationError.message);
-          if (runner.phone && regRow?.id) {
-            const { error: contactError } = await admin.from("race_registration_contacts").upsert({
-              registration_id: regRow.id,
-              emergency_phone: runner.phone,
-            }, { onConflict: "registration_id" });
-            if (contactError) throw new Error(contactError.message);
+          if ((runner.phone || runner.address) && regRow?.id) {
+            await upsertRegistrationContact(regRow.id, runner.phone || null, runner.address || null);
           }
 
 
