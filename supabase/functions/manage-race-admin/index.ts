@@ -177,7 +177,7 @@ async function findUserByEmail(admin: any, email: string): Promise<string | null
   for (let page = 1; page <= 20; page += 1) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
     if (error || !data?.users?.length) return null;
-    const match = data.users.find((u) => (u.email ?? "").toLowerCase() === normalized);
+    const match = data.users.find((u: { email?: string | null; id: string; user_metadata?: Record<string, unknown> }) => (u.email ?? "").toLowerCase() === normalized);
     if (match) {
       const meta = (match.user_metadata ?? {}) as { first_name?: string; last_name?: string };
       await admin.from("profiles").upsert({
