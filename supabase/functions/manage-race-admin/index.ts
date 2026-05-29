@@ -33,6 +33,7 @@ const BodySchema = z.discriminatedUnion("action", [
     bib_number: z.string().trim().min(1).max(40),
     category: z.string().trim().max(80).nullable(),
     emergency_phone: z.string().trim().max(40).nullable(),
+    address: z.string().trim().max(500).nullable().optional(),
   }),
   z.object({ action: z.literal("delete_registration"), race_id: uuid, registration_id: uuid }),
   z.object({ action: z.literal("delete_all_registrations"), race_id: uuid }),
@@ -43,6 +44,7 @@ const BodySchema = z.discriminatedUnion("action", [
     bib_number: z.string().trim().min(1).max(40),
     category: z.string().trim().max(80).nullable(),
     emergency_phone: z.string().trim().max(40).nullable(),
+    address: z.string().trim().max(500).nullable().optional(),
   }),
   z.object({
     action: z.literal("bulk_import_registrations"),
