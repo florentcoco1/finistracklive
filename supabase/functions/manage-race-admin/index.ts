@@ -277,6 +277,72 @@ async function loadRace(admin: any, raceId: string) {
   };
 }
 
+async function ensureRegistrationContactsSchema() {
+  const dbUrl = Deno.env.get("SUPABASE_DB_URL");
+  if (!dbUrl) throw new Error("Configuration base de données manquante");
+  const sql = postgres(dbUrl, { max: 1, prepare: false });
+  try {
+    await sql.begin(async (tx) => {
+      await tx.unsafe(`CREATE TABLE IF NOT EXISTS public.race_registration_contacts (
+        registration_id uuid PRIMARY KEY,
+        emergency_phone text,
+        address text,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`);
+      await tx.unsafe(`ALTER TABLE public.race_registration_contacts ADD COLUMN IF NOT EXISTS emergency_phone text`);
+      await tx.unsafe(`ALTER TABLE public.race_registration_contacts ADD COLUMN IF NOT EXISTS address text`);
+      await tx.unsafe(`ALTER TABLE public.race_registration_contacts ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now()`);
+      await tx.unsafe(`ALTER TABLE public.race_registration_contacts ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()`);
+      await tx.unsafe(`DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'race_registration_contacts_registration_id_fkey'
+        ) THEN
+          ALTER TABLE public.race_registration_contacts
+            ADD CONSTRAINT race_registration_contacts_registration_id_fkey
+            FOREIGN KEY (registration_id) REFERENCES public.race_registrations(id) ON DELETE CASCADE;
+        END IF;
+      END $$`);
+      await tx.unsafe(`GRANT SELECT, INSERT, UPDATE, DELETE ON public.race_registration_contacts TO authenticated`);
+      await tx.unsafe(`GRANT ALL ON public.race_registration_contacts TO service_role`);
+      await tx.unsafe(`ALTER TABLE public.race_registration_contacts ENABLE ROW LEVEL SECURITY`);
+      await tx.unsafe(`DROP POLICY IF EXISTS "Registration contacts readable by runner or staff" ON public.race_registration_contacts`);
+      await tx.unsafe(`CREATE POLICY "Registration contacts readable by runner or staff" ON public.race_registration_contacts FOR SELECT TO authenticated USING (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR EXISTS (
+          SELECT 1 FROM public.race_registrations rr
+          JOIN public.races r ON r.id = rr.race_id
+          WHERE rr.id = race_registration_contacts.registration_id
+          AND (rr.runner_id = auth.uid() OR r.organizer_id = auth.uid())
+        )
+      )`);
+      await tx.unsafe(`DROP POLICY IF EXISTS "Registration contacts writable by runner or staff" ON public.race_registration_contacts`);
+      await tx.unsafe(`CREATE POLICY "Registration contacts writable by runner or staff" ON public.race_registration_contacts FOR ALL TO authenticated USING (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR EXISTS (
+          SELECT 1 FROM public.race_registrations rr
+          JOIN public.races r ON r.id = rr.race_id
+          WHERE rr.id = race_registration_contacts.registration_id
+          AND (rr.runner_id = auth.uid() OR r.organizer_id = auth.uid())
+        )
+      ) WITH CHECK (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR EXISTS (
+          SELECT 1 FROM public.race_registrations rr
+          JOIN public.races r ON r.id = rr.race_id
+          WHERE rr.id = race_registration_contacts.registration_id
+          AND (rr.runner_id = auth.uid() OR r.organizer_id = auth.uid())
+        )
+      )`);
+      await tx.unsafe(`DROP TRIGGER IF EXISTS update_race_registration_contacts_updated_at ON public.race_registration_contacts`);
+      await tx.unsafe(`CREATE TRIGGER update_race_registration_contacts_updated_at BEFORE UPDATE ON public.race_registration_contacts FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column()`);
+      await tx.unsafe(`NOTIFY pgrst, 'reload schema'`);
+    });
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
