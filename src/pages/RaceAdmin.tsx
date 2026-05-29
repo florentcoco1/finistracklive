@@ -578,6 +578,29 @@ export default function RaceAdmin() {
     }
   };
 
+  const deleteAllRegistrations = async () => {
+    if (!raceId) return;
+    if (registrations.length === 0) {
+      toast.info("Aucun coureur à supprimer");
+      return;
+    }
+    const confirmation = window.prompt(`Cette action va supprimer DÉFINITIVEMENT les ${registrations.length} coureur(s) inscrit(s). Tape SUPPRIMER pour confirmer.`);
+    if (confirmation !== "SUPPRIMER") {
+      toast.info("Suppression annulée");
+      return;
+    }
+    setBusy(true);
+    try {
+      const data = await invokeAdmin({ action: "delete_all_registrations", race_id: raceId }) as AdminResponse & { deleted?: number };
+      applyAdminData(data);
+      toast.success(`${data.deleted ?? 0} coureur(s) supprimé(s)`);
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const addRegistration = async () => {
     if (!raceId || !newRunner.email.trim() || !newRunner.bib_number.trim()) {
       toast.error("Email et dossard requis");
