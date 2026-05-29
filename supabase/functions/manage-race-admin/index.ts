@@ -452,13 +452,9 @@ Deno.serve(async (req) => {
       const phone = body.emergency_phone || null;
       const address = body.address || null;
       if (phone || address) {
-        await admin.from("race_registration_contacts").upsert({
-          registration_id: body.registration_id,
-          emergency_phone: phone,
-          address,
-        }, { onConflict: "registration_id" });
+        await upsertRegistrationContact(body.registration_id, phone, address);
       } else {
-        await admin.from("race_registration_contacts").delete().eq("registration_id", body.registration_id);
+        await deleteRegistrationContact(body.registration_id);
       }
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
     }
@@ -474,7 +470,7 @@ Deno.serve(async (req) => {
       if (regsError) throw new Error(regsError.message);
       const ids = (regs ?? []).map((r: { id: string }) => r.id);
       if (ids.length) {
-        await admin.from("race_registration_contacts").delete().in("registration_id", ids);
+        await deleteRegistrationContacts(ids);
       }
       const { error: delError, count } = await admin.from("race_registrations").delete({ count: "exact" }).eq("race_id", body.race_id);
       if (delError) throw new Error(delError.message);
@@ -492,11 +488,7 @@ Deno.serve(async (req) => {
       }, { onConflict: "race_id,runner_id" }).select("id").single();
       if (error) throw new Error(error.message);
       if ((body.emergency_phone || body.address) && inserted?.id) {
-        await admin.from("race_registration_contacts").upsert({
-          registration_id: inserted.id,
-          emergency_phone: body.emergency_phone || null,
-          address: body.address || null,
-        }, { onConflict: "registration_id" });
+        await upsertRegistrationContact(inserted.id, body.emergency_phone || null, body.address || null);
       }
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
     }
