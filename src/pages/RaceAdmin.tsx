@@ -60,6 +60,7 @@ interface RegistrationRow {
   bib_number: string;
   category: string | null;
   emergency_phone: string | null;
+  address: string | null;
   runner_status: string;
   created_at: string;
   profile: AdminProfile | null;
@@ -98,7 +99,7 @@ interface ManualImportResponse {
   unmatched?: number;
 }
 
-const emptyRegistration = { email: "", bib_number: "", category: "", emergency_phone: "" };
+const emptyRegistration = { email: "", bib_number: "", category: "", emergency_phone: "", address: "" };
 const pendingDbName = "finistracklive-gmcap";
 const pendingStoreName = "pending-imports";
 
@@ -554,6 +555,7 @@ export default function RaceAdmin() {
         bib_number: registration.bib_number,
         category: registration.category || null,
         emergency_phone: registration.emergency_phone || null,
+        address: registration.address || null,
       });
       applyAdminData(data);
       toast.success("Inscription mise à jour");
@@ -615,6 +617,7 @@ export default function RaceAdmin() {
         bib_number: newRunner.bib_number.trim(),
         category: newRunner.category.trim() || null,
         emergency_phone: newRunner.emergency_phone.trim() || null,
+        address: newRunner.address.trim() || null,
       });
       applyAdminData(data);
       setNewRunner(emptyRegistration);
