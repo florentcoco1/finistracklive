@@ -171,6 +171,7 @@ export default function RaceAdmin() {
   const [sourceEnabled, setSourceEnabled] = useState(true);
   const [registrations, setRegistrations] = useState<RegistrationRow[]>([]);
   const [organizers, setOrganizers] = useState<OrganizerRow[]>([]);
+  const [importedCount, setImportedCount] = useState(0);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [manualImporting, setManualImporting] = useState(false);
