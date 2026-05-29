@@ -34,6 +34,7 @@ const BodySchema = z.discriminatedUnion("action", [
     emergency_phone: z.string().trim().max(40).nullable(),
   }),
   z.object({ action: z.literal("delete_registration"), race_id: uuid, registration_id: uuid }),
+  z.object({ action: z.literal("delete_all_registrations"), race_id: uuid }),
   z.object({
     action: z.literal("add_registration"),
     race_id: uuid,
@@ -317,6 +318,18 @@ Deno.serve(async (req) => {
       const { error } = await admin.from("race_registrations").delete().eq("id", body.registration_id).eq("race_id", body.race_id);
       if (error) throw new Error(error.message);
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
+    }
+
+    if (body.action === "delete_all_registrations") {
+      const { data: regs, error: regsError } = await admin.from("race_registrations").select("id").eq("race_id", body.race_id);
+      if (regsError) throw new Error(regsError.message);
+      const ids = (regs ?? []).map((r: { id: string }) => r.id);
+      if (ids.length) {
+        await admin.from("race_registration_contacts").delete().in("registration_id", ids);
+      }
+      const { error: delError, count } = await admin.from("race_registrations").delete({ count: "exact" }).eq("race_id", body.race_id);
+      if (delError) throw new Error(delError.message);
+      return json({ ok: true, deleted: count ?? ids.length, ...(await loadRace(admin, body.race_id)) });
     }
 
     if (body.action === "add_registration") {
