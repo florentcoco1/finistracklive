@@ -96,6 +96,35 @@ function getCell(row: Record<string, string>, names: string[]) {
   return "";
 }
 
+function getEmailCell(row: Record<string, string>) {
+  const exact = getCell(row, ["EMail", "Email", "E-mail", "E mail", "Mail", "Adresse mail", "Adresse e-mail", "Adresse email", "Courriel"]);
+  if (exact) return exact;
+  for (const [header, value] of Object.entries(row)) {
+    if (value?.trim() && (header.includes("email") || header.includes("mail") || header.includes("courriel"))) return value.trim();
+  }
+  return "";
+}
+
+function getPhoneCell(row: Record<string, string>) {
+  const exact = getCell(row, [
+    "Tel", "Tél", "Tél.", "Telephone", "Téléphone", "Tel.", "Phone",
+    "Portable", "Mobile", "GSM", "Tel mobile", "Téléphone mobile", "Telephone mobile",
+    "N° Tel", "N° Tél", "No Tel", "Numéro Tel", "Numero Tel",
+  ]);
+  if (exact) return exact;
+  for (const [header, value] of Object.entries(row)) {
+    if (value?.trim() && (header.includes("telephone") || header.includes("tel") || header.includes("portable") || header.includes("mobile") || header.includes("gsm") || header.includes("phone"))) return value.trim();
+  }
+  return "";
+}
+
+function detectDelimiter(line: string) {
+  const delimiters = ["\t", ";", ",", "|"];
+  return delimiters
+    .map((delimiter) => ({ delimiter, count: splitDelimitedLine(line, delimiter).length }))
+    .sort((a, b) => b.count - a.count)[0]?.delimiter ?? "\t";
+}
+
 function parseBirthDate(value: string) {
   const clean = value.trim();
   if (!clean) return null;
@@ -115,17 +144,17 @@ function randomPassword() {
 function parseRunnerImport(content: string) {
   const lines = content.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) throw new Error("Le fichier doit contenir une ligne d’en-tête et au moins un coureur");
-  const delimiter = (lines[0].match(/\t/g)?.length ?? 0) >= (lines[0].match(/;/g)?.length ?? 0) ? "\t" : ";";
+  const delimiter = detectDelimiter(lines[0]);
   const headers = splitDelimitedLine(lines[0], delimiter).map(normalizeHeader);
   return lines.slice(1).map((line) => {
     const cells = splitDelimitedLine(line, delimiter);
     const row = Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? ""]));
     return {
-      email: getCell(row, ["EMail", "Email", "E-mail", "Mail"]).toLowerCase(),
+      email: getEmailCell(row).toLowerCase(),
       bib_number: getCell(row, ["Numéro", "Numero", "Dossard", "N°", "No"]),
       first_name: getCell(row, ["Prénom", "Prenom", "First name"]),
       last_name: getCell(row, ["Nom", "Last name"]),
-      phone: getCell(row, ["Tel", "Téléphone", "Telephone", "Phone"]),
+      phone: getPhoneCell(row),
       category: getCell(row, ["Abbrev. Catégorie", "Abbrev Categorie", "Nom Catégorie", "Nom Categorie", "Catégorie", "Categorie"]),
       birth_date: parseBirthDate(getCell(row, ["DateNaissance", "Date naissance", "Naissance"])),
       gender: normalizeGender(getCell(row, ["Sexe", "Genre", "Gender", "Sex", "S"])),
