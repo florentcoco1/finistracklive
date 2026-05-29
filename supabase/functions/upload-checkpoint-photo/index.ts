@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import postgres from 'npm:postgres@3.4.5';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,6 +20,40 @@ async function ensureBucket(admin: any) {
   }
 }
 
+async function ensurePhotosSchema(dbUrl: string) {
+  const sql = postgres(dbUrl, { max: 1, prepare: false });
+  try {
+    await sql.begin(async (tx) => {
+      await tx.unsafe(`
+        CREATE TABLE IF NOT EXISTS public.checkpoint_photos (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          race_id uuid NOT NULL REFERENCES public.races(id) ON DELETE CASCADE,
+          checkpoint_id uuid REFERENCES public.race_checkpoints(id) ON DELETE SET NULL,
+          uploaded_by uuid NOT NULL,
+          storage_path text NOT NULL,
+          caption text,
+          created_at timestamptz NOT NULL DEFAULT now()
+        )
+      `);
+      await tx.unsafe(`GRANT SELECT ON public.checkpoint_photos TO anon`);
+      await tx.unsafe(`GRANT SELECT, INSERT, UPDATE, DELETE ON public.checkpoint_photos TO authenticated`);
+      await tx.unsafe(`GRANT ALL ON public.checkpoint_photos TO service_role`);
+      await tx.unsafe(`CREATE INDEX IF NOT EXISTS idx_checkpoint_photos_race ON public.checkpoint_photos(race_id)`);
+      await tx.unsafe(`CREATE INDEX IF NOT EXISTS idx_checkpoint_photos_checkpoint ON public.checkpoint_photos(checkpoint_id)`);
+      await tx.unsafe(`ALTER TABLE public.checkpoint_photos ENABLE ROW LEVEL SECURITY`);
+      await tx.unsafe(`DROP POLICY IF EXISTS "Photos viewable by everyone" ON public.checkpoint_photos`);
+      await tx.unsafe(`CREATE POLICY "Photos viewable by everyone" ON public.checkpoint_photos FOR SELECT USING (true)`);
+      await tx.unsafe(`DROP POLICY IF EXISTS "Organizers manage their race photos" ON public.checkpoint_photos`);
+      await tx.unsafe(`CREATE POLICY "Organizers manage their race photos" ON public.checkpoint_photos FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.races r WHERE r.id = checkpoint_photos.race_id AND r.organizer_id = auth.uid())) WITH CHECK (EXISTS (SELECT 1 FROM public.races r WHERE r.id = checkpoint_photos.race_id AND r.organizer_id = auth.uid()))`);
+      await tx.unsafe(`DROP POLICY IF EXISTS "Admins manage all photos" ON public.checkpoint_photos`);
+      await tx.unsafe(`CREATE POLICY "Admins manage all photos" ON public.checkpoint_photos FOR ALL TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role)) WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role))`);
+      await tx.unsafe(`NOTIFY pgrst, 'reload schema'`);
+    });
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -36,6 +71,7 @@ Deno.serve(async (req) => {
     const url = Deno.env.get('SUPABASE_URL')!;
     const anon = Deno.env.get('SUPABASE_ANON_KEY')!;
     const service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const dbUrl = Deno.env.get('SUPABASE_DB_URL')!;
 
     const userClient = createClient(url, anon, { global: { headers: { Authorization: auth } } });
     const { data: userData, error: userErr } = await userClient.auth.getUser();
@@ -43,6 +79,7 @@ Deno.serve(async (req) => {
 
     const admin = createClient(url, service);
     await ensureBucket(admin);
+    await ensurePhotosSchema(dbUrl);
 
     const ct = req.headers.get('content-type') ?? '';
     if (!ct.includes('multipart/form-data')) {
