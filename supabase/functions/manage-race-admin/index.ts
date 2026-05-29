@@ -43,6 +43,7 @@ const BodySchema = z.discriminatedUnion("action", [
     email: z.string().trim().email().max(255),
     bib_number: z.string().trim().min(1).max(40),
     category: z.string().trim().max(80).nullable(),
+    gender: z.enum(["M", "F"]).nullable().optional(),
     emergency_phone: z.string().trim().max(40).nullable(),
     address: z.string().trim().max(500).nullable().optional(),
   }),
