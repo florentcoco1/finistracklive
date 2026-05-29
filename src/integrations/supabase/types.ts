@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      checkpoint_photos: {
+        Row: {
+          caption: string | null
+          checkpoint_id: string | null
+          created_at: string
+          id: string
+          race_id: string
+          storage_path: string
+          uploaded_by: string
+        }
+        Insert: {
+          caption?: string | null
+          checkpoint_id?: string | null
+          created_at?: string
+          id?: string
+          race_id: string
+          storage_path: string
+          uploaded_by: string
+        }
+        Update: {
+          caption?: string | null
+          checkpoint_id?: string | null
+          created_at?: string
+          id?: string
+          race_id?: string
+          storage_path?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkpoint_photos_checkpoint_id_fkey"
+            columns: ["checkpoint_id"]
+            isOneToOne: false
+            referencedRelation: "race_checkpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkpoint_photos_race_id_fkey"
+            columns: ["race_id"]
+            isOneToOne: false
+            referencedRelation: "races"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           contact_email: string | null
