@@ -991,10 +991,17 @@ export default function RaceAdmin() {
                 </div>
               )}
             </div>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-[1fr_110px_120px_150px_1fr_auto] lg:items-end">
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-[1fr_110px_120px_110px_150px_1fr_auto] lg:items-end">
               <div className="space-y-2"><Label>Email utilisateur</Label><Input value={newRunner.email} onChange={(e) => setNewRunner((v) => ({ ...v, email: e.target.value }))} placeholder="coureur@email.fr" /></div>
               <div className="space-y-2"><Label>Dossard</Label><Input value={newRunner.bib_number} onChange={(e) => setNewRunner((v) => ({ ...v, bib_number: e.target.value }))} /></div>
               <div className="space-y-2"><Label>Catégorie</Label><Input value={newRunner.category} onChange={(e) => setNewRunner((v) => ({ ...v, category: e.target.value }))} /></div>
+              <div className="space-y-2"><Label>Sexe</Label>
+                <select value={newRunner.gender} onChange={(e) => setNewRunner((v) => ({ ...v, gender: e.target.value }))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  <option value="">—</option>
+                  <option value="M">H</option>
+                  <option value="F">F</option>
+                </select>
+              </div>
               <div className="space-y-2"><Label>Téléphone</Label><Input value={newRunner.emergency_phone} onChange={(e) => setNewRunner((v) => ({ ...v, emergency_phone: e.target.value }))} /></div>
               <div className="space-y-2"><Label>Adresse</Label><Input value={newRunner.address} onChange={(e) => setNewRunner((v) => ({ ...v, address: e.target.value }))} /></div>
               <Button variant="hero" onClick={addRegistration} disabled={busy}><UserPlus className="h-4 w-4 mr-2" /> Ajouter</Button>
