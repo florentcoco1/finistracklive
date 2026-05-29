@@ -338,6 +338,45 @@ export type Database = {
           },
         ]
       }
+      race_registration_contacts: {
+        Row: {
+          address: string | null
+          created_at: string
+          emergency_phone: string | null
+          registration_id: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          emergency_phone?: string | null
+          registration_id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          emergency_phone?: string | null
+          registration_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "race_registration_contacts_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: true
+            referencedRelation: "live_leaderboard"
+            referencedColumns: ["registration_id"]
+          },
+          {
+            foreignKeyName: "race_registration_contacts_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: true
+            referencedRelation: "race_registrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       race_registrations: {
         Row: {
           bib_number: string
