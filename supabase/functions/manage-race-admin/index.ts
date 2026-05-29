@@ -236,13 +236,11 @@ async function loadRace(admin: any, raceId: string) {
     admin.from("gmcap_results").select("bib_number, first_name, last_name, gender, birth_date, phone").eq("race_id", raceId),
   ]);
 
-  const registrationRows = (registrations ?? []) as Omit<RegistrationRow, "emergency_phone">[];
+  const registrationRows = (registrations ?? []) as Omit<RegistrationRow, "emergency_phone" | "address">[];
   const organizerRows = (organizers ?? []) as OrganizerRow[];
   const regIds = registrationRows.map((r) => r.id);
-  const { data: contacts } = regIds.length
-    ? await admin.from("race_registration_contacts").select("registration_id, emergency_phone, address").in("registration_id", regIds)
-    : { data: [] as Array<{ registration_id: string; emergency_phone: string | null; address: string | null }> };
-  const contactByReg = new Map(((contacts ?? []) as Array<{ registration_id: string; emergency_phone: string | null; address: string | null }>).map((c) => [c.registration_id, c]));
+  const contacts = await getRegistrationContacts(regIds);
+  const contactByReg = new Map(contacts.map((c) => [c.registration_id, c]));
 
   const profileIds = [
     ...new Set([
