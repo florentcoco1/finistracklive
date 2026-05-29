@@ -320,6 +320,18 @@ Deno.serve(async (req) => {
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
     }
 
+    if (body.action === "delete_all_registrations") {
+      const { data: regs, error: regsError } = await admin.from("race_registrations").select("id").eq("race_id", body.race_id);
+      if (regsError) throw new Error(regsError.message);
+      const ids = (regs ?? []).map((r: { id: string }) => r.id);
+      if (ids.length) {
+        await admin.from("race_registration_contacts").delete().in("registration_id", ids);
+      }
+      const { error: delError, count } = await admin.from("race_registrations").delete({ count: "exact" }).eq("race_id", body.race_id);
+      if (delError) throw new Error(delError.message);
+      return json({ ok: true, deleted: count ?? ids.length, ...(await loadRace(admin, body.race_id)) });
+    }
+
     if (body.action === "add_registration") {
       const userId = await findUserByEmail(admin, body.email);
       if (!userId) return json({ error: `Aucun compte trouvé pour ${body.email}. Demandez à la personne de créer un compte ou utilisez l'import en masse pour le créer automatiquement.` }, 404);
