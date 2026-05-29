@@ -81,6 +81,7 @@ interface AdminResponse {
   source?: GmcapSource | null;
   registrations?: RegistrationRow[];
   organizers?: OrganizerRow[];
+  imported_count?: number;
 }
 
 interface SyncResponse {
