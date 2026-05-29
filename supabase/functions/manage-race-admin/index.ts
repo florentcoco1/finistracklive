@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import postgres from "npm:postgres@3.4.5";
 import { z } from "https://esm.sh/zod@3.25.76";
 
 const corsHeaders = {
@@ -54,7 +55,7 @@ const BodySchema = z.discriminatedUnion("action", [
 ]);
 
 type ProfileRow = { user_id: string; email: string | null; first_name: string | null; last_name: string | null; phone: string | null };
-type RegistrationRow = { id: string; runner_id: string; bib_number: string; category: string | null; emergency_phone: string | null; runner_status: string; created_at: string };
+type RegistrationRow = { id: string; runner_id: string; bib_number: string; category: string | null; emergency_phone: string | null; address: string | null; runner_status: string; created_at: string };
 type OrganizerRow = { id: string; user_id: string; role: string; created_at: string | null };
 
 function json(body: unknown, status = 200) {
@@ -119,6 +120,22 @@ function getPhoneCell(row: Record<string, string>) {
   return "";
 }
 
+function getAddressCell(row: Record<string, string>) {
+  const street = getCell(row, ["Adresse", "Adresse 1", "Adresse postale", "Address", "Rue", "Voie"]);
+  const extra = getCell(row, ["Adresse 2", "Complément", "Complement", "Complément adresse", "Complement adresse"]);
+  const zip = getCell(row, ["CP", "Code postal", "CodePostal", "Zip", "Postal code"]);
+  const city = getCell(row, ["Ville", "Commune", "City", "Localité", "Localite"]);
+  const composed = [street, extra, zip, city].filter(Boolean).join(" ").trim();
+  if (composed) return composed;
+  for (const [header, value] of Object.entries(row)) {
+    if (!value?.trim()) continue;
+    const isAddress = header.includes("adresse") || header.includes("address") || header.includes("rue");
+    const isEmail = header.includes("email") || header.includes("mail") || header.includes("courriel");
+    if (isAddress && !isEmail) return value.trim();
+  }
+  return "";
+}
+
 function detectDelimiter(line: string) {
   const delimiters = ["\t", ";", ",", "|"];
   return delimiters
@@ -156,6 +173,7 @@ function parseRunnerImport(content: string) {
       first_name: getCell(row, ["Prénom", "Prenom", "First name"]),
       last_name: getCell(row, ["Nom", "Last name"]),
       phone: getPhoneCell(row),
+      address: getAddressCell(row),
       category: getCell(row, ["Abbrev. Catégorie", "Abbrev Categorie", "Nom Catégorie", "Nom Categorie", "Catégorie", "Categorie"]),
       birth_date: parseBirthDate(getCell(row, ["DateNaissance", "Date naissance", "Naissance"])),
       gender: normalizeGender(getCell(row, ["Sexe", "Genre", "Gender", "Sex", "S"])),
