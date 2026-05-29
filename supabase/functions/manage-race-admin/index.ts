@@ -34,6 +34,7 @@ const BodySchema = z.discriminatedUnion("action", [
     emergency_phone: z.string().trim().max(40).nullable(),
   }),
   z.object({ action: z.literal("delete_registration"), race_id: uuid, registration_id: uuid }),
+  z.object({ action: z.literal("delete_all_registrations"), race_id: uuid }),
   z.object({
     action: z.literal("add_registration"),
     race_id: uuid,
