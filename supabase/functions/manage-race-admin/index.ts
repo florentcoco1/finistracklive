@@ -346,6 +346,18 @@ async function ensureRegistrationContactsSchema() {
   }
 }
 
+let registrationContactsSchemaReady: Promise<void> | null = null;
+
+async function ensureRegistrationContactsSchemaOnce() {
+  if (!registrationContactsSchemaReady) {
+    registrationContactsSchemaReady = ensureRegistrationContactsSchema().catch((error) => {
+      registrationContactsSchemaReady = null;
+      throw error;
+    });
+  }
+  await registrationContactsSchemaReady;
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -365,6 +377,7 @@ Deno.serve(async (req) => {
     if (!parsed.success) return json({ error: "Données invalides", details: parsed.error.flatten().fieldErrors }, 400);
     const body = parsed.data;
     await requireRaceAdmin(admin, user.id, body.race_id);
+    await ensureRegistrationContactsSchemaOnce();
 
     if (body.action === "load") return json(await loadRace(admin, body.race_id));
 
