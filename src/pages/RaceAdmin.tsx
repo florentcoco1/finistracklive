@@ -713,8 +713,9 @@ export default function RaceAdmin() {
             {format(new Date(race.start_time), "EEEE d MMMM yyyy, HH:mm", { locale: fr })}
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-center">
-          <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-muted-foreground">coureurs</p></Card>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-muted-foreground">inscrits</p></Card>
+          <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.imported}</p><p className="text-xs text-muted-foreground">importés</p></Card>
           <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.organizers}</p><p className="text-xs text-muted-foreground">organisateurs</p></Card>
         </div>
       </div>
