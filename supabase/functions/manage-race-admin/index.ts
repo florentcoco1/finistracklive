@@ -491,6 +491,13 @@ Deno.serve(async (req) => {
       if ((body.emergency_phone || body.address) && inserted?.id) {
         await upsertRegistrationContact(inserted.id, body.emergency_phone || null, body.address || null);
       }
+      if (body.gender) {
+        await admin.from("gmcap_results").upsert({
+          race_id: body.race_id,
+          bib_number: body.bib_number,
+          gender: body.gender,
+        }, { onConflict: "race_id,bib_number" });
+      }
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
     }
 
