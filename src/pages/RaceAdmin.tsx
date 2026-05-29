@@ -255,6 +255,7 @@ export default function RaceAdmin() {
     setSourceEnabled(data.source?.enabled ?? true);
     setRegistrations(data.registrations ?? []);
     setOrganizers(data.organizers ?? []);
+    setImportedCount(data.imported_count ?? 0);
   }, []);
 
   const load = useCallback(async () => {
