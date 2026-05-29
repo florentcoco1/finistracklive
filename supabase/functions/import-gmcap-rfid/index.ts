@@ -320,6 +320,7 @@ Deno.serve(async (req) => {
         bib_number: bib,
         first_name: pick(row, "Prénom", "Prenom") || null,
         last_name: pick(row, "Nom") || null,
+        phone: pick(row, "Tel", "Tél", "Téléphone", "Telephone", "Phone", "Portable", "Mobile", "GSM") || null,
         birth_date: birthDate,
         gender,
         category: pick(row, "Abbrev. Catégorie", "Abbrev. Categorie", "Catégorie", "Categorie") || null,

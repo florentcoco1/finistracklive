@@ -113,6 +113,7 @@ async function importContent(admin: ReturnType<typeof createClient>, raceId: str
       bib_number: bib,
       first_name: pick(row, "Prénom", "Prenom") || null,
       last_name: pick(row, "Nom") || null,
+      phone: pick(row, "Tel", "Tél", "Téléphone", "Telephone", "Phone", "Portable", "Mobile", "GSM") || null,
       category: pick(row, "Abbrev. Catégorie", "Abbrev. Categorie", "Catégorie", "Categorie") || null,
       club: pick(row, "Club") || null,
       status: disqualified ? "disqualified" : abandoned ? "dnf" : started ? "classified" : "not_started",
