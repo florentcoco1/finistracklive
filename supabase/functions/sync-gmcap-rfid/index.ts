@@ -82,7 +82,7 @@ function extractSplits(row: ParsedRow) {
   return splits;
 }
 
-async function importContent(admin: ReturnType<typeof createClient>, raceId: string, content: string) {
+async function importContent(admin: any, raceId: string, content: string) {
   const rows = parseDelimited(content);
   if (rows.length === 0) throw new Error("Aucune ligne exploitable dans l'export GMCAP");
 
@@ -183,7 +183,7 @@ async function readSource(source: Source) {
 }
 
 
-async function syncSource(admin: ReturnType<typeof createClient>, source: Source) {
+async function syncSource(admin: any, source: Source) {
   const content = await readSource(source);
   const result = await importContent(admin, source.race_id, content);
   await admin.from("gmcap_import_sources").update({
