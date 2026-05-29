@@ -616,6 +616,7 @@ export default function RaceAdmin() {
         email: newRunner.email.trim(),
         bib_number: newRunner.bib_number.trim(),
         category: newRunner.category.trim() || null,
+        gender: newRunner.gender || null,
         emergency_phone: newRunner.emergency_phone.trim() || null,
         address: newRunner.address.trim() || null,
       });
