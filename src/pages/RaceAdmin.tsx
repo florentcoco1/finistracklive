@@ -645,12 +645,50 @@ export default function RaceAdmin() {
     setRunnerImporting(true);
     try {
       const content = await readTextFile(runnerImportFile);
-      const data = await invokeAdmin({ action: "bulk_import_registrations", race_id: raceId, file_name: runnerImportFile.name, content });
-      applyAdminData(data);
-      const summary = data as AdminResponse & { created?: number; updated?: number; registered?: number; skipped?: number; errors?: string[] };
-      setRunnerImportReport({ registered: summary.registered ?? 0, created: summary.created ?? 0, errors: summary.errors ?? [] });
-      if (summary.errors?.length) toast.warning(`${summary.registered ?? 0} coureur(s) importé(s), ${summary.errors.length} problème(s) détecté(s). Voir le rapport ci-dessous.`);
-      else toast.success(`${summary.registered ?? 0} coureur(s) importé(s) · ${summary.created ?? 0} compte(s) créé(s)`);
+      // Découpe le fichier en lots pour éviter le dépassement CPU de l'edge function
+      const rawLines = content.replace(/^\uFEFF/, "").split(/\r?\n/);
+      const headerIdx = rawLines.findIndex((l) => l.trim());
+      if (headerIdx < 0) throw new Error("Fichier vide");
+      const header = rawLines[headerIdx];
+      const dataLines = rawLines.slice(headerIdx + 1).filter((l) => l.trim());
+      const CHUNK = 60;
+      const chunks: string[] = [];
+      if (!dataLines.length) {
+        chunks.push(content);
+      } else {
+        for (let i = 0; i < dataLines.length; i += CHUNK) {
+          chunks.push([header, ...dataLines.slice(i, i + CHUNK)].join("\n"));
+        }
+      }
+
+      let totalRegistered = 0;
+      let totalCreated = 0;
+      let totalUpdated = 0;
+      let totalSkipped = 0;
+      const allErrors: string[] = [];
+      let lastData: unknown = null;
+
+      for (let i = 0; i < chunks.length; i += 1) {
+        toast.info(`Import lot ${i + 1}/${chunks.length}…`);
+        const data = await invokeAdmin({
+          action: "bulk_import_registrations",
+          race_id: raceId,
+          file_name: runnerImportFile.name,
+          content: chunks[i],
+        });
+        const s = data as AdminResponse & { created?: number; updated?: number; registered?: number; skipped?: number; errors?: string[] };
+        totalRegistered += s.registered ?? 0;
+        totalCreated += s.created ?? 0;
+        totalUpdated += s.updated ?? 0;
+        totalSkipped += s.skipped ?? 0;
+        if (s.errors?.length) allErrors.push(...s.errors);
+        lastData = data;
+      }
+
+      if (lastData) applyAdminData(lastData);
+      setRunnerImportReport({ registered: totalRegistered, created: totalCreated, errors: allErrors });
+      if (allErrors.length) toast.warning(`${totalRegistered} coureur(s) importé(s), ${allErrors.length} problème(s). Voir le rapport ci-dessous.`);
+      else toast.success(`${totalRegistered} coureur(s) importé(s) · ${totalCreated} compte(s) créé(s)`);
       setRunnerImportFile(null);
     } catch (error) {
       toast.error((error as Error).message || "Import coureurs impossible");
