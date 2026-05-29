@@ -307,8 +307,8 @@ export default function RaceAdmin() {
   }, [raceId, user, loading, navigate, load]);
 
   const stats = useMemo(() => {
-    return { total: registrations.length, organizers: organizers.length };
-  }, [registrations, organizers]);
+    return { total: registrations.length, organizers: organizers.length, imported: importedCount };
+  }, [registrations, organizers, importedCount]);
 
   const saveGmcap = async () => {
     if (!raceId || !sourceUrl.trim()) {
