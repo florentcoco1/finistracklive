@@ -96,6 +96,35 @@ function getCell(row: Record<string, string>, names: string[]) {
   return "";
 }
 
+function getEmailCell(row: Record<string, string>) {
+  const exact = getCell(row, ["EMail", "Email", "E-mail", "E mail", "Mail", "Adresse mail", "Adresse e-mail", "Adresse email", "Courriel"]);
+  if (exact) return exact;
+  for (const [header, value] of Object.entries(row)) {
+    if (value?.trim() && (header.includes("email") || header.includes("mail") || header.includes("courriel"))) return value.trim();
+  }
+  return "";
+}
+
+function getPhoneCell(row: Record<string, string>) {
+  const exact = getCell(row, [
+    "Tel", "Tél", "Tél.", "Telephone", "Téléphone", "Tel.", "Phone",
+    "Portable", "Mobile", "GSM", "Tel mobile", "Téléphone mobile", "Telephone mobile",
+    "N° Tel", "N° Tél", "No Tel", "Numéro Tel", "Numero Tel",
+  ]);
+  if (exact) return exact;
+  for (const [header, value] of Object.entries(row)) {
+    if (value?.trim() && (header.includes("telephone") || header.includes("tel") || header.includes("portable") || header.includes("mobile") || header.includes("gsm") || header.includes("phone"))) return value.trim();
+  }
+  return "";
+}
+
+function detectDelimiter(line: string) {
+  const delimiters = ["\t", ";", ",", "|"];
+  return delimiters
+    .map((delimiter) => ({ delimiter, count: splitDelimitedLine(line, delimiter).length }))
+    .sort((a, b) => b.count - a.count)[0]?.delimiter ?? "\t";
+}
+
 function parseBirthDate(value: string) {
   const clean = value.trim();
   if (!clean) return null;
@@ -115,17 +144,17 @@ function randomPassword() {
 function parseRunnerImport(content: string) {
   const lines = content.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) throw new Error("Le fichier doit contenir une ligne d’en-tête et au moins un coureur");
-  const delimiter = (lines[0].match(/\t/g)?.length ?? 0) >= (lines[0].match(/;/g)?.length ?? 0) ? "\t" : ";";
+  const delimiter = detectDelimiter(lines[0]);
   const headers = splitDelimitedLine(lines[0], delimiter).map(normalizeHeader);
   return lines.slice(1).map((line) => {
     const cells = splitDelimitedLine(line, delimiter);
     const row = Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? ""]));
     return {
-      email: getCell(row, ["EMail", "Email", "E-mail", "Mail"]).toLowerCase(),
+      email: getEmailCell(row).toLowerCase(),
       bib_number: getCell(row, ["Numéro", "Numero", "Dossard", "N°", "No"]),
       first_name: getCell(row, ["Prénom", "Prenom", "First name"]),
       last_name: getCell(row, ["Nom", "Last name"]),
-      phone: getCell(row, ["Tel", "Téléphone", "Telephone", "Phone"]),
+      phone: getPhoneCell(row),
       category: getCell(row, ["Abbrev. Catégorie", "Abbrev Categorie", "Nom Catégorie", "Nom Categorie", "Catégorie", "Categorie"]),
       birth_date: parseBirthDate(getCell(row, ["DateNaissance", "Date naissance", "Naissance"])),
       gender: normalizeGender(getCell(row, ["Sexe", "Genre", "Gender", "Sex", "S"])),
@@ -141,14 +170,14 @@ function normalizeGender(value: string): string | null {
   return null;
 }
 
-async function findUserByEmail(admin: ReturnType<typeof createClient>, email: string): Promise<string | null> {
+async function findUserByEmail(admin: any, email: string): Promise<string | null> {
   const normalized = email.trim().toLowerCase();
   const { data: profile } = await admin.from("profiles").select("user_id").ilike("email", normalized).maybeSingle();
   if (profile?.user_id) return profile.user_id as string;
   for (let page = 1; page <= 20; page += 1) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
     if (error || !data?.users?.length) return null;
-    const match = data.users.find((u) => (u.email ?? "").toLowerCase() === normalized);
+    const match = data.users.find((u: { email?: string | null; id: string; user_metadata?: Record<string, unknown> }) => (u.email ?? "").toLowerCase() === normalized);
     if (match) {
       const meta = (match.user_metadata ?? {}) as { first_name?: string; last_name?: string };
       await admin.from("profiles").upsert({
@@ -164,7 +193,7 @@ async function findUserByEmail(admin: ReturnType<typeof createClient>, email: st
   return null;
 }
 
-async function requireRaceAdmin(admin: ReturnType<typeof createClient>, userId: string, raceId: string) {
+async function requireRaceAdmin(admin: any, userId: string, raceId: string) {
   const { data, error } = await admin.rpc("is_race_admin", { _race_id: raceId, _user_id: userId });
   if (!error && data) return;
 
@@ -176,7 +205,7 @@ async function requireRaceAdmin(admin: ReturnType<typeof createClient>, userId: 
   if (raceError || race?.organizer_id !== userId) throw new Error("Administration réservée aux organisateurs de cette course");
 }
 
-async function loadRace(admin: ReturnType<typeof createClient>, raceId: string) {
+async function loadRace(admin: any, raceId: string) {
   const [{ data: source }, { data: registrations }, { data: organizers }, { data: race }, { data: gmcapResults }] = await Promise.all([
     admin.from("gmcap_import_sources").select("id, source_url, source_type, file_name, enabled, last_import_at, last_import_status, last_import_message").eq("race_id", raceId).maybeSingle(),
     admin.from("race_registrations").select("id, runner_id, bib_number, category, runner_status, created_at").eq("race_id", raceId).order("bib_number"),
@@ -223,7 +252,7 @@ async function loadRace(admin: ReturnType<typeof createClient>, raceId: string) 
       return { ...r, emergency_phone: phoneByReg.get(r.id) ?? null, profile: merged, gender: gmcap?.gender ?? null, birth_date: gmcap?.birth_date ?? null };
     }),
     organizers: [
-      race?.organizer_id && { id: "owner", user_id: race.organizer_id, role: "propriétaire", created_at: null, profile: profileById.get(race.organizer_id) ?? null },
+      race?.organizer_id && { id: "owner", user_id: race.organizer_id as string, role: "propriétaire", created_at: null, profile: profileById.get(race.organizer_id as string) ?? null },
       ...organizerRows.map((o) => ({ ...o, profile: profileById.get(o.user_id) ?? null })),
     ].filter(Boolean),
   };
