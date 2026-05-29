@@ -239,9 +239,9 @@ async function loadRace(admin: any, raceId: string) {
   const organizerRows = (organizers ?? []) as OrganizerRow[];
   const regIds = registrationRows.map((r) => r.id);
   const { data: contacts } = regIds.length
-    ? await admin.from("race_registration_contacts").select("registration_id, emergency_phone").in("registration_id", regIds)
-    : { data: [] as Array<{ registration_id: string; emergency_phone: string | null }> };
-  const phoneByReg = new Map(((contacts ?? []) as Array<{ registration_id: string; emergency_phone: string | null }>).map((c) => [c.registration_id, c.emergency_phone]));
+    ? await admin.from("race_registration_contacts").select("registration_id, emergency_phone, address").in("registration_id", regIds)
+    : { data: [] as Array<{ registration_id: string; emergency_phone: string | null; address: string | null }> };
+  const contactByReg = new Map(((contacts ?? []) as Array<{ registration_id: string; emergency_phone: string | null; address: string | null }>).map((c) => [c.registration_id, c]));
 
   const profileIds = [
     ...new Set([
@@ -270,7 +270,8 @@ async function loadRace(admin: any, raceId: string) {
         : gmcap
           ? { email: null, phone: gmcap.phone ?? null, first_name: gmcap.first_name, last_name: gmcap.last_name }
           : null;
-      return { ...r, emergency_phone: phoneByReg.get(r.id) ?? profile?.phone ?? gmcap?.phone ?? null, profile: merged, gender: gmcap?.gender ?? null, birth_date: gmcap?.birth_date ?? null };
+      const contact = contactByReg.get(r.id) ?? null;
+      return { ...r, emergency_phone: contact?.emergency_phone ?? profile?.phone ?? gmcap?.phone ?? null, address: contact?.address ?? null, profile: merged, gender: gmcap?.gender ?? null, birth_date: gmcap?.birth_date ?? null };
     }),
     organizers: [
       race?.organizer_id && { id: "owner", user_id: race.organizer_id as string, role: "propriétaire", created_at: null, profile: profileById.get(race.organizer_id as string) ?? null },
