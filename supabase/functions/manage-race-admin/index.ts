@@ -43,6 +43,7 @@ const BodySchema = z.discriminatedUnion("action", [
     email: z.string().trim().email().max(255),
     bib_number: z.string().trim().min(1).max(40),
     category: z.string().trim().max(80).nullable(),
+    gender: z.enum(["M", "F"]).nullable().optional(),
     emergency_phone: z.string().trim().max(40).nullable(),
     address: z.string().trim().max(500).nullable().optional(),
   }),
@@ -489,6 +490,13 @@ Deno.serve(async (req) => {
       if (error) throw new Error(error.message);
       if ((body.emergency_phone || body.address) && inserted?.id) {
         await upsertRegistrationContact(inserted.id, body.emergency_phone || null, body.address || null);
+      }
+      if (body.gender) {
+        await admin.from("gmcap_results").upsert({
+          race_id: body.race_id,
+          bib_number: body.bib_number,
+          gender: body.gender,
+        }, { onConflict: "race_id,bib_number" });
       }
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
     }
