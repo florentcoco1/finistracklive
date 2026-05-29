@@ -54,6 +54,21 @@ async function ensurePhotosSchema(dbUrl: string) {
   }
 }
 
+async function insertCheckpointPhoto(
+  dbUrl: string,
+  photo: { raceId: string; checkpointId: string | null; uploadedBy: string; storagePath: string; caption: string | null },
+) {
+  const sql = postgres(dbUrl, { max: 1, prepare: false });
+  try {
+    await sql`
+      INSERT INTO public.checkpoint_photos (race_id, checkpoint_id, uploaded_by, storage_path, caption)
+      VALUES (${photo.raceId}, ${photo.checkpointId}, ${photo.uploadedBy}, ${photo.storagePath}, ${photo.caption})
+    `;
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -118,16 +133,17 @@ Deno.serve(async (req) => {
     const { error: upErr } = await admin.storage.from(BUCKET).upload(path, file, { contentType: file.type, upsert: false });
     if (upErr) return json({ error: upErr.message }, 500);
     if (!registrationId) {
-      const { error: dbErr } = await admin.from('checkpoint_photos').insert({
-        race_id: targetRaceId,
-        checkpoint_id: checkpointId || null,
-        uploaded_by: userData.user.id,
-        storage_path: path,
-        caption: caption || null,
-      });
-      if (dbErr) {
+      try {
+        await insertCheckpointPhoto(dbUrl, {
+          raceId: targetRaceId,
+          checkpointId: checkpointId || null,
+          uploadedBy: userData.user.id,
+          storagePath: path,
+          caption: caption || null,
+        });
+      } catch (dbErr) {
         await admin.storage.from(BUCKET).remove([path]);
-        return json({ error: dbErr.message }, 500);
+        return json({ error: dbErr instanceof Error ? dbErr.message : 'photo_save_failed' }, 500);
       }
     }
     const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(path);
