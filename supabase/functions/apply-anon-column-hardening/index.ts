@@ -34,8 +34,8 @@ Deno.serve(async (req) => {
       .from('user_roles')
       .select('role')
       .eq('user_id', userData.user.id);
-    const isAdmin = (roles ?? []).some((r: { role: string }) => r.role === 'admin');
-    if (!isAdmin) return json({ error: 'forbidden' }, 403);
+    const canRun = (roles ?? []).some((r: { role: string }) => r.role === 'admin' || r.role === 'organizer');
+    if (!canRun) return json({ error: 'forbidden' }, 403);
 
     const sql = postgres(dbUrl, { max: 1, prepare: false });
     try {
