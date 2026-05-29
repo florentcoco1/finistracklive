@@ -262,6 +262,7 @@ async function loadRace(admin: any, raceId: string) {
 
   return {
     source,
+    imported_count: (gmcapResults ?? []).length,
     registrations: registrationRows.map((r) => {
       const profile = profileById.get(r.runner_id) ?? null;
       const gmcap = gmcapByBib.get(String(r.bib_number).trim()) ?? null;
