@@ -72,11 +72,25 @@ const Index = () => {
 
   useEffect(() => {
     document.title = "FinisTrackLive — Suivi de course en direct";
+    const since = new Date();
+    since.setHours(0, 0, 0, 0);
+    since.setDate(since.getDate() - 1);
+    const sinceIso = since.toISOString();
+
     const loadRaces = (columns: string) =>
-      (supabase.from as unknown as (table: string) => UntypedRacesQuery)("races")
+      (supabase.from as unknown as (table: string) => {
+        select: (c: string) => {
+          gte: (col: string, val: string) => {
+            order: (col: string, opts: { ascending: boolean }) => {
+              limit: (n: number) => Promise<{ data: unknown[] | null; error: { code?: string; message?: string } | null }>;
+            };
+          };
+        };
+      })("races")
         .select(columns)
+        .gte("start_time", sinceIso)
         .order("start_time", { ascending: true })
-        .limit(6);
+        .limit(20);
 
     loadRaces(raceColumns).then(async ({ data, error }) => {
       if (isMissingDifficultyColumn(error)) {
@@ -91,6 +105,7 @@ const Index = () => {
       }
       setRaces((data ?? []) as Race[]);
     });
+
 
     // Fetch events and find one that is currently live
     (supabase.from as unknown as (table: string) => UntypedRacesQuery)("events")
@@ -114,12 +129,13 @@ const Index = () => {
       });
   }, []);
 
-  const liveRace = races.find((r) => {
+  const liveRaces = races.filter((r) => {
     const startMs = new Date(r.start_time).getTime();
     const now = Date.now();
     return r.status === "live" || (now >= startMs && r.status !== "finished");
   });
-  const upcomingRaces = races.filter((r) => r.id !== liveRace?.id);
+  const liveRaceIds = new Set(liveRaces.map((r) => r.id));
+  const upcomingRaces = races.filter((r) => !liveRaceIds.has(r.id));
 
   return (
     <main>
@@ -159,21 +175,29 @@ const Index = () => {
       </section>
 
       {/* Live race highlight */}
-      {liveRace && (
+      {liveRaces.length > 0 && (
         <section className="container -mt-8 mb-8 relative z-10">
           <div className="mb-4 flex items-center gap-2">
             <span className="relative flex h-3 w-3">
               <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-75 animate-ping" />
               <span className="relative inline-flex rounded-full h-3 w-3 bg-success" />
             </span>
-            <h2 className="font-display text-xl font-bold text-success">Course en cours</h2>
+            <h2 className="font-display text-xl font-bold text-success">
+              {liveRaces.length > 1 ? "Courses en cours" : "Course en cours"}
+            </h2>
           </div>
-          <LiveRaceCard race={liveRace} showDescription />
+          <div className="grid md:grid-cols-2 gap-4">
+            {liveRaces.map((r) => (
+              <LiveRaceCard key={r.id} race={r} showDescription />
+            ))}
+          </div>
         </section>
       )}
 
+
+
       {/* Live event highlight (fallback when no live race) */}
-      {!liveRace && liveEvent && (
+      {liveRaces.length === 0 && liveEvent && (
         <section className="container -mt-8 mb-8 relative z-10">
           <Link to={`/events/${liveEvent.id}`}>
             <Card className="glass-card p-6 md:p-8 hover:border-primary/50 hover:shadow-glow transition-smooth relative overflow-hidden">
