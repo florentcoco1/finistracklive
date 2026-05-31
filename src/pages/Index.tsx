@@ -197,7 +197,7 @@ const Index = () => {
 
 
       {/* Live event highlight (fallback when no live race) */}
-      {!liveRace && liveEvent && (
+      {liveRaces.length === 0 && liveEvent && (
         <section className="container -mt-8 mb-8 relative z-10">
           <Link to={`/events/${liveEvent.id}`}>
             <Card className="glass-card p-6 md:p-8 hover:border-primary/50 hover:shadow-glow transition-smooth relative overflow-hidden">
