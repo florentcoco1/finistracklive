@@ -135,7 +135,7 @@ const Index = () => {
     return r.status === "live" || (now >= startMs && r.status !== "finished");
   });
   const liveRaceIds = new Set(liveRaces.map((r) => r.id));
-  const upcomingRaces = races.filter((r) => !liveRaceIds.has(r.id));
+  const upcomingRaces = races.filter((r) => !liveRaceIds.has(r.id) && r.status !== "finished");
 
   return (
     <main>
