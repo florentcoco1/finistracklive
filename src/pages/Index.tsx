@@ -80,7 +80,7 @@ const Index = () => {
     const loadRaces = (columns: string) =>
       (supabase.from as unknown as (table: string) => {
         select: (c: string) => {
-          gte: (col: string, val: string) => {
+          or: (filter: string) => {
             order: (col: string, opts: { ascending: boolean }) => {
               limit: (n: number) => Promise<{ data: unknown[] | null; error: { code?: string; message?: string } | null }>;
             };
@@ -88,9 +88,9 @@ const Index = () => {
         };
       })("races")
         .select(columns)
-        .gte("start_time", sinceIso)
+        .or(`status.neq.finished,start_time.gte.${sinceIso}`)
         .order("start_time", { ascending: true })
-        .limit(20);
+        .limit(50);
 
     loadRaces(raceColumns).then(async ({ data, error }) => {
       if (isMissingDifficultyColumn(error)) {
