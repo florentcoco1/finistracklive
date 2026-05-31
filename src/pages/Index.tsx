@@ -72,11 +72,25 @@ const Index = () => {
 
   useEffect(() => {
     document.title = "FinisTrackLive — Suivi de course en direct";
+    const since = new Date();
+    since.setHours(0, 0, 0, 0);
+    since.setDate(since.getDate() - 1);
+    const sinceIso = since.toISOString();
+
     const loadRaces = (columns: string) =>
-      (supabase.from as unknown as (table: string) => UntypedRacesQuery)("races")
+      (supabase.from as unknown as (table: string) => {
+        select: (c: string) => {
+          gte: (col: string, val: string) => {
+            order: (col: string, opts: { ascending: boolean }) => {
+              limit: (n: number) => Promise<{ data: unknown[] | null; error: { code?: string; message?: string } | null }>;
+            };
+          };
+        };
+      })("races")
         .select(columns)
+        .gte("start_time", sinceIso)
         .order("start_time", { ascending: true })
-        .limit(6);
+        .limit(20);
 
     loadRaces(raceColumns).then(async ({ data, error }) => {
       if (isMissingDifficultyColumn(error)) {
@@ -91,6 +105,7 @@ const Index = () => {
       }
       setRaces((data ?? []) as Race[]);
     });
+
 
     // Fetch events and find one that is currently live
     (supabase.from as unknown as (table: string) => UntypedRacesQuery)("events")
