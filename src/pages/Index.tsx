@@ -129,12 +129,13 @@ const Index = () => {
       });
   }, []);
 
-  const liveRace = races.find((r) => {
+  const liveRaces = races.filter((r) => {
     const startMs = new Date(r.start_time).getTime();
     const now = Date.now();
     return r.status === "live" || (now >= startMs && r.status !== "finished");
   });
-  const upcomingRaces = races.filter((r) => r.id !== liveRace?.id);
+  const liveRaceIds = new Set(liveRaces.map((r) => r.id));
+  const upcomingRaces = races.filter((r) => !liveRaceIds.has(r.id));
 
   return (
     <main>
@@ -174,18 +175,26 @@ const Index = () => {
       </section>
 
       {/* Live race highlight */}
-      {liveRace && (
+      {liveRaces.length > 0 && (
         <section className="container -mt-8 mb-8 relative z-10">
           <div className="mb-4 flex items-center gap-2">
             <span className="relative flex h-3 w-3">
               <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-75 animate-ping" />
               <span className="relative inline-flex rounded-full h-3 w-3 bg-success" />
             </span>
-            <h2 className="font-display text-xl font-bold text-success">Course en cours</h2>
+            <h2 className="font-display text-xl font-bold text-success">
+              {liveRaces.length > 1 ? "Courses en cours" : "Course en cours"}
+            </h2>
           </div>
-          <LiveRaceCard race={liveRace} showDescription />
+          <div className="grid md:grid-cols-2 gap-4">
+            {liveRaces.map((r) => (
+              <LiveRaceCard key={r.id} race={r} showDescription />
+            ))}
+          </div>
         </section>
       )}
+
+
 
       {/* Live event highlight (fallback when no live race) */}
       {!liveRace && liveEvent && (
