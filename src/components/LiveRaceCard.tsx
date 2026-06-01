@@ -69,7 +69,7 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
     let active = true;
 
     const load = async () => {
-      const [{ data: regs }, { data: checkpoints }] = await Promise.all([
+      const [{ data: regs }, { data: checkpoints }, { data: gmcap }] = await Promise.all([
         supabase
           .from("race_registrations")
           .select("id, runner_id, bib_number")
@@ -79,43 +79,39 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
           .select("id, name, position")
           .eq("race_id", race.id)
           .order("position", { ascending: true }),
+        supabase
+          .from("gmcap_results")
+          .select("bib_number, first_name, last_name, gender, official_time_seconds, official_time_text, scratch_rank")
+          .eq("race_id", race.id),
       ]);
       if (!active) return;
       const regList = (regs ?? []) as Array<{ id: string; runner_id: string; bib_number: string }>;
       const cpList = (checkpoints ?? []) as Array<{ id: string; name: string; position: number }>;
-      if (regList.length === 0) {
-        setPodium({ men: [], women: [], overall: [] });
-        return;
-      }
-
+      const gmcapList = (gmcap ?? []) as Array<{ bib_number: string; first_name: string | null; last_name: string | null; gender: string | null; official_time_seconds: number | null; official_time_text: string | null; scratch_rank: number | null }>;
 
       const regIds = regList.map((r) => r.id);
       const runnerIds = Array.from(new Set(regList.map((r) => r.runner_id)));
-      const bibs = regList.map((r) => r.bib_number);
 
-      const [{ data: times }, { data: profiles }, { data: gmcap }] = await Promise.all([
-        supabase
-          .from("runner_checkpoint_times")
-          .select("registration_id, checkpoint_id, time_seconds, time_text")
-          .in("registration_id", regIds),
-        supabase
-          .from("profiles")
-          .select("user_id, first_name, last_name")
-          .in("user_id", runnerIds),
-        supabase
-          .from("gmcap_results")
-          .select("bib_number, gender, official_time_seconds, official_time_text, scratch_rank")
-          .eq("race_id", race.id)
-          .in("bib_number", bibs),
+      const [{ data: times }, { data: profiles }] = await Promise.all([
+        regIds.length > 0
+          ? supabase
+              .from("runner_checkpoint_times")
+              .select("registration_id, checkpoint_id, time_seconds, time_text")
+              .in("registration_id", regIds)
+          : Promise.resolve({ data: [] as any[] }),
+        runnerIds.length > 0
+          ? supabase
+              .from("profiles")
+              .select("user_id, first_name, last_name")
+              .in("user_id", runnerIds)
+          : Promise.resolve({ data: [] as any[] }),
       ]);
       if (!active) return;
 
       const cpById = new Map(cpList.map((c) => [c.id, c]));
       const profileById = new Map((profiles ?? []).map((p) => [p.user_id, p]));
-      const gmcapByBib = new Map(
-        ((gmcap ?? []) as Array<{ bib_number: string; gender: string | null; official_time_seconds: number | null; official_time_text: string | null; scratch_rank: number | null }>)
-          .map((g) => [String(g.bib_number).trim(), g]),
-      );
+      const gmcapByBib = new Map(gmcapList.map((g) => [String(g.bib_number).trim(), g]));
+      const regBibs = new Set(regList.map((r) => String(r.bib_number).trim()));
 
       const bestByReg = new Map<string, { position: number; checkpoint_id: string; time_seconds: number | null; time_text: string | null }>();
       for (const t of (times ?? []) as Array<{ registration_id: string; checkpoint_id: string; time_seconds: number | null; time_text: string | null }>) {
@@ -143,8 +139,8 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
           return {
             registration_id: r.id,
             bib_number: r.bib_number,
-            first_name: profile?.first_name ?? null,
-            last_name: profile?.last_name ?? null,
+            first_name: profile?.first_name ?? g?.first_name ?? null,
+            last_name: profile?.last_name ?? g?.last_name ?? null,
             gender: (g?.gender as "M" | "F" | null) ?? null,
             checkpoint_name: finished ? "Arrivée" : (cp?.name ?? null),
             checkpoint_position: finished ? Number.MAX_SAFE_INTEGER : (best?.position ?? 0),
@@ -155,6 +151,26 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
           } as PodiumRow;
         })
         .filter((r): r is PodiumRow => r !== null);
+
+      // Inclure les finishers du GMCAP qui ne sont pas dans race_registrations
+      for (const g of gmcapList) {
+        const bib = String(g.bib_number).trim();
+        if (regBibs.has(bib)) continue;
+        if (g.official_time_seconds == null) continue;
+        rows.push({
+          registration_id: `gmcap-${bib}`,
+          bib_number: bib,
+          first_name: g.first_name,
+          last_name: g.last_name,
+          gender: (g.gender as "M" | "F" | null) ?? null,
+          checkpoint_name: "Arrivée",
+          checkpoint_position: Number.MAX_SAFE_INTEGER,
+          time_text: g.official_time_text,
+          time_seconds: g.official_time_seconds,
+          finished: true,
+          finish_rank: g.scratch_rank,
+        });
+      }
 
       const sortFn = (a: PodiumRow, b: PodiumRow) => {
         if (a.finished !== b.finished) return a.finished ? -1 : 1;
