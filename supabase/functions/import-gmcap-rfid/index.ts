@@ -351,6 +351,41 @@ Deno.serve(async (req) => {
     }
     const deduped = Array.from(dedupedMap.values());
 
+    // Recompute scratch/gender/category ranks from official_time_seconds to fix any
+    // inconsistencies in the source GMCAP file. Only classified runners with a valid
+    // time are ranked.
+    const ranked = deduped.filter(
+      (r) => r.status === "classified" && typeof r.official_time_seconds === "number" && (r.official_time_seconds as number) > 0
+    );
+    ranked.sort((a, b) => (a.official_time_seconds as number) - (b.official_time_seconds as number));
+    const rankedSet = new Set(ranked);
+    const genderCounters = new Map<string, number>();
+    const categoryCounters = new Map<string, number>();
+    ranked.forEach((r, idx) => {
+      r.scratch_rank = idx + 1;
+      if (r.gender) {
+        const n = (genderCounters.get(r.gender) ?? 0) + 1;
+        genderCounters.set(r.gender, n);
+        r.gender_rank = n;
+      } else {
+        r.gender_rank = null;
+      }
+      if (r.category) {
+        const n = (categoryCounters.get(r.category) ?? 0) + 1;
+        categoryCounters.set(r.category, n);
+        r.category_rank = n;
+      } else {
+        r.category_rank = null;
+      }
+    });
+    for (const r of deduped) {
+      if (!rankedSet.has(r)) {
+        r.scratch_rank = null;
+        r.gender_rank = null;
+        r.category_rank = null;
+      }
+    }
+
     const { error: upsertError } = await admin
       .from("gmcap_results")
       .upsert(deduped, { onConflict: "race_id,bib_number" });
