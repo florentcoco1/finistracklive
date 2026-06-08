@@ -71,7 +71,18 @@ function formatTime(seconds: number | null, fallback: string | null): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { raceId: string; raceStartTime?: string | null; registrations: RegistrationLite[] }) {
+interface EventRunner {
+  registration_id: string;
+  race_id: string;
+  race_name: string;
+  race_start_time: string | null;
+  bib_number: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+}
+
+export function RaceCheckpoints({ raceId, eventId, raceStartTime, registrations }: { raceId: string; eventId?: string | null; raceStartTime?: string | null; registrations: RegistrationLite[] }) {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [times, setTimes] = useState<CheckpointTime[]>([]);
   const [newCp, setNewCp] = useState(emptyNew);
@@ -79,12 +90,14 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
   const [activeCp, setActiveCp] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({}); // key registrationId
   const [bibInput, setBibInput] = useState("");
-  const [recentEntries, setRecentEntries] = useState<Array<{ bib: string; name: string; text: string; photos: string[] }>>([]);
+  const [recentEntries, setRecentEntries] = useState<Array<{ bib: string; firstName: string; lastName: string; raceName: string; text: string; photos: string[] }>>([]);
   const bibRef = useRef<HTMLInputElement | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<File[]>([]);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [photosByReg, setPhotosByReg] = useState<Record<string, string[]>>({});
   const [uploadingReg, setUploadingReg] = useState<string | null>(null);
+  const [eventRunners, setEventRunners] = useState<EventRunner[]>([]);
+  const [eventCheckpoints, setEventCheckpoints] = useState<Array<{ id: string; race_id: string; name: string }>>([]);
 
   const ensureSchema = useCallback(async () => {
     await supabase.functions.invoke("ensure-checkpoints-schema");
@@ -117,6 +130,50 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Load all runners + checkpoints of the parent event for cross-race bib lookup
+  useEffect(() => {
+    if (!eventId) {
+      setEventRunners([]);
+      setEventCheckpoints([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const sb = supabase as any;
+      const { data: races } = await sb.from("races").select("id, name, start_time").eq("event_id", eventId);
+      const raceIds = (races ?? []).map((r: any) => r.id);
+      if (raceIds.length === 0) return;
+      const raceMeta = new Map<string, { name: string; start_time: string | null }>(
+        (races ?? []).map((r: any) => [r.id, { name: r.name, start_time: r.start_time }]),
+      );
+      const { data: regs } = await sb
+        .from("race_registrations")
+        .select("id, race_id, bib_number, runner:profiles!race_registrations_runner_id_fkey(first_name, last_name, email)")
+        .in("race_id", raceIds);
+      const { data: cps } = await sb
+        .from("race_checkpoints")
+        .select("id, race_id, name")
+        .in("race_id", raceIds);
+      if (cancelled) return;
+      const runners: EventRunner[] = (regs ?? []).map((r: any) => {
+        const meta = raceMeta.get(r.race_id) ?? { name: "", start_time: null };
+        return {
+          registration_id: r.id,
+          race_id: r.race_id,
+          race_name: meta.name,
+          race_start_time: meta.start_time,
+          bib_number: r.bib_number,
+          first_name: r.runner?.first_name ?? null,
+          last_name: r.runner?.last_name ?? null,
+          email: r.runner?.email ?? null,
+        };
+      });
+      setEventRunners(runners);
+      setEventCheckpoints((cps ?? []) as any);
+    })();
+    return () => { cancelled = true; };
+  }, [eventId, checkpoints.length]);
 
   useEffect(() => {
     if (!activeCp) {
@@ -201,16 +258,48 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
     if (!activeCp) return;
     const bib = bibInput.trim();
     if (!bib) return;
-    if (!raceStartTime) {
+    const active = checkpoints.find((c) => c.id === activeCp);
+    if (!active) return;
+
+    // 1) Try local race first
+    let targetRegId: string | null = null;
+    let targetCheckpointId: string = activeCp;
+    let targetStart: string | null = raceStartTime ?? null;
+    let targetRaceName = "";
+    let firstName = "";
+    let lastName = "";
+
+    const localReg = registrations.find((r) => String(r.bib_number).trim() === bib);
+    if (localReg) {
+      targetRegId = localReg.id;
+      firstName = localReg.profile?.first_name ?? "";
+      lastName = localReg.profile?.last_name ?? "";
+    } else {
+      // 2) Look across the event
+      const xReg = eventRunners.find((r) => String(r.bib_number).trim() === bib);
+      if (!xReg) {
+        toast.error(`Dossard ${bib} introuvable dans l'événement`);
+        return;
+      }
+      // Find a checkpoint of the same name in the bib's race
+      const xCp = eventCheckpoints.find((c) => c.race_id === xReg.race_id && c.name === active.name);
+      if (!xCp) {
+        toast.error(`Aucun point « ${active.name} » sur la course « ${xReg.race_name} ». Crée-le d'abord pour cette course.`);
+        return;
+      }
+      targetRegId = xReg.registration_id;
+      targetCheckpointId = xCp.id;
+      targetStart = xReg.race_start_time;
+      targetRaceName = xReg.race_name;
+      firstName = xReg.first_name ?? "";
+      lastName = xReg.last_name ?? "";
+    }
+
+    if (!targetStart) {
       toast.error("Heure de départ de la course inconnue");
       return;
     }
-    const reg = registrations.find((r) => String(r.bib_number).trim() === bib);
-    if (!reg) {
-      toast.error(`Dossard ${bib} introuvable`);
-      return;
-    }
-    const startMs = new Date(raceStartTime).getTime();
+    const startMs = new Date(targetStart).getTime();
     const nowMs = Date.now();
     const seconds = Math.max(0, Math.round((nowMs - startMs) / 1000));
     const text = formatTime(seconds, null);
@@ -219,7 +308,7 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
     const { error } = await sb
       .from("runner_checkpoint_times")
       .upsert(
-        { checkpoint_id: activeCp, registration_id: reg.id, time_seconds: seconds, time_text: text, recorded_at: new Date().toISOString() },
+        { checkpoint_id: targetCheckpointId, registration_id: targetRegId, time_seconds: seconds, time_text: text, recorded_at: new Date().toISOString() },
         { onConflict: "checkpoint_id,registration_id" },
       );
     if (error) {
@@ -231,20 +320,21 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
     if (pendingPhotos.length > 0) {
       for (const f of pendingPhotos) {
         try {
-          const res = await uploadCheckpointPhoto(f, activeCp, reg.id);
+          const res = await uploadCheckpointPhoto(f, targetCheckpointId, targetRegId!);
           uploadedUrls.push(res.public_url);
         } catch (e) {
           toast.error(`Photo non envoyée : ${(e as Error).message}`);
         }
       }
-      setPhotosByReg((m) => ({ ...m, [reg.id]: [...(m[reg.id] ?? []), ...uploadedUrls] }));
+      if (targetCheckpointId === activeCp) {
+        setPhotosByReg((m) => ({ ...m, [targetRegId!]: [...(m[targetRegId!] ?? []), ...uploadedUrls] }));
+      }
       setPendingPhotos([]);
       if (photoInputRef.current) photoInputRef.current.value = "";
     }
     setBusy(false);
-    const name = `${reg.profile?.first_name ?? ""} ${reg.profile?.last_name ?? ""}`.trim() || reg.profile?.email || "—";
-    setRecentEntries((prev) => [{ bib, name, text, photos: uploadedUrls }, ...prev].slice(0, 8));
-    toast.success(`Dossard ${bib} — ${text}${uploadedUrls.length ? ` · ${uploadedUrls.length} photo(s)` : ""}`);
+    setRecentEntries((prev) => [{ bib, firstName, lastName, raceName: targetRaceName, text, photos: uploadedUrls }, ...prev].slice(0, 8));
+    toast.success(`Dossard ${bib} — ${text}${targetRaceName ? ` · ${targetRaceName}` : ""}${uploadedUrls.length ? ` · ${uploadedUrls.length} photo(s)` : ""}`);
     setBibInput("");
     bibRef.current?.focus();
     void load();
@@ -425,7 +515,7 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
                 className="max-w-48 font-mono text-lg"
                 inputMode="numeric"
               />
-              <Button variant="hero" onClick={() => void submitBib()} disabled={busy || !bibInput.trim() || !raceStartTime}>
+              <Button variant="hero" onClick={() => void submitBib()} disabled={busy || !bibInput.trim()}>
                 Valider <span className="ml-2 text-xs opacity-70">(Entrée)</span>
               </Button>
               <Button type="button" variant="glass" onClick={() => photoInputRef.current?.click()}>
@@ -466,21 +556,41 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
               <p className="text-xs text-destructive">Définis l'heure de départ de la course pour activer la saisie rapide.</p>
             )}
             {recentEntries.length > 0 && (
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">Derniers passages enregistrés</p>
-                <div className="flex flex-wrap gap-2">
-                  {recentEntries.map((e, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <Badge variant="secondary" className="font-mono">
-                        #{e.bib} · {e.text} · {e.name}{e.photos.length > 0 ? ` · 📷${e.photos.length}` : ""}
-                      </Badge>
-                      {e.photos.map((u, j) => (
-                        <a key={j} href={u} target="_blank" rel="noreferrer">
-                          <img src={u} alt="" className="h-10 w-10 object-cover rounded border border-border/50" />
-                        </a>
+                <div className="rounded-md border border-border/50 overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-20">Dossard</TableHead>
+                        <TableHead>Prénom</TableHead>
+                        <TableHead>Nom</TableHead>
+                        <TableHead>Course</TableHead>
+                        <TableHead className="text-right">Temps</TableHead>
+                        <TableHead>Photos</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {recentEntries.map((e, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-mono">#{e.bib}</TableCell>
+                          <TableCell>{e.firstName || "—"}</TableCell>
+                          <TableCell>{e.lastName || "—"}</TableCell>
+                          <TableCell>{e.raceName || <span className="text-muted-foreground italic">course actuelle</span>}</TableCell>
+                          <TableCell className="font-mono text-right">{e.text}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {e.photos.map((u, j) => (
+                                <a key={j} href={u} target="_blank" rel="noreferrer">
+                                  <img src={u} alt="" className="h-8 w-8 object-cover rounded border border-border/50" />
+                                </a>
+                              ))}
+                            </div>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </div>
-                  ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}
