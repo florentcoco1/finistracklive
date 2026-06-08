@@ -42,6 +42,17 @@ function formatElapsed(s: number) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
+function isZeroTime(text: string | null | undefined) {
+  if (!text) return true;
+  return /^0+([:.]0+)+$/.test(text.trim());
+}
+
+function displayTime(text: string | null, seconds: number | null) {
+  if (text && !isZeroTime(text)) return text;
+  if (seconds != null && seconds > 0) return formatElapsed(Math.round(seconds));
+  return null;
+}
+
 export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProps) {
   const startMs = useMemo(() => new Date(race.start_time).getTime(), [race.start_time]);
   const [nowTs, setNowTs] = useState(() => Date.now());
