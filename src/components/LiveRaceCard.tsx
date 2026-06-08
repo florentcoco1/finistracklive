@@ -143,7 +143,7 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
         .map((r) => {
           const g = gmcapByBib.get(String(r.bib_number).trim());
           const best = bestByReg.get(r.id);
-          const finished = !!(g && g.official_time_seconds != null);
+          const finished = !!(g && g.official_time_seconds != null && g.official_time_seconds > 0);
           if (!finished && !best) return null;
           const cp = best ? cpById.get(best.checkpoint_id) : null;
           const profile = profileById.get(r.runner_id);
