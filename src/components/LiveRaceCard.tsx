@@ -42,6 +42,17 @@ function formatElapsed(s: number) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
+function isZeroTime(text: string | null | undefined) {
+  if (!text) return true;
+  return /^0+([:.]0+)+$/.test(text.trim());
+}
+
+function displayTime(text: string | null, seconds: number | null) {
+  if (text && !isZeroTime(text)) return text;
+  if (seconds != null && seconds > 0) return formatElapsed(Math.round(seconds));
+  return null;
+}
+
 export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProps) {
   const startMs = useMemo(() => new Date(race.start_time).getTime(), [race.start_time]);
   const [nowTs, setNowTs] = useState(() => Date.now());
@@ -132,7 +143,7 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
         .map((r) => {
           const g = gmcapByBib.get(String(r.bib_number).trim());
           const best = bestByReg.get(r.id);
-          const finished = !!(g && g.official_time_seconds != null);
+          const finished = !!(g && g.official_time_seconds != null && g.official_time_seconds > 0);
           if (!finished && !best) return null;
           const cp = best ? cpById.get(best.checkpoint_id) : null;
           const profile = profileById.get(r.runner_id);
@@ -156,7 +167,7 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
       for (const g of gmcapList) {
         const bib = String(g.bib_number).trim();
         if (regBibs.has(bib)) continue;
-        if (g.official_time_seconds == null) continue;
+        if (g.official_time_seconds == null || g.official_time_seconds <= 0) continue;
         rows.push({
           registration_id: `gmcap-${bib}`,
           bib_number: bib,
@@ -271,9 +282,13 @@ function PodiumList({ title, rows }: { title: string; rows: PodiumRow[] }) {
               #{r.bib_number} {r.first_name} {r.last_name}
             </span>
             <span className={`shrink-0 ${r.finished ? "text-success font-semibold" : "text-muted-foreground"}`}>
-              {r.finished
-                ? `Arrivé${r.finish_rank ? ` · ${r.finish_rank}e` : ""}${r.time_text ? ` · ${r.time_text}` : ""}`
-                : `${r.checkpoint_name ?? `CP ${r.checkpoint_position + 1}`}${r.time_text ? ` · ${r.time_text}` : ""}`}
+              {(() => {
+                const t = displayTime(r.time_text, r.time_seconds);
+                if (r.finished) {
+                  return `Arrivé${r.finish_rank ? ` · ${r.finish_rank}e` : ""}${t ? ` · ${t}` : ""}`;
+                }
+                return `${r.checkpoint_name ?? `CP ${r.checkpoint_position + 1}`}${t ? ` · ${t}` : ""}`;
+              })()}
             </span>
           </li>
         ))}
