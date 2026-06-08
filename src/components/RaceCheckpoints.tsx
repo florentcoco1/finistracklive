@@ -258,16 +258,48 @@ export function RaceCheckpoints({ raceId, eventId, raceStartTime, registrations 
     if (!activeCp) return;
     const bib = bibInput.trim();
     if (!bib) return;
-    if (!raceStartTime) {
+    const active = checkpoints.find((c) => c.id === activeCp);
+    if (!active) return;
+
+    // 1) Try local race first
+    let targetRegId: string | null = null;
+    let targetCheckpointId: string = activeCp;
+    let targetStart: string | null = raceStartTime ?? null;
+    let targetRaceName = "";
+    let firstName = "";
+    let lastName = "";
+
+    const localReg = registrations.find((r) => String(r.bib_number).trim() === bib);
+    if (localReg) {
+      targetRegId = localReg.id;
+      firstName = localReg.profile?.first_name ?? "";
+      lastName = localReg.profile?.last_name ?? "";
+    } else {
+      // 2) Look across the event
+      const xReg = eventRunners.find((r) => String(r.bib_number).trim() === bib);
+      if (!xReg) {
+        toast.error(`Dossard ${bib} introuvable dans l'événement`);
+        return;
+      }
+      // Find a checkpoint of the same name in the bib's race
+      const xCp = eventCheckpoints.find((c) => c.race_id === xReg.race_id && c.name === active.name);
+      if (!xCp) {
+        toast.error(`Aucun point « ${active.name} » sur la course « ${xReg.race_name} ». Crée-le d'abord pour cette course.`);
+        return;
+      }
+      targetRegId = xReg.registration_id;
+      targetCheckpointId = xCp.id;
+      targetStart = xReg.race_start_time;
+      targetRaceName = xReg.race_name;
+      firstName = xReg.first_name ?? "";
+      lastName = xReg.last_name ?? "";
+    }
+
+    if (!targetStart) {
       toast.error("Heure de départ de la course inconnue");
       return;
     }
-    const reg = registrations.find((r) => String(r.bib_number).trim() === bib);
-    if (!reg) {
-      toast.error(`Dossard ${bib} introuvable`);
-      return;
-    }
-    const startMs = new Date(raceStartTime).getTime();
+    const startMs = new Date(targetStart).getTime();
     const nowMs = Date.now();
     const seconds = Math.max(0, Math.round((nowMs - startMs) / 1000));
     const text = formatTime(seconds, null);
@@ -276,7 +308,7 @@ export function RaceCheckpoints({ raceId, eventId, raceStartTime, registrations 
     const { error } = await sb
       .from("runner_checkpoint_times")
       .upsert(
-        { checkpoint_id: activeCp, registration_id: reg.id, time_seconds: seconds, time_text: text, recorded_at: new Date().toISOString() },
+        { checkpoint_id: targetCheckpointId, registration_id: targetRegId, time_seconds: seconds, time_text: text, recorded_at: new Date().toISOString() },
         { onConflict: "checkpoint_id,registration_id" },
       );
     if (error) {
@@ -288,20 +320,21 @@ export function RaceCheckpoints({ raceId, eventId, raceStartTime, registrations 
     if (pendingPhotos.length > 0) {
       for (const f of pendingPhotos) {
         try {
-          const res = await uploadCheckpointPhoto(f, activeCp, reg.id);
+          const res = await uploadCheckpointPhoto(f, targetCheckpointId, targetRegId!);
           uploadedUrls.push(res.public_url);
         } catch (e) {
           toast.error(`Photo non envoyée : ${(e as Error).message}`);
         }
       }
-      setPhotosByReg((m) => ({ ...m, [reg.id]: [...(m[reg.id] ?? []), ...uploadedUrls] }));
+      if (targetCheckpointId === activeCp) {
+        setPhotosByReg((m) => ({ ...m, [targetRegId!]: [...(m[targetRegId!] ?? []), ...uploadedUrls] }));
+      }
       setPendingPhotos([]);
       if (photoInputRef.current) photoInputRef.current.value = "";
     }
     setBusy(false);
-    const name = `${reg.profile?.first_name ?? ""} ${reg.profile?.last_name ?? ""}`.trim() || reg.profile?.email || "—";
-    setRecentEntries((prev) => [{ bib, name, text, photos: uploadedUrls }, ...prev].slice(0, 8));
-    toast.success(`Dossard ${bib} — ${text}${uploadedUrls.length ? ` · ${uploadedUrls.length} photo(s)` : ""}`);
+    setRecentEntries((prev) => [{ bib, firstName, lastName, raceName: targetRaceName, text, photos: uploadedUrls }, ...prev].slice(0, 8));
+    toast.success(`Dossard ${bib} — ${text}${targetRaceName ? ` · ${targetRaceName}` : ""}${uploadedUrls.length ? ` · ${uploadedUrls.length} photo(s)` : ""}`);
     setBibInput("");
     bibRef.current?.focus();
     void load();
