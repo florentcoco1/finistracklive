@@ -71,7 +71,18 @@ function formatTime(seconds: number | null, fallback: string | null): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { raceId: string; raceStartTime?: string | null; registrations: RegistrationLite[] }) {
+interface EventRunner {
+  registration_id: string;
+  race_id: string;
+  race_name: string;
+  race_start_time: string | null;
+  bib_number: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+}
+
+export function RaceCheckpoints({ raceId, eventId, raceStartTime, registrations }: { raceId: string; eventId?: string | null; raceStartTime?: string | null; registrations: RegistrationLite[] }) {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [times, setTimes] = useState<CheckpointTime[]>([]);
   const [newCp, setNewCp] = useState(emptyNew);
@@ -79,12 +90,14 @@ export function RaceCheckpoints({ raceId, raceStartTime, registrations }: { race
   const [activeCp, setActiveCp] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({}); // key registrationId
   const [bibInput, setBibInput] = useState("");
-  const [recentEntries, setRecentEntries] = useState<Array<{ bib: string; name: string; text: string; photos: string[] }>>([]);
+  const [recentEntries, setRecentEntries] = useState<Array<{ bib: string; firstName: string; lastName: string; raceName: string; text: string; photos: string[] }>>([]);
   const bibRef = useRef<HTMLInputElement | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<File[]>([]);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [photosByReg, setPhotosByReg] = useState<Record<string, string[]>>({});
   const [uploadingReg, setUploadingReg] = useState<string | null>(null);
+  const [eventRunners, setEventRunners] = useState<EventRunner[]>([]);
+  const [eventCheckpoints, setEventCheckpoints] = useState<Array<{ id: string; race_id: string; name: string }>>([]);
 
   const ensureSchema = useCallback(async () => {
     await supabase.functions.invoke("ensure-checkpoints-schema");
