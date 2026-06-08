@@ -515,7 +515,7 @@ export function RaceCheckpoints({ raceId, eventId, raceStartTime, registrations 
                 className="max-w-48 font-mono text-lg"
                 inputMode="numeric"
               />
-              <Button variant="hero" onClick={() => void submitBib()} disabled={busy || !bibInput.trim() || !raceStartTime}>
+              <Button variant="hero" onClick={() => void submitBib()} disabled={busy || !bibInput.trim()}>
                 Valider <span className="ml-2 text-xs opacity-70">(Entrée)</span>
               </Button>
               <Button type="button" variant="glass" onClick={() => photoInputRef.current?.click()}>
