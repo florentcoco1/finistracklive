@@ -167,7 +167,7 @@ export default function LiveRaceCard({ race, showDescription }: LiveRaceCardProp
       for (const g of gmcapList) {
         const bib = String(g.bib_number).trim();
         if (regBibs.has(bib)) continue;
-        if (g.official_time_seconds == null) continue;
+        if (g.official_time_seconds == null || g.official_time_seconds <= 0) continue;
         rows.push({
           registration_id: `gmcap-${bib}`,
           bib_number: bib,
