@@ -556,21 +556,41 @@ export function RaceCheckpoints({ raceId, eventId, raceStartTime, registrations 
               <p className="text-xs text-destructive">Définis l'heure de départ de la course pour activer la saisie rapide.</p>
             )}
             {recentEntries.length > 0 && (
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">Derniers passages enregistrés</p>
-                <div className="flex flex-wrap gap-2">
-                  {recentEntries.map((e, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <Badge variant="secondary" className="font-mono">
-                        #{e.bib} · {e.text} · {e.name}{e.photos.length > 0 ? ` · 📷${e.photos.length}` : ""}
-                      </Badge>
-                      {e.photos.map((u, j) => (
-                        <a key={j} href={u} target="_blank" rel="noreferrer">
-                          <img src={u} alt="" className="h-10 w-10 object-cover rounded border border-border/50" />
-                        </a>
+                <div className="rounded-md border border-border/50 overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-20">Dossard</TableHead>
+                        <TableHead>Prénom</TableHead>
+                        <TableHead>Nom</TableHead>
+                        <TableHead>Course</TableHead>
+                        <TableHead className="text-right">Temps</TableHead>
+                        <TableHead>Photos</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {recentEntries.map((e, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-mono">#{e.bib}</TableCell>
+                          <TableCell>{e.firstName || "—"}</TableCell>
+                          <TableCell>{e.lastName || "—"}</TableCell>
+                          <TableCell>{e.raceName || <span className="text-muted-foreground italic">course actuelle</span>}</TableCell>
+                          <TableCell className="font-mono text-right">{e.text}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {e.photos.map((u, j) => (
+                                <a key={j} href={u} target="_blank" rel="noreferrer">
+                                  <img src={u} alt="" className="h-8 w-8 object-cover rounded border border-border/50" />
+                                </a>
+                              ))}
+                            </div>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </div>
-                  ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}
