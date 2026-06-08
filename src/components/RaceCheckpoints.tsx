@@ -131,6 +131,50 @@ export function RaceCheckpoints({ raceId, eventId, raceStartTime, registrations 
     void load();
   }, [load]);
 
+  // Load all runners + checkpoints of the parent event for cross-race bib lookup
+  useEffect(() => {
+    if (!eventId) {
+      setEventRunners([]);
+      setEventCheckpoints([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const sb = supabase as any;
+      const { data: races } = await sb.from("races").select("id, name, start_time").eq("event_id", eventId);
+      const raceIds = (races ?? []).map((r: any) => r.id);
+      if (raceIds.length === 0) return;
+      const raceMeta = new Map<string, { name: string; start_time: string | null }>(
+        (races ?? []).map((r: any) => [r.id, { name: r.name, start_time: r.start_time }]),
+      );
+      const { data: regs } = await sb
+        .from("race_registrations")
+        .select("id, race_id, bib_number, runner:profiles!race_registrations_runner_id_fkey(first_name, last_name, email)")
+        .in("race_id", raceIds);
+      const { data: cps } = await sb
+        .from("race_checkpoints")
+        .select("id, race_id, name")
+        .in("race_id", raceIds);
+      if (cancelled) return;
+      const runners: EventRunner[] = (regs ?? []).map((r: any) => {
+        const meta = raceMeta.get(r.race_id) ?? { name: "", start_time: null };
+        return {
+          registration_id: r.id,
+          race_id: r.race_id,
+          race_name: meta.name,
+          race_start_time: meta.start_time,
+          bib_number: r.bib_number,
+          first_name: r.runner?.first_name ?? null,
+          last_name: r.runner?.last_name ?? null,
+          email: r.runner?.email ?? null,
+        };
+      });
+      setEventRunners(runners);
+      setEventCheckpoints((cps ?? []) as any);
+    })();
+    return () => { cancelled = true; };
+  }, [eventId, checkpoints.length]);
+
   useEffect(() => {
     if (!activeCp) {
       setDrafts({});
