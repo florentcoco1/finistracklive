@@ -187,20 +187,38 @@ export default function Results() {
         <div className="flex flex-col md:flex-row gap-3 md:items-center">
           <div className="flex-1">
             <label className="text-xs text-muted-foreground mb-1 block">Course</label>
+      <Card className="glass-card p-4 mb-6">
+        <div className="grid gap-3 md:grid-cols-3 md:items-end">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Épreuve</label>
+            <select
+              value={selectedEventId}
+              onChange={(e) => setSelectedEventId(e.target.value as string as "all" | "none" | string)}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="all">Toutes les épreuves</option>
+              {events.map((ev) => (
+                <option key={ev.id} value={ev.id}>{ev.name}</option>
+              ))}
+              <option value="none">— Courses sans épreuve —</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Course</label>
             <select
               value={selectedRaceId}
               onChange={(e) => setSelectedRaceId(e.target.value as string)}
               className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
             >
               <option value="all">Toutes les courses</option>
-              {races.map((r) => (
+              {filteredRaces.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name} — {format(new Date(r.start_time), "d MMM yyyy", { locale: fr })}
                 </option>
               ))}
             </select>
           </div>
-          <div className="flex-1">
+          <div>
             <label className="text-xs text-muted-foreground mb-1 block">Rechercher</label>
             <div className="relative">
               <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
