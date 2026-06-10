@@ -18,6 +18,12 @@ interface RaceLite {
   start_time: string;
   distance_km: number | null;
   status: string;
+  event_id: string | null;
+}
+
+interface EventLite {
+  id: string;
+  name: string;
 }
 
 interface ResultRow {
