@@ -235,11 +235,20 @@ Deno.serve(async (req) => {
 
     for (const row of rows) {
       const courseValue = pick(row, "Course", "Épreuve", "Epreuve", "Race");
-      if (courseValue) {
+      const competitionValue = pick(row, "Competition", "Compétition", "Compet", "Compet.", "Évènement", "Evenement", "Event");
+      const candidates = [courseValue, competitionValue].filter((v) => v && v.length > 0);
+      if (candidates.length > 0) {
         courseFieldSeen = true;
-        if (raceNameNorm && normKey(courseValue) !== raceNameNorm) {
-          skippedByCourse += 1;
-          continue;
+        if (raceNameNorm) {
+          // Souple : la course passe si l'une des valeurs (Course/Competition) contient le nom de la race ou inversement.
+          const match = candidates.some((v) => {
+            const n = normKey(v);
+            return n === raceNameNorm || n.includes(raceNameNorm) || raceNameNorm.includes(n);
+          });
+          if (!match) {
+            skippedByCourse += 1;
+            continue;
+          }
         }
       }
 
