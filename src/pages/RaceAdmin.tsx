@@ -286,6 +286,7 @@ export default function RaceAdmin() {
         }
         setRace(data as RaceSummary);
         setEventId((data as RaceSummary).event_id ?? "");
+        setRaceName((data as RaceSummary).name ?? "");
         const d = new Date((data as RaceSummary).start_time);
         const pad = (n: number) => String(n).padStart(2, "0");
         setStartTimeInput(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
