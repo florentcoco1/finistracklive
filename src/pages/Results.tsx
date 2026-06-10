@@ -18,6 +18,12 @@ interface RaceLite {
   start_time: string;
   distance_km: number | null;
   status: string;
+  event_id: string | null;
+}
+
+interface EventLite {
+  id: string;
+  name: string;
 }
 
 interface ResultRow {
@@ -58,8 +64,10 @@ export default function Results() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [races, setRaces] = useState<RaceLite[]>([]);
+  const [events, setEvents] = useState<EventLite[]>([]);
   const [results, setResults] = useState<ResultRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedEventId, setSelectedEventId] = useState<string | "all" | "none">("all");
   const [selectedRaceId, setSelectedRaceId] = useState<string | "all">("all");
   const [search, setSearch] = useState("");
   const [openRunner, setOpenRunner] = useState<RunnerKey | null>(null);
@@ -79,11 +87,13 @@ export default function Results() {
     if (!user) return;
     (async () => {
       setLoading(true);
-      const [racesRes, resultsRes] = await Promise.all([
-        supabase.from("races").select("id, name, start_time, distance_km, status").order("start_time", { ascending: false }),
+      const [racesRes, eventsRes, resultsRes] = await Promise.all([
+        supabase.from("races").select("id, name, start_time, distance_km, status, event_id").order("start_time", { ascending: false }),
+        supabase.from("events").select("id, name").order("start_date", { ascending: false }),
         supabase.from("gmcap_results").select("id, race_id, bib_number, first_name, last_name, gender, category, club, official_time_text, official_time_seconds, scratch_rank, category_rank, gender_rank, status, rgpd_consent"),
       ]);
       setRaces((racesRes.data ?? []) as RaceLite[]);
+      setEvents((eventsRes.data ?? []) as EventLite[]);
       setResults(((resultsRes.data ?? []) as unknown) as ResultRow[]);
       setLoading(false);
     })();
@@ -95,10 +105,29 @@ export default function Results() {
     return m;
   }, [races]);
 
+  const filteredRaces = useMemo(() => {
+    if (selectedEventId === "all") return races;
+    if (selectedEventId === "none") return races.filter((r) => !r.event_id);
+    return races.filter((r) => r.event_id === selectedEventId);
+  }, [races, selectedEventId]);
+
+  // Reset race selection when event filter changes and current race isn't in scope.
+  useEffect(() => {
+    if (selectedRaceId === "all") return;
+    if (!filteredRaces.some((r) => r.id === selectedRaceId)) {
+      setSelectedRaceId("all");
+    }
+  }, [filteredRaces, selectedRaceId]);
+
   const filteredResults = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const allowedRaceIds = new Set(filteredRaces.map((r) => r.id));
     return results.filter((r) => {
-      if (selectedRaceId !== "all" && r.race_id !== selectedRaceId) return false;
+      if (selectedRaceId !== "all") {
+        if (r.race_id !== selectedRaceId) return false;
+      } else if (selectedEventId !== "all" && !allowedRaceIds.has(r.race_id)) {
+        return false;
+      }
       if (!q) return true;
       if (r.rgpd_consent === "N") {
         return String(r.bib_number ?? "").toLowerCase().includes(q);
@@ -106,7 +135,8 @@ export default function Results() {
       const hay = `${r.first_name ?? ""} ${r.last_name ?? ""} ${r.bib_number ?? ""} ${r.club ?? ""}`.toLowerCase();
       return hay.includes(q);
     }).sort((a, b) => (a.scratch_rank ?? 9999) - (b.scratch_rank ?? 9999));
-  }, [results, selectedRaceId, search]);
+  }, [results, selectedRaceId, selectedEventId, filteredRaces, search]);
+
 
   const runnerResults = useMemo(() => {
     if (!openRunner) return [];
@@ -154,8 +184,22 @@ export default function Results() {
       <p className="text-muted-foreground mb-8">Classements officiels et bilans par coureur</p>
 
       <Card className="glass-card p-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-3 md:items-center">
-          <div className="flex-1">
+        <div className="grid gap-3 md:grid-cols-3 md:items-end">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Épreuve</label>
+            <select
+              value={selectedEventId}
+              onChange={(e) => setSelectedEventId(e.target.value as string as "all" | "none" | string)}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="all">Toutes les épreuves</option>
+              {events.map((ev) => (
+                <option key={ev.id} value={ev.id}>{ev.name}</option>
+              ))}
+              <option value="none">— Courses sans épreuve —</option>
+            </select>
+          </div>
+          <div>
             <label className="text-xs text-muted-foreground mb-1 block">Course</label>
             <select
               value={selectedRaceId}
@@ -163,14 +207,14 @@ export default function Results() {
               className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
             >
               <option value="all">Toutes les courses</option>
-              {races.map((r) => (
+              {filteredRaces.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name} — {format(new Date(r.start_time), "d MMM yyyy", { locale: fr })}
                 </option>
               ))}
             </select>
           </div>
-          <div className="flex-1">
+          <div>
             <label className="text-xs text-muted-foreground mb-1 block">Rechercher</label>
             <div className="relative">
               <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
