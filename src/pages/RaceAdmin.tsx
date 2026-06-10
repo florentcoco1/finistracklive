@@ -365,6 +365,28 @@ export default function RaceAdmin() {
     }
   };
 
+  const saveName = async () => {
+    if (!raceId) return;
+    const trimmed = raceName.trim();
+    if (!trimmed) {
+      toast.error("Le nom de la course ne peut pas être vide");
+      return;
+    }
+    setSavingName(true);
+    try {
+      const { error } = await supabase.from("races").update({ name: trimmed }).eq("id", raceId);
+      if (error) throw error;
+      setRace((prev) => (prev ? { ...prev, name: trimmed } : prev));
+      document.title = `Administration ${trimmed} — FinisTrackLive`;
+      toast.success("Nom de la course mis à jour");
+    } catch (error) {
+      toast.error((error as Error).message || "Mise à jour impossible");
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+
   const replaceGpx = async () => {
     if (!raceId || !gpxFile || !user) {
       toast.error("Sélectionne un fichier GPX");
