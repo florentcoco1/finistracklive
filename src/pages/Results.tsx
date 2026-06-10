@@ -64,8 +64,10 @@ export default function Results() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [races, setRaces] = useState<RaceLite[]>([]);
+  const [events, setEvents] = useState<EventLite[]>([]);
   const [results, setResults] = useState<ResultRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedEventId, setSelectedEventId] = useState<string | "all" | "none">("all");
   const [selectedRaceId, setSelectedRaceId] = useState<string | "all">("all");
   const [search, setSearch] = useState("");
   const [openRunner, setOpenRunner] = useState<RunnerKey | null>(null);
@@ -85,11 +87,13 @@ export default function Results() {
     if (!user) return;
     (async () => {
       setLoading(true);
-      const [racesRes, resultsRes] = await Promise.all([
-        supabase.from("races").select("id, name, start_time, distance_km, status").order("start_time", { ascending: false }),
+      const [racesRes, eventsRes, resultsRes] = await Promise.all([
+        supabase.from("races").select("id, name, start_time, distance_km, status, event_id").order("start_time", { ascending: false }),
+        supabase.from("events").select("id, name").order("start_date", { ascending: false }),
         supabase.from("gmcap_results").select("id, race_id, bib_number, first_name, last_name, gender, category, club, official_time_text, official_time_seconds, scratch_rank, category_rank, gender_rank, status, rgpd_consent"),
       ]);
       setRaces((racesRes.data ?? []) as RaceLite[]);
+      setEvents((eventsRes.data ?? []) as EventLite[]);
       setResults(((resultsRes.data ?? []) as unknown) as ResultRow[]);
       setLoading(false);
     })();
@@ -100,6 +104,20 @@ export default function Results() {
     races.forEach((r) => m.set(r.id, r));
     return m;
   }, [races]);
+
+  const filteredRaces = useMemo(() => {
+    if (selectedEventId === "all") return races;
+    if (selectedEventId === "none") return races.filter((r) => !r.event_id);
+    return races.filter((r) => r.event_id === selectedEventId);
+  }, [races, selectedEventId]);
+
+  // Reset race selection when event filter changes and current race isn't in scope.
+  useEffect(() => {
+    if (selectedRaceId === "all") return;
+    if (!filteredRaces.some((r) => r.id === selectedRaceId)) {
+      setSelectedRaceId("all");
+    }
+  }, [filteredRaces, selectedRaceId]);
 
   const filteredResults = useMemo(() => {
     const q = search.trim().toLowerCase();
