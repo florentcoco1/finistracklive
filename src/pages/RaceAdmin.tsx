@@ -786,6 +786,26 @@ export default function RaceAdmin() {
       <Card className="glass-card p-4 mb-6">
         <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
           <div className="space-y-2">
+            <Label htmlFor="race-name">Nom de la course</Label>
+            <Input
+              id="race-name"
+              value={raceName}
+              onChange={(e) => setRaceName(e.target.value)}
+              placeholder="Ex. Trail 25 km"
+            />
+            <p className="text-xs text-muted-foreground">
+              Ce nom est affiché partout (page course, classements, imports GMCAP).
+            </p>
+          </div>
+          <Button variant="hero" onClick={saveName} disabled={savingName || raceName.trim() === (race?.name ?? "")}>
+            <Save className="h-4 w-4 mr-2" /> Enregistrer
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="glass-card p-4 mb-6">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="space-y-2">
             <Label htmlFor="race-event">Épreuve de rattachement</Label>
             <select
               id="race-event"
