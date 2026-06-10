@@ -188,6 +188,8 @@ export default function RaceAdmin() {
   const [events, setEvents] = useState<EventOption[]>([]);
   const [eventId, setEventId] = useState<string>("");
   const [savingEvent, setSavingEvent] = useState(false);
+  const [raceName, setRaceName] = useState<string>("");
+  const [savingName, setSavingName] = useState(false);
   const [gpxFile, setGpxFile] = useState<File | null>(null);
   const [uploadingGpx, setUploadingGpx] = useState(false);
   const [checkpoints, setCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
@@ -284,6 +286,7 @@ export default function RaceAdmin() {
         }
         setRace(data as RaceSummary);
         setEventId((data as RaceSummary).event_id ?? "");
+        setRaceName((data as RaceSummary).name ?? "");
         const d = new Date((data as RaceSummary).start_time);
         const pad = (n: number) => String(n).padStart(2, "0");
         setStartTimeInput(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
@@ -361,6 +364,28 @@ export default function RaceAdmin() {
       setSavingEvent(false);
     }
   };
+
+  const saveName = async () => {
+    if (!raceId) return;
+    const trimmed = raceName.trim();
+    if (!trimmed) {
+      toast.error("Le nom de la course ne peut pas être vide");
+      return;
+    }
+    setSavingName(true);
+    try {
+      const { error } = await supabase.from("races").update({ name: trimmed }).eq("id", raceId);
+      if (error) throw error;
+      setRace((prev) => (prev ? { ...prev, name: trimmed } : prev));
+      document.title = `Administration ${trimmed} — FinisTrackLive`;
+      toast.success("Nom de la course mis à jour");
+    } catch (error) {
+      toast.error((error as Error).message || "Mise à jour impossible");
+    } finally {
+      setSavingName(false);
+    }
+  };
+
 
   const replaceGpx = async () => {
     if (!raceId || !gpxFile || !user) {
@@ -757,6 +782,26 @@ export default function RaceAdmin() {
           <Card className="glass-card p-3"><p className="text-2xl font-bold">{stats.organizers}</p><p className="text-xs text-muted-foreground">organisateurs</p></Card>
         </div>
       </div>
+
+      <Card className="glass-card p-4 mb-6">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="space-y-2">
+            <Label htmlFor="race-name">Nom de la course</Label>
+            <Input
+              id="race-name"
+              value={raceName}
+              onChange={(e) => setRaceName(e.target.value)}
+              placeholder="Ex. Trail 25 km"
+            />
+            <p className="text-xs text-muted-foreground">
+              Ce nom est affiché partout (page course, classements, imports GMCAP).
+            </p>
+          </div>
+          <Button variant="hero" onClick={saveName} disabled={savingName || raceName.trim() === (race?.name ?? "")}>
+            <Save className="h-4 w-4 mr-2" /> Enregistrer
+          </Button>
+        </div>
+      </Card>
 
       <Card className="glass-card p-4 mb-6">
         <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
