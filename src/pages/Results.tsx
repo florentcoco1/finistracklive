@@ -87,17 +87,37 @@ export default function Results() {
     if (!user) return;
     (async () => {
       setLoading(true);
-      const [racesRes, eventsRes, resultsRes] = await Promise.all([
+      const [racesRes, eventsRes] = await Promise.all([
         supabase.from("races").select("id, name, start_time, distance_km, status, event_id").order("start_time", { ascending: false }),
         supabase.from("events").select("id, name").order("start_date", { ascending: false }),
-        supabase.from("gmcap_results").select("id, race_id, bib_number, first_name, last_name, gender, category, club, official_time_text, official_time_seconds, scratch_rank, category_rank, gender_rank, status, rgpd_consent"),
       ]);
       setRaces((racesRes.data ?? []) as RaceLite[]);
       setEvents((eventsRes.data ?? []) as EventLite[]);
-      setResults(((resultsRes.data ?? []) as unknown) as ResultRow[]);
+
+      // Pagine la table gmcap_results : le client PostgREST plafonne à 1000 lignes par requête.
+      const pageSize = 1000;
+      const all: ResultRow[] = [];
+      let from = 0;
+      // Boucle jusqu'à ce qu'une page ramène moins que pageSize.
+      // (sécurité : 50 pages max = 50 000 lignes)
+      for (let i = 0; i < 50; i += 1) {
+        const { data, error } = await supabase
+          .from("gmcap_results")
+          .select("id, race_id, bib_number, first_name, last_name, gender, category, club, official_time_text, official_time_seconds, scratch_rank, category_rank, gender_rank, status, rgpd_consent")
+          .order("race_id", { ascending: true })
+          .order("scratch_rank", { ascending: true, nullsFirst: false })
+          .range(from, from + pageSize - 1);
+        if (error) break;
+        const batch = (data ?? []) as unknown as ResultRow[];
+        all.push(...batch);
+        if (batch.length < pageSize) break;
+        from += pageSize;
+      }
+      setResults(all);
       setLoading(false);
     })();
   }, [user]);
+
 
   const racesById = useMemo(() => {
     const m = new Map<string, RaceLite>();
