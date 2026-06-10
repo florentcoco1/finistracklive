@@ -143,6 +143,8 @@ export default function Results() {
     const q = search.trim().toLowerCase();
     const allowedRaceIds = new Set(filteredRaces.map((r) => r.id));
     return results.filter((r) => {
+      // Masque les coureurs sans temps officiel (DNF, non partants, disqualifiés…)
+      if (!r.official_time_text || !r.official_time_seconds || r.official_time_seconds <= 0) return false;
       if (selectedRaceId !== "all") {
         if (r.race_id !== selectedRaceId) return false;
       } else if (selectedEventId !== "all" && !allowedRaceIds.has(r.race_id)) {
