@@ -121,8 +121,13 @@ export default function Results() {
 
   const filteredResults = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const allowedRaceIds = new Set(filteredRaces.map((r) => r.id));
     return results.filter((r) => {
-      if (selectedRaceId !== "all" && r.race_id !== selectedRaceId) return false;
+      if (selectedRaceId !== "all") {
+        if (r.race_id !== selectedRaceId) return false;
+      } else if (selectedEventId !== "all" && !allowedRaceIds.has(r.race_id)) {
+        return false;
+      }
       if (!q) return true;
       if (r.rgpd_consent === "N") {
         return String(r.bib_number ?? "").toLowerCase().includes(q);
@@ -130,7 +135,8 @@ export default function Results() {
       const hay = `${r.first_name ?? ""} ${r.last_name ?? ""} ${r.bib_number ?? ""} ${r.club ?? ""}`.toLowerCase();
       return hay.includes(q);
     }).sort((a, b) => (a.scratch_rank ?? 9999) - (b.scratch_rank ?? 9999));
-  }, [results, selectedRaceId, search]);
+  }, [results, selectedRaceId, selectedEventId, filteredRaces, search]);
+
 
   const runnerResults = useMemo(() => {
     if (!openRunner) return [];
