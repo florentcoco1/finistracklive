@@ -184,10 +184,6 @@ export default function Results() {
       <p className="text-muted-foreground mb-8">Classements officiels et bilans par coureur</p>
 
       <Card className="glass-card p-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-3 md:items-center">
-          <div className="flex-1">
-            <label className="text-xs text-muted-foreground mb-1 block">Course</label>
-      <Card className="glass-card p-4 mb-6">
         <div className="grid gap-3 md:grid-cols-3 md:items-end">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Épreuve</label>
