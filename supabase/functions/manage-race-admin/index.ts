@@ -229,16 +229,28 @@ async function requireRaceAdmin(admin: any, userId: string, raceId: string) {
 }
 
 async function loadRace(admin: any, raceId: string) {
-  const [{ data: source }, { data: registrations }, { data: organizers }, { data: race }, { data: gmcapResults }] = await Promise.all([
+  const [{ data: source }, { data: registrations }, { data: raceOrganizers }, { data: race }, { data: gmcapResults }] = await Promise.all([
     admin.from("gmcap_import_sources").select("id, source_url, source_type, file_name, enabled, last_import_at, last_import_status, last_import_message").eq("race_id", raceId).maybeSingle(),
     admin.from("race_registrations").select("id, runner_id, bib_number, category, runner_status, created_at").eq("race_id", raceId).order("bib_number"),
     admin.from("race_organizers").select("id, user_id, role, created_at").eq("race_id", raceId).order("created_at"),
-    admin.from("races").select("id, name, organizer_id").eq("id", raceId).single(),
+    admin.from("races").select("id, name, organizer_id, event_id").eq("id", raceId).single(),
     admin.from("gmcap_results").select("bib_number, first_name, last_name, gender, birth_date, phone").eq("race_id", raceId),
   ]);
 
+  const eventId = (race as { event_id?: string | null } | null)?.event_id ?? null;
+  let event: { id: string; organizer_id: string | null } | null = null;
+  let eventOrganizers: OrganizerRow[] = [];
+  if (eventId) {
+    const [{ data: ev }, { data: evOrgs }] = await Promise.all([
+      admin.from("events").select("id, organizer_id").eq("id", eventId).maybeSingle(),
+      admin.from("event_organizers").select("id, user_id, role, created_at").eq("event_id", eventId).order("created_at"),
+    ]);
+    event = ev as { id: string; organizer_id: string | null } | null;
+    eventOrganizers = (evOrgs ?? []) as OrganizerRow[];
+  }
+
   const registrationRows = (registrations ?? []) as Omit<RegistrationRow, "emergency_phone" | "address">[];
-  const organizerRows = (organizers ?? []) as OrganizerRow[];
+  const raceOrganizerRows = (raceOrganizers ?? []) as OrganizerRow[];
   const regIds = registrationRows.map((r) => r.id);
   const contacts = await getRegistrationContacts(regIds);
   const contactByReg = new Map(contacts.map((c) => [c.registration_id, c]));
@@ -246,8 +258,10 @@ async function loadRace(admin: any, raceId: string) {
   const profileIds = [
     ...new Set([
       race?.organizer_id,
+      event?.organizer_id,
       ...registrationRows.map((r) => r.runner_id),
-      ...organizerRows.map((o) => o.user_id),
+      ...raceOrganizerRows.map((o) => o.user_id),
+      ...eventOrganizers.map((o) => o.user_id),
     ].filter(Boolean)),
   ];
   const { data: profiles } = profileIds.length
@@ -260,9 +274,31 @@ async function loadRace(admin: any, raceId: string) {
       .map((g) => [String(g.bib_number).trim(), g]),
   );
 
+  const seen = new Set<string>();
+  const allOrganizers: Array<Record<string, unknown>> = [];
+  if (race?.organizer_id) {
+    seen.add(race.organizer_id as string);
+    allOrganizers.push({ id: "owner", user_id: race.organizer_id, role: "propriétaire", scope: "course", created_at: null, profile: profileById.get(race.organizer_id as string) ?? null });
+  }
+  if (event?.organizer_id && !seen.has(event.organizer_id as string)) {
+    seen.add(event.organizer_id as string);
+    allOrganizers.push({ id: "event-owner", user_id: event.organizer_id, role: "propriétaire épreuve", scope: "épreuve", created_at: null, profile: profileById.get(event.organizer_id as string) ?? null });
+  }
+  for (const o of eventOrganizers) {
+    if (seen.has(o.user_id)) continue;
+    seen.add(o.user_id);
+    allOrganizers.push({ ...o, scope: "épreuve", profile: profileById.get(o.user_id) ?? null });
+  }
+  for (const o of raceOrganizerRows) {
+    if (seen.has(o.user_id)) continue;
+    seen.add(o.user_id);
+    allOrganizers.push({ ...o, scope: "course", profile: profileById.get(o.user_id) ?? null });
+  }
+
   return {
     source,
     imported_count: (gmcapResults ?? []).length,
+    event_id: eventId,
     registrations: registrationRows.map((r) => {
       const profile = profileById.get(r.runner_id) ?? null;
       const gmcap = gmcapByBib.get(String(r.bib_number).trim()) ?? null;
@@ -274,10 +310,7 @@ async function loadRace(admin: any, raceId: string) {
       const contact = contactByReg.get(r.id) ?? null;
       return { ...r, emergency_phone: contact?.emergency_phone ?? profile?.phone ?? gmcap?.phone ?? null, address: contact?.address ?? null, profile: merged, gender: gmcap?.gender ?? null, birth_date: gmcap?.birth_date ?? null };
     }),
-    organizers: [
-      race?.organizer_id && { id: "owner", user_id: race.organizer_id as string, role: "propriétaire", created_at: null, profile: profileById.get(race.organizer_id as string) ?? null },
-      ...organizerRows.map((o) => ({ ...o, profile: profileById.get(o.user_id) ?? null })),
-    ].filter(Boolean),
+    organizers: allOrganizers,
   };
 }
 
