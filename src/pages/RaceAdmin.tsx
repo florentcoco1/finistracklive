@@ -192,6 +192,8 @@ export default function RaceAdmin() {
   const [savingEvent, setSavingEvent] = useState(false);
   const [raceName, setRaceName] = useState<string>("");
   const [savingName, setSavingName] = useState(false);
+  const [difficultyLevel, setDifficultyLevel] = useState(1);
+  const [savingDifficulty, setSavingDifficulty] = useState(false);
   const [gpxFile, setGpxFile] = useState<File | null>(null);
   const [uploadingGpx, setUploadingGpx] = useState(false);
   const [checkpoints, setCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
