@@ -19,6 +19,7 @@ import { RaceCheckpoints } from "@/components/RaceCheckpoints";
 import { RaceInviteCard } from "@/components/RaceInviteCard";
 import RaceMap from "@/components/RaceMap";
 import ElevationChart from "@/components/ElevationChart";
+import { DifficultyStars } from "@/components/DifficultyStars";
 
 interface RaceSummary {
   id: string;
