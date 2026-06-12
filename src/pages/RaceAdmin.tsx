@@ -29,6 +29,7 @@ interface RaceSummary {
   gpx_geojson: any;
   route_points: { lat: number; lng: number; cumulativeDistanceM: number }[] | null;
   distance_km: number | null;
+  difficulty_level: number | null;
 }
 
 interface EventOption {
