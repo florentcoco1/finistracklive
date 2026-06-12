@@ -279,7 +279,7 @@ export default function RaceAdmin() {
 
     supabase
       .from("races")
-      .select("id, name, start_time, status, event_id, gpx_geojson, route_points, distance_km")
+      .select("id, name, start_time, status, event_id, gpx_geojson, route_points, distance_km, difficulty_level")
       .eq("id", raceId)
       .single()
       .then(({ data, error }) => {
@@ -291,6 +291,7 @@ export default function RaceAdmin() {
         setRace(data as RaceSummary);
         setEventId((data as RaceSummary).event_id ?? "");
         setRaceName((data as RaceSummary).name ?? "");
+        setDifficultyLevel(Number((data as RaceSummary).difficulty_level) || 1);
         const d = new Date((data as RaceSummary).start_time);
         const pad = (n: number) => String(n).padStart(2, "0");
         setStartTimeInput(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
