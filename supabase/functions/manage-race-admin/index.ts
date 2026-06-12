@@ -476,17 +476,60 @@ async function ensureRaceOrganizersSchema() {
         public.has_role(auth.uid(), 'admin'::public.app_role)
         OR EXISTS (SELECT 1 FROM public.races r WHERE r.id = race_organizers.race_id AND r.organizer_id = auth.uid())
       )`);
+      await tx.unsafe(`CREATE TABLE IF NOT EXISTS public.event_organizers (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        event_id uuid NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
+        user_id uuid NOT NULL,
+        role text NOT NULL DEFAULT 'organisateur',
+        created_by uuid,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`);
+      await tx.unsafe(`CREATE UNIQUE INDEX IF NOT EXISTS event_organizers_event_user_key ON public.event_organizers(event_id, user_id)`);
+      await tx.unsafe(`GRANT SELECT, INSERT, UPDATE, DELETE ON public.event_organizers TO authenticated`);
+      await tx.unsafe(`GRANT ALL ON public.event_organizers TO service_role`);
+      await tx.unsafe(`ALTER TABLE public.event_organizers ENABLE ROW LEVEL SECURITY`);
+      await tx.unsafe(`DROP POLICY IF EXISTS "Event organizers readable by staff" ON public.event_organizers`);
+      await tx.unsafe(`CREATE POLICY "Event organizers readable by staff" ON public.event_organizers FOR SELECT TO authenticated USING (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR user_id = auth.uid()
+        OR EXISTS (SELECT 1 FROM public.events e WHERE e.id = event_organizers.event_id AND e.organizer_id = auth.uid())
+      )`);
+      await tx.unsafe(`DROP POLICY IF EXISTS "Event organizers writable by owner or admin" ON public.event_organizers`);
+      await tx.unsafe(`CREATE POLICY "Event organizers writable by owner or admin" ON public.event_organizers FOR ALL TO authenticated USING (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR EXISTS (SELECT 1 FROM public.events e WHERE e.id = event_organizers.event_id AND e.organizer_id = auth.uid())
+      ) WITH CHECK (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR EXISTS (SELECT 1 FROM public.events e WHERE e.id = event_organizers.event_id AND e.organizer_id = auth.uid())
+      )`);
       await tx.unsafe(`CREATE OR REPLACE FUNCTION public.is_race_admin(_race_id uuid, _user_id uuid)
         RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
         SELECT EXISTS (
           SELECT 1 FROM public.races r WHERE r.id = _race_id AND r.organizer_id = _user_id
         ) OR EXISTS (
           SELECT 1 FROM public.race_organizers o WHERE o.race_id = _race_id AND o.user_id = _user_id
+        ) OR EXISTS (
+          SELECT 1 FROM public.races r
+          JOIN public.events e ON e.id = r.event_id
+          WHERE r.id = _race_id AND e.organizer_id = _user_id
+        ) OR EXISTS (
+          SELECT 1 FROM public.races r
+          JOIN public.event_organizers eo ON eo.event_id = r.event_id
+          WHERE r.id = _race_id AND eo.user_id = _user_id
         ) OR public.has_role(_user_id, 'admin'::public.app_role)
       $$`);
       await tx.unsafe(`NOTIFY pgrst, 'reload schema'`);
     });
   });
+}
+
+async function ensureEventOrganizersTableExists() {
+  await withSql(async (sql) => {
+    const rows = await sql`SELECT to_regclass('public.event_organizers') AS r`;
+    if (rows[0]?.r) return;
+    raceOrganizersSchemaReady = null;
+  });
+  await ensureRaceOrganizersSchemaOnce();
 }
 
 let registrationContactsSchemaReady: Promise<void> | null = null;
