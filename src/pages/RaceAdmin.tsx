@@ -1074,7 +1074,8 @@ export default function RaceAdmin() {
               <p>La synchronisation automatique nécessite un lien HTTP/HTTPS accessible par FinisTrackLive. L’import manuel fonctionne directement avec un fichier local du PC utilisé pour GMCAP.</p>
             </div>
           </Card>
-        </TabsContent>
+        </TabsContent>}
+
 
         <TabsContent value="runners">
           <Card className="glass-card p-5 space-y-5">
