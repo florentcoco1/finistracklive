@@ -441,11 +441,9 @@ async function ensureRegistrationContactsSchema() {
 async function ensureRaceOrganizersSchema() {
   await withSql(async (sql) => {
     const rows = await sql`
-      SELECT column_name FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = 'race_organizers'
+      SELECT to_regclass('public.race_organizers') AS race_t, to_regclass('public.event_organizers') AS event_t
     `;
-    const cols = new Set(rows.map((r: any) => r.column_name));
-    if (cols.has("race_id") && cols.has("user_id") && cols.has("role")) return;
+    if (rows[0]?.race_t && rows[0]?.event_t) return;
     await sql.begin(async (tx) => {
       await tx.unsafe(`CREATE TABLE IF NOT EXISTS public.race_organizers (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
