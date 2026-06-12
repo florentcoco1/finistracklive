@@ -79,6 +79,9 @@ Deno.serve(async (req) => {
         await tx.unsafe(`CREATE INDEX IF NOT EXISTS idx_events_start_date ON public.events(start_date DESC)`);
         await tx.unsafe(`ALTER TABLE public.races ADD COLUMN IF NOT EXISTS event_id uuid REFERENCES public.events(id) ON DELETE SET NULL`);
         await tx.unsafe(`CREATE INDEX IF NOT EXISTS idx_races_event_id ON public.races(event_id)`);
+        await tx.unsafe(`ALTER TABLE public.races ADD COLUMN IF NOT EXISTS difficulty_level integer NOT NULL DEFAULT 1`);
+        await tx.unsafe(`ALTER TABLE public.races DROP CONSTRAINT IF EXISTS races_difficulty_level_range`);
+        await tx.unsafe(`ALTER TABLE public.races ADD CONSTRAINT races_difficulty_level_range CHECK (difficulty_level BETWEEN 1 AND 5)`);
         await tx.unsafe(`NOTIFY pgrst, 'reload schema'`);
       });
     } finally {
