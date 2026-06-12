@@ -370,6 +370,41 @@ export type Database = {
           },
         ]
       }
+      race_organizers: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          race_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          race_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          race_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "race_organizers_race_id_fkey"
+            columns: ["race_id"]
+            isOneToOne: false
+            referencedRelation: "races"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       race_registration_contacts: {
         Row: {
           address: string | null
@@ -710,6 +745,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_race_admin: {
+        Args: { _race_id: string; _user_id: string }
         Returns: boolean
       }
     }

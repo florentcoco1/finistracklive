@@ -74,6 +74,7 @@ interface OrganizerRow {
   id: string;
   user_id: string;
   role: string;
+  scope?: "course" | "épreuve" | null;
   created_at: string | null;
   profile: AdminProfile | null;
 }
@@ -1211,8 +1212,8 @@ export default function RaceAdmin() {
         <TabsContent value="organizers">
           <Card className="glass-card p-5 space-y-5">
             <div>
-              <h2 className="font-display text-xl font-semibold">Organisateurs de la course</h2>
-              <p className="text-sm text-muted-foreground mt-1">Donne accès à l’administration GMCAP et à la gestion des inscrits pour cette course.</p>
+              <h2 className="font-display text-xl font-semibold">Organisateurs</h2>
+              <p className="text-sm text-muted-foreground mt-1">Si cette course appartient à une épreuve, l'organisateur ajouté aura accès à <strong>toutes les courses de l'épreuve</strong> (chronos manuels, gestion des coureurs, photos).</p>
             </div>
             <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
               <div className="space-y-2"><Label>Email utilisateur</Label><Input value={newOrganizerEmail} onChange={(e) => setNewOrganizerEmail(e.target.value)} placeholder="organisateur@email.fr" /></div>
@@ -1221,15 +1222,16 @@ export default function RaceAdmin() {
             <div className="rounded-lg border border-border/50 overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow><TableHead>Organisateur</TableHead><TableHead>Rôle</TableHead><TableHead className="text-right">Actions</TableHead></TableRow>
+                  <TableRow><TableHead>Organisateur</TableHead><TableHead>Rôle</TableHead><TableHead>Portée</TableHead><TableHead className="text-right">Actions</TableHead></TableRow>
                 </TableHeader>
                 <TableBody>
                   {organizers.map((organizer) => (
                     <TableRow key={`${organizer.id}-${organizer.user_id}`}>
                       <TableCell><p className="font-medium">{displayName(organizer.profile)}</p><p className="text-xs text-muted-foreground">{organizer.profile?.email}</p></TableCell>
                       <TableCell><Badge variant="secondary">{organizer.role}</Badge></TableCell>
+                      <TableCell><Badge variant={organizer.scope === "épreuve" ? "default" : "outline"}>{organizer.scope === "épreuve" ? "Épreuve" : "Course"}</Badge></TableCell>
                       <TableCell className="text-right">
-                        {organizer.id !== "owner" && <Button variant="destructive" size="icon" onClick={() => removeOrganizer(organizer.user_id)} disabled={busy} aria-label="Retirer"><Trash2 className="h-4 w-4" /></Button>}
+                        {organizer.id !== "owner" && organizer.id !== "event-owner" && <Button variant="destructive" size="icon" onClick={() => removeOrganizer(organizer.user_id)} disabled={busy} aria-label="Retirer"><Trash2 className="h-4 w-4" /></Button>}
                       </TableCell>
                     </TableRow>
                   ))}

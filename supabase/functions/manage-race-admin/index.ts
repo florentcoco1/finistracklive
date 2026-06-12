@@ -229,16 +229,28 @@ async function requireRaceAdmin(admin: any, userId: string, raceId: string) {
 }
 
 async function loadRace(admin: any, raceId: string) {
-  const [{ data: source }, { data: registrations }, { data: organizers }, { data: race }, { data: gmcapResults }] = await Promise.all([
+  const [{ data: source }, { data: registrations }, { data: raceOrganizers }, { data: race }, { data: gmcapResults }] = await Promise.all([
     admin.from("gmcap_import_sources").select("id, source_url, source_type, file_name, enabled, last_import_at, last_import_status, last_import_message").eq("race_id", raceId).maybeSingle(),
     admin.from("race_registrations").select("id, runner_id, bib_number, category, runner_status, created_at").eq("race_id", raceId).order("bib_number"),
     admin.from("race_organizers").select("id, user_id, role, created_at").eq("race_id", raceId).order("created_at"),
-    admin.from("races").select("id, name, organizer_id").eq("id", raceId).single(),
+    admin.from("races").select("id, name, organizer_id, event_id").eq("id", raceId).single(),
     admin.from("gmcap_results").select("bib_number, first_name, last_name, gender, birth_date, phone").eq("race_id", raceId),
   ]);
 
+  const eventId = (race as { event_id?: string | null } | null)?.event_id ?? null;
+  let event: { id: string; organizer_id: string | null } | null = null;
+  let eventOrganizers: OrganizerRow[] = [];
+  if (eventId) {
+    const [{ data: ev }, { data: evOrgs }] = await Promise.all([
+      admin.from("events").select("id, organizer_id").eq("id", eventId).maybeSingle(),
+      admin.from("event_organizers").select("id, user_id, role, created_at").eq("event_id", eventId).order("created_at"),
+    ]);
+    event = ev as { id: string; organizer_id: string | null } | null;
+    eventOrganizers = (evOrgs ?? []) as OrganizerRow[];
+  }
+
   const registrationRows = (registrations ?? []) as Omit<RegistrationRow, "emergency_phone" | "address">[];
-  const organizerRows = (organizers ?? []) as OrganizerRow[];
+  const raceOrganizerRows = (raceOrganizers ?? []) as OrganizerRow[];
   const regIds = registrationRows.map((r) => r.id);
   const contacts = await getRegistrationContacts(regIds);
   const contactByReg = new Map(contacts.map((c) => [c.registration_id, c]));
@@ -246,8 +258,10 @@ async function loadRace(admin: any, raceId: string) {
   const profileIds = [
     ...new Set([
       race?.organizer_id,
+      event?.organizer_id,
       ...registrationRows.map((r) => r.runner_id),
-      ...organizerRows.map((o) => o.user_id),
+      ...raceOrganizerRows.map((o) => o.user_id),
+      ...eventOrganizers.map((o) => o.user_id),
     ].filter(Boolean)),
   ];
   const { data: profiles } = profileIds.length
@@ -260,9 +274,31 @@ async function loadRace(admin: any, raceId: string) {
       .map((g) => [String(g.bib_number).trim(), g]),
   );
 
+  const seen = new Set<string>();
+  const allOrganizers: Array<Record<string, unknown>> = [];
+  if (race?.organizer_id) {
+    seen.add(race.organizer_id as string);
+    allOrganizers.push({ id: "owner", user_id: race.organizer_id, role: "propriétaire", scope: "course", created_at: null, profile: profileById.get(race.organizer_id as string) ?? null });
+  }
+  if (event?.organizer_id && !seen.has(event.organizer_id as string)) {
+    seen.add(event.organizer_id as string);
+    allOrganizers.push({ id: "event-owner", user_id: event.organizer_id, role: "propriétaire épreuve", scope: "épreuve", created_at: null, profile: profileById.get(event.organizer_id as string) ?? null });
+  }
+  for (const o of eventOrganizers) {
+    if (seen.has(o.user_id)) continue;
+    seen.add(o.user_id);
+    allOrganizers.push({ ...o, scope: "épreuve", profile: profileById.get(o.user_id) ?? null });
+  }
+  for (const o of raceOrganizerRows) {
+    if (seen.has(o.user_id)) continue;
+    seen.add(o.user_id);
+    allOrganizers.push({ ...o, scope: "course", profile: profileById.get(o.user_id) ?? null });
+  }
+
   return {
     source,
     imported_count: (gmcapResults ?? []).length,
+    event_id: eventId,
     registrations: registrationRows.map((r) => {
       const profile = profileById.get(r.runner_id) ?? null;
       const gmcap = gmcapByBib.get(String(r.bib_number).trim()) ?? null;
@@ -274,10 +310,7 @@ async function loadRace(admin: any, raceId: string) {
       const contact = contactByReg.get(r.id) ?? null;
       return { ...r, emergency_phone: contact?.emergency_phone ?? profile?.phone ?? gmcap?.phone ?? null, address: contact?.address ?? null, profile: merged, gender: gmcap?.gender ?? null, birth_date: gmcap?.birth_date ?? null };
     }),
-    organizers: [
-      race?.organizer_id && { id: "owner", user_id: race.organizer_id as string, role: "propriétaire", created_at: null, profile: profileById.get(race.organizer_id as string) ?? null },
-      ...organizerRows.map((o) => ({ ...o, profile: profileById.get(o.user_id) ?? null })),
-    ].filter(Boolean),
+    organizers: allOrganizers,
   };
 }
 
@@ -408,11 +441,9 @@ async function ensureRegistrationContactsSchema() {
 async function ensureRaceOrganizersSchema() {
   await withSql(async (sql) => {
     const rows = await sql`
-      SELECT column_name FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = 'race_organizers'
+      SELECT to_regclass('public.race_organizers') AS race_t, to_regclass('public.event_organizers') AS event_t
     `;
-    const cols = new Set(rows.map((r: any) => r.column_name));
-    if (cols.has("race_id") && cols.has("user_id") && cols.has("role")) return;
+    if (rows[0]?.race_t && rows[0]?.event_t) return;
     await sql.begin(async (tx) => {
       await tx.unsafe(`CREATE TABLE IF NOT EXISTS public.race_organizers (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -443,18 +474,53 @@ async function ensureRaceOrganizersSchema() {
         public.has_role(auth.uid(), 'admin'::public.app_role)
         OR EXISTS (SELECT 1 FROM public.races r WHERE r.id = race_organizers.race_id AND r.organizer_id = auth.uid())
       )`);
+      await tx.unsafe(`CREATE TABLE IF NOT EXISTS public.event_organizers (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        event_id uuid NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
+        user_id uuid NOT NULL,
+        role text NOT NULL DEFAULT 'organisateur',
+        created_by uuid,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`);
+      await tx.unsafe(`CREATE UNIQUE INDEX IF NOT EXISTS event_organizers_event_user_key ON public.event_organizers(event_id, user_id)`);
+      await tx.unsafe(`GRANT SELECT, INSERT, UPDATE, DELETE ON public.event_organizers TO authenticated`);
+      await tx.unsafe(`GRANT ALL ON public.event_organizers TO service_role`);
+      await tx.unsafe(`ALTER TABLE public.event_organizers ENABLE ROW LEVEL SECURITY`);
+      await tx.unsafe(`DROP POLICY IF EXISTS "Event organizers readable by staff" ON public.event_organizers`);
+      await tx.unsafe(`CREATE POLICY "Event organizers readable by staff" ON public.event_organizers FOR SELECT TO authenticated USING (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR user_id = auth.uid()
+        OR EXISTS (SELECT 1 FROM public.events e WHERE e.id = event_organizers.event_id AND e.organizer_id = auth.uid())
+      )`);
+      await tx.unsafe(`DROP POLICY IF EXISTS "Event organizers writable by owner or admin" ON public.event_organizers`);
+      await tx.unsafe(`CREATE POLICY "Event organizers writable by owner or admin" ON public.event_organizers FOR ALL TO authenticated USING (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR EXISTS (SELECT 1 FROM public.events e WHERE e.id = event_organizers.event_id AND e.organizer_id = auth.uid())
+      ) WITH CHECK (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR EXISTS (SELECT 1 FROM public.events e WHERE e.id = event_organizers.event_id AND e.organizer_id = auth.uid())
+      )`);
       await tx.unsafe(`CREATE OR REPLACE FUNCTION public.is_race_admin(_race_id uuid, _user_id uuid)
         RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
         SELECT EXISTS (
           SELECT 1 FROM public.races r WHERE r.id = _race_id AND r.organizer_id = _user_id
         ) OR EXISTS (
           SELECT 1 FROM public.race_organizers o WHERE o.race_id = _race_id AND o.user_id = _user_id
+        ) OR EXISTS (
+          SELECT 1 FROM public.races r
+          JOIN public.events e ON e.id = r.event_id
+          WHERE r.id = _race_id AND e.organizer_id = _user_id
+        ) OR EXISTS (
+          SELECT 1 FROM public.races r
+          JOIN public.event_organizers eo ON eo.event_id = r.event_id
+          WHERE r.id = _race_id AND eo.user_id = _user_id
         ) OR public.has_role(_user_id, 'admin'::public.app_role)
       $$`);
       await tx.unsafe(`NOTIFY pgrst, 'reload schema'`);
     });
   });
 }
+
 
 let registrationContactsSchemaReady: Promise<void> | null = null;
 let raceOrganizersSchemaReady: Promise<void> | null = null;
@@ -693,8 +759,13 @@ Deno.serve(async (req) => {
     if (body.action === "add_organizer") {
       const userId = await findUserByEmail(admin, body.email);
       if (!userId) return json({ error: `Aucun compte trouvé pour ${body.email}. La personne doit d'abord créer un compte sur l'application.` }, 404);
+      const { data: race } = await admin.from("races").select("event_id").eq("id", body.race_id).maybeSingle();
+      const eventId = (race as { event_id?: string | null } | null)?.event_id ?? null;
+      const linkPromise = eventId
+        ? admin.from("event_organizers").upsert({ event_id: eventId, user_id: userId, created_by: user.id }, { onConflict: "event_id,user_id" })
+        : admin.from("race_organizers").upsert({ race_id: body.race_id, user_id: userId, created_by: user.id }, { onConflict: "race_id,user_id" });
       const [{ error: organizerError }, { error: roleError }] = await Promise.all([
-        admin.from("race_organizers").upsert({ race_id: body.race_id, user_id: userId, created_by: user.id }, { onConflict: "race_id,user_id" }),
+        linkPromise,
         admin.from("user_roles").upsert({ user_id: userId, role: "organizer" }, { onConflict: "user_id,role" }),
       ]);
       if (organizerError || roleError) throw new Error(organizerError?.message ?? roleError?.message);
@@ -702,10 +773,17 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === "remove_organizer") {
-      const { data: race } = await admin.from("races").select("organizer_id").eq("id", body.race_id).single();
+      const { data: race } = await admin.from("races").select("organizer_id, event_id").eq("id", body.race_id).single();
       if (race?.organizer_id === body.organizer_id) return json({ error: "Le propriétaire de la course ne peut pas être retiré" }, 400);
-      const { error } = await admin.from("race_organizers").delete().eq("race_id", body.race_id).eq("user_id", body.organizer_id);
-      if (error) throw new Error(error.message);
+      const eventId = (race as { event_id?: string | null }).event_id ?? null;
+      if (eventId) {
+        const { data: ev } = await admin.from("events").select("organizer_id").eq("id", eventId).maybeSingle();
+        if ((ev as { organizer_id?: string } | null)?.organizer_id === body.organizer_id) {
+          return json({ error: "Le propriétaire de l'épreuve ne peut pas être retiré" }, 400);
+        }
+        await admin.from("event_organizers").delete().eq("event_id", eventId).eq("user_id", body.organizer_id);
+      }
+      await admin.from("race_organizers").delete().eq("race_id", body.race_id).eq("user_id", body.organizer_id);
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
     }
 
