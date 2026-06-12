@@ -165,11 +165,26 @@ export default function EventFormPage({ mode }: { mode: "create" | "edit" }) {
       const upsertContact = async (eventId: string) => {
         const hasContact = !!(form.contact_email || form.contact_phone);
         if (!hasContact) return;
-        await (supabase as any).from("events_contacts").upsert({
+        const row = {
           event_id: eventId,
           contact_email: form.contact_email || null,
           contact_phone: form.contact_phone || null,
-        }, { onConflict: "event_id" });
+        };
+        let { error: ccErr } = await (supabase as any)
+          .from("events_contacts")
+          .upsert(row, { onConflict: "event_id" });
+        const code = (ccErr as { code?: string } | null)?.code;
+        const msg = (ccErr as { message?: string } | null)?.message ?? "";
+        if (ccErr && (code === "PGRST205" || code === "42P01" || msg.includes("events_contacts"))) {
+          const { error: schemaError } = await supabase.functions.invoke("ensure-events-contacts-schema");
+          if (schemaError) throw schemaError;
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          const retry = await (supabase as any)
+            .from("events_contacts")
+            .upsert(row, { onConflict: "event_id" });
+          ccErr = retry.error;
+        }
+        if (ccErr) throw ccErr;
       };
 
       let table = (supabase.from as unknown as (t: string) => UntypedQuery)("events");
