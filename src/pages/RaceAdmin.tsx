@@ -391,6 +391,26 @@ export default function RaceAdmin() {
     }
   };
 
+  const saveDifficulty = async () => {
+    if (!raceId) return;
+    const level = Math.min(5, Math.max(1, Number(difficultyLevel) || 1));
+    setSavingDifficulty(true);
+    try {
+      const { error } = await (supabase.from as unknown as (t: string) => { update: (v: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message?: string } | null }> } })("races")
+        .update({ difficulty_level: level })
+        .eq("id", raceId);
+      if (error) throw new Error(error.message ?? "Mise à jour impossible");
+      setRace((prev) => (prev ? { ...prev, difficulty_level: level } : prev));
+      toast.success("Difficulté mise à jour");
+    } catch (error) {
+      toast.error((error as Error).message || "Mise à jour impossible");
+    } finally {
+      setSavingDifficulty(false);
+    }
+  };
+
+
+
 
   const replaceGpx = async () => {
     if (!raceId || !gpxFile || !user) {
