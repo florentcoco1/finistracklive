@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
         await tx.unsafe(`CREATE POLICY "Event contacts writable by owner or admin" ON public.events_contacts FOR ALL TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role) OR EXISTS (SELECT 1 FROM public.events e WHERE e.id = events_contacts.event_id AND e.organizer_id = auth.uid())) WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role) OR EXISTS (SELECT 1 FROM public.events e WHERE e.id = events_contacts.event_id AND e.organizer_id = auth.uid()))`);
         await tx.unsafe(`DROP TRIGGER IF EXISTS update_events_contacts_updated_at ON public.events_contacts`);
         await tx.unsafe(`CREATE TRIGGER update_events_contacts_updated_at BEFORE UPDATE ON public.events_contacts FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column()`);
+        await tx.unsafe(`GRANT EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) TO authenticated, anon`);
         await tx.unsafe(`NOTIFY pgrst, 'reload schema'`);
       });
     } finally {
