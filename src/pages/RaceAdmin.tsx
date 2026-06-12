@@ -876,6 +876,31 @@ export default function RaceAdmin() {
       <Card className="glass-card p-4 mb-6">
         <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
           <div className="space-y-2">
+            <Label htmlFor="race-difficulty">Difficulté du parcours</Label>
+            <select
+              id="race-difficulty"
+              value={difficultyLevel}
+              onChange={(e) => setDifficultyLevel(Number(e.target.value))}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="1">1 étoile — parcours facile</option>
+              <option value="2">2 étoiles — parcours accessible</option>
+              <option value="3">3 étoiles — parcours intermédiaire</option>
+              <option value="4">4 étoiles — parcours difficile</option>
+              <option value="5">5 étoiles — parcours très difficile</option>
+            </select>
+            <DifficultyStars level={difficultyLevel} />
+          </div>
+          <Button variant="hero" onClick={saveDifficulty} disabled={savingDifficulty || (Number(race?.difficulty_level) || 1) === difficultyLevel}>
+            <Save className="h-4 w-4 mr-2" /> Enregistrer
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="glass-card p-4 mb-6">
+
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="space-y-2">
             <Label htmlFor="race-gpx">Fichier GPX du tracé</Label>
             <Input
               id="race-gpx"
