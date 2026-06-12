@@ -74,6 +74,7 @@ interface OrganizerRow {
   id: string;
   user_id: string;
   role: string;
+  scope?: "course" | "épreuve" | null;
   created_at: string | null;
   profile: AdminProfile | null;
 }
