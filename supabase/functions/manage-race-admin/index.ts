@@ -497,6 +497,7 @@ Deno.serve(async (req) => {
     const parsed = BodySchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) return json({ error: "Données invalides", details: parsed.error.flatten().fieldErrors }, 400);
     const body = parsed.data;
+    await ensureRaceOrganizersSchemaOnce();
     await requireRaceAdmin(admin, user.id, body.race_id);
     await ensureRegistrationContactsSchemaOnce();
 
