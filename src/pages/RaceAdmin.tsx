@@ -19,6 +19,7 @@ import { RaceCheckpoints } from "@/components/RaceCheckpoints";
 import { RaceInviteCard } from "@/components/RaceInviteCard";
 import RaceMap from "@/components/RaceMap";
 import ElevationChart from "@/components/ElevationChart";
+import { DifficultyStars } from "@/components/DifficultyStars";
 
 interface RaceSummary {
   id: string;
@@ -29,6 +30,7 @@ interface RaceSummary {
   gpx_geojson: any;
   route_points: { lat: number; lng: number; cumulativeDistanceM: number }[] | null;
   distance_km: number | null;
+  difficulty_level: number | null;
 }
 
 interface EventOption {
@@ -190,6 +192,8 @@ export default function RaceAdmin() {
   const [savingEvent, setSavingEvent] = useState(false);
   const [raceName, setRaceName] = useState<string>("");
   const [savingName, setSavingName] = useState(false);
+  const [difficultyLevel, setDifficultyLevel] = useState(1);
+  const [savingDifficulty, setSavingDifficulty] = useState(false);
   const [gpxFile, setGpxFile] = useState<File | null>(null);
   const [uploadingGpx, setUploadingGpx] = useState(false);
   const [checkpoints, setCheckpoints] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
@@ -273,9 +277,8 @@ export default function RaceAdmin() {
       return;
     }
 
-    supabase
-      .from("races")
-      .select("id, name, start_time, status, event_id, gpx_geojson, route_points, distance_km")
+    (supabase.from as unknown as (t: string) => { select: (c: string) => { eq: (col: string, val: string) => { single: () => Promise<{ data: unknown; error: unknown }> } } })("races")
+      .select("id, name, start_time, status, event_id, gpx_geojson, route_points, distance_km, difficulty_level")
       .eq("id", raceId)
       .single()
       .then(({ data, error }) => {
@@ -284,13 +287,15 @@ export default function RaceAdmin() {
           navigate("/races");
           return;
         }
-        setRace(data as RaceSummary);
-        setEventId((data as RaceSummary).event_id ?? "");
-        setRaceName((data as RaceSummary).name ?? "");
-        const d = new Date((data as RaceSummary).start_time);
+        const row = data as RaceSummary;
+        setRace(row);
+        setEventId(row.event_id ?? "");
+        setRaceName(row.name ?? "");
+        setDifficultyLevel(Number(row.difficulty_level) || 1);
+        const d = new Date(row.start_time);
         const pad = (n: number) => String(n).padStart(2, "0");
         setStartTimeInput(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
-        document.title = `Administration ${data.name} — FinisTrackLive`;
+        document.title = `Administration ${row.name} — FinisTrackLive`;
       });
 
     supabase
@@ -385,6 +390,26 @@ export default function RaceAdmin() {
       setSavingName(false);
     }
   };
+
+  const saveDifficulty = async () => {
+    if (!raceId) return;
+    const level = Math.min(5, Math.max(1, Number(difficultyLevel) || 1));
+    setSavingDifficulty(true);
+    try {
+      const { error } = await (supabase.from as unknown as (t: string) => { update: (v: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message?: string } | null }> } })("races")
+        .update({ difficulty_level: level })
+        .eq("id", raceId);
+      if (error) throw new Error(error.message ?? "Mise à jour impossible");
+      setRace((prev) => (prev ? { ...prev, difficulty_level: level } : prev));
+      toast.success("Difficulté mise à jour");
+    } catch (error) {
+      toast.error((error as Error).message || "Mise à jour impossible");
+    } finally {
+      setSavingDifficulty(false);
+    }
+  };
+
+
 
 
   const replaceGpx = async () => {
@@ -849,6 +874,31 @@ export default function RaceAdmin() {
       </Card>
 
       <Card className="glass-card p-4 mb-6">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="space-y-2">
+            <Label htmlFor="race-difficulty">Difficulté du parcours</Label>
+            <select
+              id="race-difficulty"
+              value={difficultyLevel}
+              onChange={(e) => setDifficultyLevel(Number(e.target.value))}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="1">1 étoile — parcours facile</option>
+              <option value="2">2 étoiles — parcours accessible</option>
+              <option value="3">3 étoiles — parcours intermédiaire</option>
+              <option value="4">4 étoiles — parcours difficile</option>
+              <option value="5">5 étoiles — parcours très difficile</option>
+            </select>
+            <DifficultyStars level={difficultyLevel} />
+          </div>
+          <Button variant="hero" onClick={saveDifficulty} disabled={savingDifficulty || (Number(race?.difficulty_level) || 1) === difficultyLevel}>
+            <Save className="h-4 w-4 mr-2" /> Enregistrer
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="glass-card p-4 mb-6">
+
         <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
           <div className="space-y-2">
             <Label htmlFor="race-gpx">Fichier GPX du tracé</Label>
