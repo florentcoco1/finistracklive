@@ -521,14 +521,6 @@ async function ensureRaceOrganizersSchema() {
   });
 }
 
-async function ensureEventOrganizersTableExists() {
-  await withSql(async (sql) => {
-    const rows = await sql`SELECT to_regclass('public.event_organizers') AS r`;
-    if (rows[0]?.r) return;
-    raceOrganizersSchemaReady = null;
-  });
-  await ensureRaceOrganizersSchemaOnce();
-}
 
 let registrationContactsSchemaReady: Promise<void> | null = null;
 let raceOrganizersSchemaReady: Promise<void> | null = null;
