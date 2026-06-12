@@ -166,7 +166,7 @@ async function readTextFile(file: File) {
 export default function RaceAdmin() {
   const { id: raceId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const { user, loading, isAdmin } = useAuth();
   const [race, setRace] = useState<RaceSummary | null>(null);
   const [source, setSource] = useState<GmcapSource | null>(null);
   const [sourceUrl, setSourceUrl] = useState("");
