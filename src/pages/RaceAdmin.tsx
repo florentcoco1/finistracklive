@@ -975,7 +975,7 @@ export default function RaceAdmin() {
         </TabsList>
 
 
-        <TabsContent value="gmcap">
+        {isAdmin && <TabsContent value="gmcap">
           <Card className="glass-card p-5 space-y-5">
             <div>
               <h2 className="font-display text-xl font-semibold">Lien avec le fichier GMCAP</h2>
