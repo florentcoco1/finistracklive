@@ -116,6 +116,38 @@ export type Database = {
         }
         Relationships: []
       }
+      events_contacts: {
+        Row: {
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          event_id: string
+          updated_at: string
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          event_id: string
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          event_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_contacts_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: true
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gmcap_import_sources: {
         Row: {
           created_at: string
