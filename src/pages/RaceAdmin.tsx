@@ -249,11 +249,24 @@ export default function RaceAdmin() {
 
   const invokeAdmin = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("manage-race-admin", { body });
-    if (error) throw error;
+    // Sur un statut non-2xx, Supabase renvoie une FunctionsHttpError générique
+    // mais le vrai message JSON est accessible via error.context.json().
+    if (error) {
+      let detail: string | null = null;
+      try {
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === "function") {
+          const body = await ctx.json();
+          if (body?.error) detail = String(body.error);
+        }
+      } catch { /* ignore */ }
+      throw new Error(detail ?? error.message);
+    }
     const payload = data as AdminResponse;
     if (payload?.error) throw new Error(payload.error);
     return payload;
   }, []);
+
 
   const applyAdminData = useCallback((data: AdminResponse) => {
     setSource(data.source ?? null);
