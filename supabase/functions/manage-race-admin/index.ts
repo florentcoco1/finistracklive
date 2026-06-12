@@ -405,7 +405,59 @@ async function ensureRegistrationContactsSchema() {
 }
 
 
+async function ensureRaceOrganizersSchema() {
+  await withSql(async (sql) => {
+    const rows = await sql`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'race_organizers'
+    `;
+    const cols = new Set(rows.map((r: any) => r.column_name));
+    if (cols.has("race_id") && cols.has("user_id") && cols.has("role")) return;
+    await sql.begin(async (tx) => {
+      await tx.unsafe(`CREATE TABLE IF NOT EXISTS public.race_organizers (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        race_id uuid NOT NULL REFERENCES public.races(id) ON DELETE CASCADE,
+        user_id uuid NOT NULL,
+        role text NOT NULL DEFAULT 'organisateur',
+        created_by uuid,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`);
+      await tx.unsafe(`ALTER TABLE public.race_organizers ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'organisateur'`);
+      await tx.unsafe(`ALTER TABLE public.race_organizers ADD COLUMN IF NOT EXISTS created_by uuid`);
+      await tx.unsafe(`ALTER TABLE public.race_organizers ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now()`);
+      await tx.unsafe(`CREATE UNIQUE INDEX IF NOT EXISTS race_organizers_race_user_key ON public.race_organizers(race_id, user_id)`);
+      await tx.unsafe(`GRANT SELECT, INSERT, UPDATE, DELETE ON public.race_organizers TO authenticated`);
+      await tx.unsafe(`GRANT ALL ON public.race_organizers TO service_role`);
+      await tx.unsafe(`ALTER TABLE public.race_organizers ENABLE ROW LEVEL SECURITY`);
+      await tx.unsafe(`DROP POLICY IF EXISTS "Race organizers readable by staff" ON public.race_organizers`);
+      await tx.unsafe(`CREATE POLICY "Race organizers readable by staff" ON public.race_organizers FOR SELECT TO authenticated USING (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR user_id = auth.uid()
+        OR EXISTS (SELECT 1 FROM public.races r WHERE r.id = race_organizers.race_id AND r.organizer_id = auth.uid())
+      )`);
+      await tx.unsafe(`DROP POLICY IF EXISTS "Race organizers writable by owner or admin" ON public.race_organizers`);
+      await tx.unsafe(`CREATE POLICY "Race organizers writable by owner or admin" ON public.race_organizers FOR ALL TO authenticated USING (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR EXISTS (SELECT 1 FROM public.races r WHERE r.id = race_organizers.race_id AND r.organizer_id = auth.uid())
+      ) WITH CHECK (
+        public.has_role(auth.uid(), 'admin'::public.app_role)
+        OR EXISTS (SELECT 1 FROM public.races r WHERE r.id = race_organizers.race_id AND r.organizer_id = auth.uid())
+      )`);
+      await tx.unsafe(`CREATE OR REPLACE FUNCTION public.is_race_admin(_race_id uuid, _user_id uuid)
+        RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+        SELECT EXISTS (
+          SELECT 1 FROM public.races r WHERE r.id = _race_id AND r.organizer_id = _user_id
+        ) OR EXISTS (
+          SELECT 1 FROM public.race_organizers o WHERE o.race_id = _race_id AND o.user_id = _user_id
+        ) OR public.has_role(_user_id, 'admin'::public.app_role)
+      $$`);
+      await tx.unsafe(`NOTIFY pgrst, 'reload schema'`);
+    });
+  });
+}
+
 let registrationContactsSchemaReady: Promise<void> | null = null;
+let raceOrganizersSchemaReady: Promise<void> | null = null;
 
 async function ensureRegistrationContactsSchemaOnce() {
   if (!registrationContactsSchemaReady) {
@@ -415,6 +467,16 @@ async function ensureRegistrationContactsSchemaOnce() {
     });
   }
   await registrationContactsSchemaReady;
+}
+
+async function ensureRaceOrganizersSchemaOnce() {
+  if (!raceOrganizersSchemaReady) {
+    raceOrganizersSchemaReady = ensureRaceOrganizersSchema().catch((error) => {
+      raceOrganizersSchemaReady = null;
+      throw error;
+    });
+  }
+  await raceOrganizersSchemaReady;
 }
 
 
@@ -435,6 +497,7 @@ Deno.serve(async (req) => {
     const parsed = BodySchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) return json({ error: "Données invalides", details: parsed.error.flatten().fieldErrors }, 400);
     const body = parsed.data;
+    await ensureRaceOrganizersSchemaOnce();
     await requireRaceAdmin(admin, user.id, body.race_id);
     await ensureRegistrationContactsSchemaOnce();
 
