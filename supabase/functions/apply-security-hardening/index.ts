@@ -154,6 +154,87 @@ Deno.serve(async (req) => {
         await tx.unsafe(`DROP POLICY IF EXISTS "Organizers delete their event posters" ON storage.objects`);
         await tx.unsafe(`CREATE POLICY "Organizers delete their event posters" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'event-posters' AND (storage.foldername(name))[1] = auth.uid()::text)`);
 
+        // 8) Storage write policies for checkpoint-photos bucket
+        await tx.unsafe(`DROP POLICY IF EXISTS "Checkpoint photos insert by race organizer" ON storage.objects`);
+        await tx.unsafe(`CREATE POLICY "Checkpoint photos insert by race organizer" ON storage.objects FOR INSERT TO authenticated WITH CHECK (
+          bucket_id = 'checkpoint-photos' AND (
+            public.has_role(auth.uid(), 'admin'::public.app_role)
+            OR EXISTS (
+              SELECT 1 FROM public.race_checkpoints c
+              JOIN public.races r ON r.id = c.race_id
+              WHERE c.id::text = (storage.foldername(name))[1]
+                AND (r.organizer_id = auth.uid() OR public.is_race_admin(r.id, auth.uid()))
+            )
+            OR EXISTS (
+              SELECT 1 FROM public.races r
+              WHERE r.id::text = (storage.foldername(name))[1]
+                AND (r.organizer_id = auth.uid() OR public.is_race_admin(r.id, auth.uid()))
+            )
+          )
+        )`);
+        await tx.unsafe(`DROP POLICY IF EXISTS "Checkpoint photos update by race organizer" ON storage.objects`);
+        await tx.unsafe(`CREATE POLICY "Checkpoint photos update by race organizer" ON storage.objects FOR UPDATE TO authenticated USING (
+          bucket_id = 'checkpoint-photos' AND (
+            public.has_role(auth.uid(), 'admin'::public.app_role)
+            OR EXISTS (
+              SELECT 1 FROM public.race_checkpoints c
+              JOIN public.races r ON r.id = c.race_id
+              WHERE c.id::text = (storage.foldername(name))[1]
+                AND (r.organizer_id = auth.uid() OR public.is_race_admin(r.id, auth.uid()))
+            )
+            OR EXISTS (
+              SELECT 1 FROM public.races r
+              WHERE r.id::text = (storage.foldername(name))[1]
+                AND (r.organizer_id = auth.uid() OR public.is_race_admin(r.id, auth.uid()))
+            )
+          )
+        )`);
+        await tx.unsafe(`DROP POLICY IF EXISTS "Checkpoint photos delete by race organizer" ON storage.objects`);
+        await tx.unsafe(`CREATE POLICY "Checkpoint photos delete by race organizer" ON storage.objects FOR DELETE TO authenticated USING (
+          bucket_id = 'checkpoint-photos' AND (
+            public.has_role(auth.uid(), 'admin'::public.app_role)
+            OR EXISTS (
+              SELECT 1 FROM public.race_checkpoints c
+              JOIN public.races r ON r.id = c.race_id
+              WHERE c.id::text = (storage.foldername(name))[1]
+                AND (r.organizer_id = auth.uid() OR public.is_race_admin(r.id, auth.uid()))
+            )
+            OR EXISTS (
+              SELECT 1 FROM public.races r
+              WHERE r.id::text = (storage.foldername(name))[1]
+                AND (r.organizer_id = auth.uid() OR public.is_race_admin(r.id, auth.uid()))
+            )
+          )
+        )`);
+
+        // 9) Prevent public bucket listing — drop broad SELECT policies (direct public URLs still work via CDN)
+        await tx.unsafe(`DROP POLICY IF EXISTS "Event posters readable by everyone" ON storage.objects`);
+        await tx.unsafe(`DROP POLICY IF EXISTS "Checkpoint photos readable by everyone" ON storage.objects`);
+        await tx.unsafe(`DROP POLICY IF EXISTS "GPX files readable by everyone" ON storage.objects`);
+        await tx.unsafe(`DROP POLICY IF EXISTS "Public read access" ON storage.objects`);
+        await tx.unsafe(`DROP POLICY IF EXISTS "Anyone can view checkpoint photos" ON storage.objects`);
+        await tx.unsafe(`DROP POLICY IF EXISTS "Anyone can view gpx files" ON storage.objects`);
+
+        // 10) Lock down is_race_admin SECURITY DEFINER helper from anon/public
+        await tx.unsafe(`REVOKE EXECUTE ON FUNCTION public.is_race_admin(uuid, uuid) FROM PUBLIC`);
+        await tx.unsafe(`REVOKE EXECUTE ON FUNCTION public.is_race_admin(uuid, uuid) FROM anon`);
+
+        // 11) Remove gmcap_results from Realtime publication (prevents broadcasting phone/birth_date)
+        await tx.unsafe(`DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM pg_publication_tables
+            WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'gmcap_results'
+          ) THEN
+            EXECUTE 'ALTER PUBLICATION supabase_realtime DROP TABLE public.gmcap_results';
+          END IF;
+        END $$`);
+
+        // 12) Ensure events table no longer exposes contact_email/contact_phone columns to anon
+        await tx.unsafe(`REVOKE SELECT ON public.events FROM anon`);
+        await tx.unsafe(`GRANT SELECT (id, name, description, location, start_date, end_date, organizer_id, poster_url, website_url, facebook_url, instagram_url, twitter_url, created_at, updated_at) ON public.events TO anon`);
+        await tx.unsafe(`GRANT SELECT ON public.events TO authenticated`);
+
         await tx.unsafe(`NOTIFY pgrst, 'reload schema'`);
       });
     } finally {
