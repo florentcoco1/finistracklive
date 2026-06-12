@@ -759,8 +759,13 @@ Deno.serve(async (req) => {
     if (body.action === "add_organizer") {
       const userId = await findUserByEmail(admin, body.email);
       if (!userId) return json({ error: `Aucun compte trouvé pour ${body.email}. La personne doit d'abord créer un compte sur l'application.` }, 404);
+      const { data: race } = await admin.from("races").select("event_id").eq("id", body.race_id).maybeSingle();
+      const eventId = (race as { event_id?: string | null } | null)?.event_id ?? null;
+      const linkPromise = eventId
+        ? admin.from("event_organizers").upsert({ event_id: eventId, user_id: userId, created_by: user.id }, { onConflict: "event_id,user_id" })
+        : admin.from("race_organizers").upsert({ race_id: body.race_id, user_id: userId, created_by: user.id }, { onConflict: "race_id,user_id" });
       const [{ error: organizerError }, { error: roleError }] = await Promise.all([
-        admin.from("race_organizers").upsert({ race_id: body.race_id, user_id: userId, created_by: user.id }, { onConflict: "race_id,user_id" }),
+        linkPromise,
         admin.from("user_roles").upsert({ user_id: userId, role: "organizer" }, { onConflict: "user_id,role" }),
       ]);
       if (organizerError || roleError) throw new Error(organizerError?.message ?? roleError?.message);
@@ -768,10 +773,17 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === "remove_organizer") {
-      const { data: race } = await admin.from("races").select("organizer_id").eq("id", body.race_id).single();
+      const { data: race } = await admin.from("races").select("organizer_id, event_id").eq("id", body.race_id).single();
       if (race?.organizer_id === body.organizer_id) return json({ error: "Le propriétaire de la course ne peut pas être retiré" }, 400);
-      const { error } = await admin.from("race_organizers").delete().eq("race_id", body.race_id).eq("user_id", body.organizer_id);
-      if (error) throw new Error(error.message);
+      const eventId = (race as { event_id?: string | null }).event_id ?? null;
+      if (eventId) {
+        const { data: ev } = await admin.from("events").select("organizer_id").eq("id", eventId).maybeSingle();
+        if ((ev as { organizer_id?: string } | null)?.organizer_id === body.organizer_id) {
+          return json({ error: "Le propriétaire de l'épreuve ne peut pas être retiré" }, 400);
+        }
+        await admin.from("event_organizers").delete().eq("event_id", eventId).eq("user_id", body.organizer_id);
+      }
+      await admin.from("race_organizers").delete().eq("race_id", body.race_id).eq("user_id", body.organizer_id);
       return json({ ok: true, ...(await loadRace(admin, body.race_id)) });
     }
 
