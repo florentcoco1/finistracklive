@@ -277,8 +277,7 @@ export default function RaceAdmin() {
       return;
     }
 
-    supabase
-      .from("races")
+    (supabase.from as unknown as (t: string) => { select: (c: string) => { eq: (col: string, val: string) => { single: () => Promise<{ data: unknown; error: unknown }> } } })("races")
       .select("id, name, start_time, status, event_id, gpx_geojson, route_points, distance_km, difficulty_level")
       .eq("id", raceId)
       .single()
@@ -288,14 +287,15 @@ export default function RaceAdmin() {
           navigate("/races");
           return;
         }
-        setRace(data as RaceSummary);
-        setEventId((data as RaceSummary).event_id ?? "");
-        setRaceName((data as RaceSummary).name ?? "");
-        setDifficultyLevel(Number((data as RaceSummary).difficulty_level) || 1);
-        const d = new Date((data as RaceSummary).start_time);
+        const row = data as RaceSummary;
+        setRace(row);
+        setEventId(row.event_id ?? "");
+        setRaceName(row.name ?? "");
+        setDifficultyLevel(Number(row.difficulty_level) || 1);
+        const d = new Date(row.start_time);
         const pad = (n: number) => String(n).padStart(2, "0");
         setStartTimeInput(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
-        document.title = `Administration ${data.name} — FinisTrackLive`;
+        document.title = `Administration ${row.name} — FinisTrackLive`;
       });
 
     supabase
