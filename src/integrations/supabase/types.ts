@@ -472,6 +472,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          difficulty_level: number
           distance_km: number | null
           event_id: string | null
           gpx_geojson: Json | null
@@ -487,6 +488,7 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          difficulty_level?: number
           distance_km?: number | null
           event_id?: string | null
           gpx_geojson?: Json | null
@@ -502,6 +504,7 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          difficulty_level?: number
           distance_km?: number | null
           event_id?: string | null
           gpx_geojson?: Json | null
