@@ -77,10 +77,20 @@ export default function Dashboard() {
       (supabase.from as unknown as (table: string) => UntypedQuery)("race_organizers")
         .select("race:races ( id, name, start_time, distance_km, status )")
         .eq("user_id", user.id),
-    ]).then(([owned, delegated]) => {
+      (supabase.from as unknown as (table: string) => UntypedQuery)("event_organizers")
+        .select("event:events ( id, races:races ( id, name, start_time, distance_km, status ) )")
+        .eq("user_id", user.id),
+      (supabase.from as unknown as (table: string) => UntypedQuery)("events")
+        .select("id, races:races ( id, name, start_time, distance_km, status )")
+        .eq("organizer_id", user.id),
+    ]).then(([owned, delegated, eventDelegated, ownedEvents]) => {
       const delegatedRaces = ((delegated.data ?? []) as unknown as DelegatedRaceRow[]).map((row) => row.race).filter(Boolean) as OrganizerRace[];
+      const eventRaces = ((eventDelegated.data ?? []) as unknown as Array<{ event: { races?: OrganizerRace[] } | null }>)
+        .flatMap((row) => row.event?.races ?? []);
+      const ownedEventRaces = ((ownedEvents.data ?? []) as unknown as Array<{ races?: OrganizerRace[] }>)
+        .flatMap((row) => row.races ?? []);
       const byId = new Map<string, OrganizerRace>();
-      [...((owned.data ?? []) as OrganizerRace[]), ...delegatedRaces].forEach((race) => byId.set(race.id, race));
+      [...((owned.data ?? []) as OrganizerRace[]), ...delegatedRaces, ...eventRaces, ...ownedEventRaces].forEach((race) => byId.set(race.id, race));
       setOrganizerRaces([...byId.values()].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()));
     });
   }, [user, isOrganizer]);
