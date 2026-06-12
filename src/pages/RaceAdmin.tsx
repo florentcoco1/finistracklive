@@ -966,13 +966,14 @@ export default function RaceAdmin() {
         </Card>
       )}
 
-      <Tabs defaultValue="gmcap" className="space-y-4">
-        <TabsList className="grid w-full max-w-3xl grid-cols-4">
-          <TabsTrigger value="gmcap"><Link2 className="h-4 w-4 mr-2" /> GMCAP</TabsTrigger>
+      <Tabs defaultValue={isAdmin ? "gmcap" : "checkpoints"} className="space-y-4">
+        <TabsList className={`grid w-full max-w-3xl ${isAdmin ? "grid-cols-4" : "grid-cols-3"}`}>
+          {isAdmin && <TabsTrigger value="gmcap"><Link2 className="h-4 w-4 mr-2" /> GMCAP</TabsTrigger>}
           <TabsTrigger value="runners"><Users className="h-4 w-4 mr-2" /> Coureurs</TabsTrigger>
           <TabsTrigger value="checkpoints"><Flag className="h-4 w-4 mr-2" /> Chronos</TabsTrigger>
           <TabsTrigger value="organizers"><Shield className="h-4 w-4 mr-2" /> Organisateurs</TabsTrigger>
         </TabsList>
+
 
         <TabsContent value="gmcap">
           <Card className="glass-card p-5 space-y-5">
