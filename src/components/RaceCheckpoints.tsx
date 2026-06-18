@@ -277,23 +277,50 @@ export function RaceCheckpoints({ raceId, eventId, raceStartTime, registrations 
     } else {
       // 2) Look across the event
       const xReg = eventRunners.find((r) => String(r.bib_number).trim() === bib);
-      if (!xReg) {
-        toast.error(`Dossard ${bib} introuvable dans l'événement`);
-        return;
+      if (xReg) {
+        const xCp = eventCheckpoints.find((c) => c.race_id === xReg.race_id && c.name === active.name);
+        if (!xCp) {
+          toast.error(`Aucun point « ${active.name} » sur la course « ${xReg.race_name} ». Crée-le d'abord pour cette course.`);
+          return;
+        }
+        targetRegId = xReg.registration_id;
+        targetCheckpointId = xCp.id;
+        targetStart = xReg.race_start_time;
+        targetRaceName = xReg.race_name;
+        firstName = xReg.first_name ?? "";
+        lastName = xReg.last_name ?? "";
+      } else {
+        // 3) Look across ALL accessible races (any event) for a checkpoint of the same name
+        const sb = supabase as any;
+        const { data: cps } = await sb
+          .from("race_checkpoints")
+          .select("id, race_id, name, race:races(id, name, start_time)")
+          .eq("name", active.name);
+        const candidateRaceIds = (cps ?? []).map((c: any) => c.race_id);
+        if (candidateRaceIds.length === 0) {
+          toast.error(`Dossard ${bib} introuvable et aucun autre point « ${active.name} » trouvé.`);
+          return;
+        }
+        const { data: regs } = await sb
+          .from("race_registrations")
+          .select("id, race_id, bib_number, runner:profiles!race_registrations_runner_id_fkey(first_name, last_name, email)")
+          .in("race_id", candidateRaceIds)
+          .eq("bib_number", bib);
+        const match = (regs ?? [])[0];
+        if (!match) {
+          toast.error(`Dossard ${bib} introuvable sur une course avec le point « ${active.name} ».`);
+          return;
+        }
+        const xCp = (cps ?? []).find((c: any) => c.race_id === match.race_id);
+        targetRegId = match.id;
+        targetCheckpointId = xCp.id;
+        targetStart = xCp.race?.start_time ?? null;
+        targetRaceName = xCp.race?.name ?? "";
+        firstName = match.runner?.first_name ?? "";
+        lastName = match.runner?.last_name ?? "";
       }
-      // Find a checkpoint of the same name in the bib's race
-      const xCp = eventCheckpoints.find((c) => c.race_id === xReg.race_id && c.name === active.name);
-      if (!xCp) {
-        toast.error(`Aucun point « ${active.name} » sur la course « ${xReg.race_name} ». Crée-le d'abord pour cette course.`);
-        return;
-      }
-      targetRegId = xReg.registration_id;
-      targetCheckpointId = xCp.id;
-      targetStart = xReg.race_start_time;
-      targetRaceName = xReg.race_name;
-      firstName = xReg.first_name ?? "";
-      lastName = xReg.last_name ?? "";
     }
+
 
     if (!targetStart) {
       toast.error("Heure de départ de la course inconnue");
