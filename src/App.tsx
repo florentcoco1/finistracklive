@@ -20,6 +20,7 @@ import AdminPage from "./pages/Admin.tsx";
 import Results from "./pages/Results.tsx";
 import LiveMonitor from "./pages/LiveMonitor.tsx";
 import CheckpointPhotos from "./pages/CheckpointPhotos.tsx";
+import ManualTiming from "./pages/ManualTiming.tsx";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,7 @@ const App = () => (
           <Route path="/races/:id" element={<RaceDetail />} />
           <Route path="/results" element={<Results />} />
           <Route path="/organizer/live" element={<LiveMonitor />} />
+          <Route path="/organizer/manual-timing" element={<ManualTiming />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/organizer/new-race" element={<NewRace />} />
           <Route path="/organizer/races/:id/admin" element={<RaceAdmin />} />
