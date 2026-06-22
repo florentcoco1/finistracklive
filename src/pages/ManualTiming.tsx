@@ -133,11 +133,38 @@ export default function ManualTiming() {
     const bib = bibInput.trim();
     if (!bib) return;
     if (!checkpointName) { toast.error("Sélectionne un point de chrono"); return; }
-    const reg = registrations.find((r) => String(r.bib_number).trim() === bib);
+    const norm = (v: string) => v.trim().replace(/^0+/, "");
+    const bibN = norm(bib);
+    const sb = supabase as any;
+
+    // 1) Try local cached registrations (any matching, ignoring leading zeros)
+    let reg = registrations.find((r) => norm(String(r.bib_number)) === bibN);
+
+    // 2) Server-side fallback in case RLS / cache hid it
+    if (!reg) {
+      const raceIds = races.map((r) => r.id);
+      if (raceIds.length > 0) {
+        const { data } = await sb
+          .from("race_registrations")
+          .select("id, race_id, bib_number, runner:profiles!race_registrations_runner_id_fkey(first_name, last_name)")
+          .in("race_id", raceIds);
+        const match = ((data ?? []) as any[]).find((r) => norm(String(r.bib_number)) === bibN);
+        if (match) {
+          reg = {
+            id: match.id,
+            race_id: match.race_id,
+            bib_number: match.bib_number,
+            first_name: match.runner?.first_name ?? null,
+            last_name: match.runner?.last_name ?? null,
+          };
+        }
+      }
+    }
+
     if (!reg) { toast.error(`Dossard ${bib} introuvable sur cette épreuve`); return; }
-    const race = races.find((r) => r.id === reg.race_id);
-    if (!race) return;
-    const cp = checkpoints.find((c) => c.race_id === reg.race_id && c.name === checkpointName);
+    const race = races.find((r) => r.id === reg!.race_id);
+    if (!race) { toast.error("Course introuvable"); return; }
+    const cp = checkpoints.find((c) => c.race_id === reg!.race_id && c.name === checkpointName);
     if (!cp) {
       toast.error(`Aucun point « ${checkpointName} » sur la course « ${race.name} »`);
       return;
@@ -146,7 +173,7 @@ export default function ManualTiming() {
     const seconds = Math.max(0, Math.round((Date.now() - new Date(race.start_time).getTime()) / 1000));
     const text = formatTime(seconds);
     setBusy(true);
-    const { error } = await (supabase as any)
+    const { error } = await sb
       .from("runner_checkpoint_times")
       .upsert(
         { checkpoint_id: cp.id, registration_id: reg.id, time_seconds: seconds, time_text: text, recorded_at: new Date().toISOString() },
@@ -154,11 +181,12 @@ export default function ManualTiming() {
       );
     setBusy(false);
     if (error) { toast.error(error.message); return; }
-    setRecent((prev) => [{ bib, firstName: reg.first_name ?? "", lastName: reg.last_name ?? "", raceName: race.name, text }, ...prev].slice(0, 15));
+    setRecent((prev) => [{ bib, firstName: reg!.first_name ?? "", lastName: reg!.last_name ?? "", raceName: race.name, text }, ...prev].slice(0, 15));
     toast.success(`Dossard ${bib} — ${text} · ${race.name}`);
     setBibInput("");
     bibRef.current?.focus();
   }, [bibInput, checkpointName, registrations, races, checkpoints]);
+
 
   if (loading) return null;
   if (!user) return <Navigate to="/auth" replace />;
