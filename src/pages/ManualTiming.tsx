@@ -156,18 +156,18 @@ export default function ManualTiming() {
       if (raceIds.length > 0) {
         const { data } = await sb
           .from("race_registrations")
-          .select("id, race_id, bib_number, runner:profiles!race_registrations_runner_id_fkey(first_name, last_name)")
+          .select("id, race_id, bib_number, runner_id")
           .in("race_id", raceIds);
         const match = ((data ?? []) as any[]).find((r) => norm(String(r.bib_number)) === bibN);
         if (match) {
-          reg = {
-            id: match.id,
-            race_id: match.race_id,
-            bib_number: match.bib_number,
-            first_name: match.runner?.first_name ?? null,
-            last_name: match.runner?.last_name ?? null,
-          };
+          let fn: string | null = null, ln: string | null = null;
+          if (match.runner_id) {
+            const { data: p } = await sb.from("profiles").select("first_name, last_name").eq("user_id", match.runner_id).maybeSingle();
+            fn = p?.first_name ?? null; ln = p?.last_name ?? null;
+          }
+          reg = { id: match.id, race_id: match.race_id, bib_number: match.bib_number, first_name: fn, last_name: ln };
         }
+
       }
     }
 
