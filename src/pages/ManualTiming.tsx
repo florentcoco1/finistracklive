@@ -107,18 +107,28 @@ export default function ManualTiming() {
       const [{ data: cps }, { data: regs }] = await Promise.all([
         sb.from("race_checkpoints").select("id, race_id, name").in("race_id", raceIds),
         sb.from("race_registrations")
-          .select("id, race_id, bib_number, runner:profiles!race_registrations_runner_id_fkey(first_name, last_name)")
+          .select("id, race_id, bib_number, runner_id")
           .in("race_id", raceIds),
       ]);
       if (cancelled) return;
       setCheckpoints((cps ?? []) as CheckpointLite[]);
-      setRegistrations(((regs ?? []) as any[]).map((r) => ({
-        id: r.id,
-        race_id: r.race_id,
-        bib_number: r.bib_number,
-        first_name: r.runner?.first_name ?? null,
-        last_name: r.runner?.last_name ?? null,
-      })));
+      const runnerIds = Array.from(new Set(((regs ?? []) as any[]).map((r) => r.runner_id).filter(Boolean)));
+      const profilesMap = new Map<string, { first_name: string | null; last_name: string | null }>();
+      if (runnerIds.length > 0) {
+        const { data: profs } = await sb.from("profiles").select("user_id, first_name, last_name").in("user_id", runnerIds);
+        (profs ?? []).forEach((p: any) => profilesMap.set(p.user_id, { first_name: p.first_name, last_name: p.last_name }));
+      }
+      setRegistrations(((regs ?? []) as any[]).map((r) => {
+        const p = profilesMap.get(r.runner_id);
+        return {
+          id: r.id,
+          race_id: r.race_id,
+          bib_number: r.bib_number,
+          first_name: p?.first_name ?? null,
+          last_name: p?.last_name ?? null,
+        };
+      }));
+
     })();
     return () => { cancelled = true; };
   }, [eventId]);
