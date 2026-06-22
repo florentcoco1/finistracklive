@@ -19,6 +19,7 @@ export function SiteHeader() {
     ...(user && !isOrganizer ? [{ to: "/dashboard", label: "Mon espace" }] : []),
     ...(isOrganizer ? [{ to: "/dashboard", label: "Administration" }] : []),
     ...(isOrganizer || isAdmin ? [{ to: "/organizer/live", label: "Suivi live" }] : []),
+    ...(isOrganizer || isAdmin ? [{ to: "/organizer/manual-timing", label: "Chrono manuel" }] : []),
     ...(isOrganizer ? [{ to: "/organizer/new-event", label: "Créer une épreuve" }] : []),
     ...(isAdmin ? [{ to: "/admin", label: "Admin global" }] : []),
   ];
